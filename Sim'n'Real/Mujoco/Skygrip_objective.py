@@ -102,7 +102,12 @@ class SkyGripObjective:
         self.nu = self.model.nu  # 7
         self.ctrlrange = self.model.actuator_ctrlrange.copy()  # (nu, 2), read from the XML itself
 
-        self.total_mass = 1.185  # kg -- TODO confirm this still matches the current mass edits (0.743+arm+gripper)
+        # Read from the model rather than hardcoded, so edits to arm/gripper masses
+        # cannot silently desync hover thrust from the actual vehicle. (Was 1.185;
+        # the model's base_link subtree is 1.1920 kg.) Note the drone does not carry
+        # this rigidly -- the arm is a free pendulum, so commanding exactly m*g leaves
+        # ~+0.12 m/s^2 residual. MPPI closes that; it is not an error to tune out here.
+        self.total_mass = float(self.model.body_subtreemass[self.base_id])
         self.nominal_hover_thrust = self.total_mass * 9.81
 
         # per-actuator noise sigma, sized by what each actuator actually controls

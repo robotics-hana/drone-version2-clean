@@ -37,9 +37,31 @@
         <joint joint1="right_clamp" joint2="left_clamp" polycoef="0 -1 0 0 0"/>
     </equality>
 
+    <!-- Seven actuators. ORDER IS LOAD-BEARING: skygrip.py assigns MPPI noise by index
+         (0,1,2 = arm/gripper, 3 = thrust, 4,5,6 = torques), while Skygrip_objective.py
+         looks them up by name. Renaming or reordering breaks one or the other.
+
+         Thrust and body torques are site-mounted motors rather than xfrc_applied (which
+         is what create_force_general.py used). Physically equivalent -- gear "0 0 1 0 0 0"
+         on thrust_point applies force along the body z axis at the body origin, exactly as
+         the old R @ [0,0,thrust] did -- but expressed as ctrl, so MJX can see it. The JAX
+         path rolls out through mjx and cannot read xfrc_applied, so this is required for
+         Skygrip_objective_jax.py to work at all.
+
+         Arm and gripper are POSITION actuators, not torque. This is the action-space
+         decision: joint-position targets are what the VLA emits (matching the dissertation's
+         joint-space choice), they stay meaningful across action-chunk boundaries, and they
+         let MPPI explore in radians rather than newton-metres. forcerange preserves the
+         torque authority the old motors had (+-6 / +-4 N*m). kp/kv follow mppi.xml; the
+         gains are stiff and may want tuning once there is a real payload on the arm. -->
     <actuator>
-        <motor joint="Joint_1" name="act1" gear="1" ctrlrange="-6 6"/>
-        <motor joint="Joint_2" name="act2" gear="1" ctrlrange="-4 4"/>
+        <position name="act_joint1" joint="Joint_1" ctrlrange="-1.6 1.6" forcerange="-6 6" kp="998.22" kv="2.731"/>
+        <position name="act_joint2" joint="Joint_2" ctrlrange="-1.6 1.6" forcerange="-4 4" kp="998.22" kv="2.731"/>
+        <position name="act_gripper" joint="right_clamp" ctrlrange="0 0.037" forcerange="-3.5 3.5" kp="998.22" kv="2.731"/>
+        <motor name="thrust" site="thrust_point" gear="0 0 1 0 0 0" ctrlrange="0 30"/>
+        <motor name="roll_torque" site="thrust_point" gear="0 0 0 1 0 0" ctrlrange="-1 1"/>
+        <motor name="pitch_torque" site="thrust_point" gear="0 0 0 0 1 0" ctrlrange="-1 1"/>
+        <motor name="yaw_torque" site="thrust_point" gear="0 0 0 0 0 1" ctrlrange="-1 1"/>
     </actuator>
 
     <worldbody>
@@ -134,6 +156,19 @@
                     </body>
                 </body>
             </body>
+        </body>
+
+        <!-- Pick target. 40 mm cube (size is the half-extent), so the jaws need
+             aperture >= ~0.015 to clear it on approach: jaw separation runs 10.7 mm
+             closed to 84.6 mm fully open. Resting on the ground at z = half-extent.
+             collect_demos.py randomises this pose per episode; the position here is
+             only the reset default. Placed on +y, the side the arm reaches toward at
+             positive Joint_1 and the side scene_cam faces. -->
+        <body name="target_object" pos="0 0.35 0.02">
+            <freejoint name="target_free_joint"/>
+            <inertial pos="0 0 0" mass="0.05" diaginertia="1.3e-5 1.3e-5 1.3e-5"/>
+            <geom type="box" size="0.02 0.02 0.02" rgba="0.85 0.2 0.2 1"
+                  friction="1.0 0.005 0.0001"/>
         </body>
 
         <body name="current_target" pos="0 0 1.5" mocap="true">

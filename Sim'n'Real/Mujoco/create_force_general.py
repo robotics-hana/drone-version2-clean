@@ -20,6 +20,13 @@ class MPPIParams:
     w_omega: float = 10.0          # 角速度权重
     w_ctrl: float = 0.001          # 控制量权重（减小以允许更大控制）
     w_smooth: float = 0.1          # 平滑性权重（减小以提高响应速度）
+    # Arm joint tracking. The arm actuators are <position>, so channels 4/5 are
+    # setpoints in RADIANS -- the sampler's +-1.5 clip spans nearly the whole
+    # +-1.6 joint range. Without a term pulling the arm toward a target, MPPI has
+    # no reason to hold it still and will swing it across its full travel, which
+    # disturbs the body it is trying to stabilise. This is the cost term the arm
+    # previously lacked entirely.
+    w_joint: float = 20.0
     
     def __post_init__(self):
         # 控制噪声标准差 [推力, 3个扭矩, 2个关节力矩]
@@ -53,9 +60,28 @@ class PureMPPIController:
             print("Warning: Could not find base_link, using default ID")
         
         # 基本参数
-        self.total_mass = 1.185  # kg
+        # mass read from the model rather than hardcoded, so edits to the arm/gripper
+        # masses can't silently desync the hover thrust from the actual vehicle
+        self.total_mass = float(self.model.body_subtreemass[self.base_id])
         self.nominal_hover_thrust = self.total_mass * 9.81
-        self.nu = 6  # 控制维度
+        self.nu = 6  # 控制维度 [thrust, tau_x, tau_y, tau_z, joint1, joint2]
+
+        # Actuator indices by NAME. SkyGrip_full.xml now exposes thrust and body torques
+        # as site-mounted motors instead of requiring xfrc_applied, so every channel goes
+        # through data.ctrl. Channels 4/5 are POSITION targets in radians, not torques --
+        # the arm actuators are <position>, so writing a torque there would command a
+        # nonsense setpoint (this is exactly what broke the old drone_direct_control path).
+        a = lambda n: self.model.actuator(n).id
+        try:
+            self.idx = dict(thrust=a("thrust"), roll=a("roll_torque"),
+                            pitch=a("pitch_torque"), yaw=a("yaw_torque"),
+                            joint1=a("act_joint1"), joint2=a("act_joint2"))
+            self.idx_gripper = a("act_gripper")
+        except KeyError as e:
+            raise RuntimeError(
+                f"Model {model_path} lacks the expected actuators ({e}). This controller "
+                f"needs thrust/roll_torque/pitch_torque/yaw_torque/act_joint1/act_joint2."
+            ) from None
         
         # 控制限制
         self.thrust_limits = [0, 30]
@@ -69,8 +95,12 @@ class PureMPPIController:
         self.noise = np.zeros((self.params.num_samples, self.params.horizon, self.nu))
         self.costs = np.zeros(self.params.num_samples)
         
-        # 参考状态（只跟踪位置）
+        # 参考状态
         self.target_pos = np.array([0, 0, 1.5])
+        # Arm joint targets, in radians. Zeros = arm stowed. The task FSM should
+        # drive this per phase; leaving it at zeros makes MPPI hold the arm still,
+        # which is the correct behaviour for hovering.
+        self.target_q = np.zeros(2)
         
         # 轨迹跟踪
         self.waypoints = []
@@ -117,30 +147,28 @@ class PureMPPIController:
             'dq_joints': dq_joints
         }
     
+    def _write_ctrl(self, sim_data, control):
+        """Map the 6-D control vector onto the model's named actuators.
+
+        The thrust motor is mounted on the thrust_point site with gear "0 0 1 0 0 0",
+        so MuJoCo rotates the body-frame thrust into world coordinates itself -- the
+        explicit R @ [0,0,thrust] the old xfrc_applied path did by hand is no longer
+        needed, and would double-count if reintroduced.
+
+        Every value is clipped to the actuator's own ctrlrange straight from the XML,
+        so the limits can't drift out of sync with the model.
+        """
+        lo, hi = self.model.actuator_ctrlrange[:, 0], self.model.actuator_ctrlrange[:, 1]
+        i = self.idx
+        for slot, chan in ((i["thrust"], control[0]), (i["roll"], control[1]),
+                           (i["pitch"], control[2]), (i["yaw"], control[3]),
+                           (i["joint1"], control[4]), (i["joint2"], control[5])):
+            sim_data.ctrl[slot] = np.clip(chan, lo[slot], hi[slot])
+
     def simulate_step(self, sim_data, control, dt):
         """使用MuJoCo仿真一个控制步"""
-        # 清除之前的力
-        sim_data.xfrc_applied[:] = 0
-        
-        # 限制控制输入
-        thrust = np.clip(control[0], self.thrust_limits[0], self.thrust_limits[1])
-        torques = np.clip(control[1:4], self.torque_limits[0], self.torque_limits[1])
-        joint_torques = np.clip(control[4:6], self.joint_limits[0], self.joint_limits[1])
-        
-        # 应用推力（body坐标系转世界坐标系）
-        R = sim_data.xmat[self.base_id].reshape(3, 3)
-        thrust_body = np.array([0, 0, thrust])
-        thrust_world = R @ thrust_body
-        
-        # 应用力和扭矩
-        sim_data.xfrc_applied[self.base_id, 0:3] = thrust_world
-        sim_data.xfrc_applied[self.base_id, 3:6] = torques
-        
-        # 应用关节控制
-        if len(sim_data.ctrl) >= 2:
-            sim_data.ctrl[0] = joint_torques[0]
-            sim_data.ctrl[1] = joint_torques[1]
-        
+        self._write_ctrl(sim_data, control)
+
         # 执行仿真步进
         n_steps = max(1, int(dt / self.model.opt.timestep))
         for _ in range(n_steps):
@@ -168,6 +196,10 @@ class PureMPPIController:
             
             # 角速度惩罚（希望稳定）
             cost += self.params.w_omega * np.sum(state['omega']**2)
+
+            # 关节跟踪 -- arm joint position tracking
+            joint_error = state['q_joints'] - self.target_q
+            cost += self.params.w_joint * np.sum(joint_error**2)
             
             # 控制惩罚
             if t < len(controls):
@@ -302,21 +334,7 @@ class PureMPPIController:
     
     def apply_control(self, control):
         """应用控制到实际系统"""
-        # 清除之前的力
-        self.data.xfrc_applied[:] = 0
-        
-        # 应用推力
-        R = self.data.xmat[self.base_id].reshape(3, 3)
-        thrust_body = np.array([0, 0, control[0]])
-        thrust_world = R @ thrust_body
-        
-        self.data.xfrc_applied[self.base_id, 0:3] = thrust_world
-        self.data.xfrc_applied[self.base_id, 3:6] = control[1:4]
-        
-        # 应用关节控制
-        if len(self.data.ctrl) >= 2:
-            self.data.ctrl[0] = control[4]
-            self.data.ctrl[1] = control[5]
+        self._write_ctrl(self.data, control)
     
     def set_trajectory(self, waypoints: List[np.ndarray]):
         """设置轨迹路径点"""
@@ -497,7 +515,7 @@ def test_pure_mppi():
         w_smooth=0.1
     )
     
-    controller = PureMPPIController("drone_direct_control.xml", params)
+    controller = PureMPPIController("SkyGrip_full.xml", params)
     
     # 设置轨迹
     waypoints = [
