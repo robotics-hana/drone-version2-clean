@@ -104,6 +104,17 @@
                              camera sat inside the link5_1 mesh, blocked at 9 mm):
                                pos="0 -0.028 0.082" xyaxes="-1 0 0 0 -0.574 0.819" fovy="110" -->
                         <camera name="wrist_cam" pos="0 -0.075 0.105" xyaxes="1 0 0.004  0 1 0.025" fovy="85"/>
+
+                        <!-- True end-effector: midpoint between the jaws, where a grasped object
+                             actually sits. This is 7.2 cm from the gripper_assembly body origin
+                             (the clamp meshes carry large offsets), so using the body origin as
+                             an EE proxy puts the reaching cost 7.2 cm off -- wider than a 4 cm
+                             target cube, i.e. the optimiser converges "on target" with the object
+                             outside the jaws. Position is invariant to both gripper aperture
+                             (the clamps slide symmetrically) and arm pose, so a static site is
+                             exact rather than an approximation. -->
+                        <site name="grasp_site" pos="0.00043 -0.07236 -0.00018" size="0.006"
+                              rgba="1 0.5 0 0.9" type="sphere"/>
                         
                         <body name="clamp_1" pos="-0.052134 -0.220077 -0.186037">
                             <inertial pos="0.0601695 0.144807 0.184483" quat="0.745779 0.661192 0.0475856 -0.0661414"
