@@ -351,7 +351,15 @@ class PureMPPIController:
         """更新目标路径点"""
         if len(self.waypoints) == 0:
             return
-        
+
+        # Stop once the trajectory is exhausted. Without this the index keeps
+        # incrementing every control step after the final waypoint -- a 3-waypoint
+        # run reports "reached waypoint 78 / 3" and prints "All waypoints
+        # completed!" dozens of times, which makes current_waypoint_idx useless
+        # as a did-it-arrive check and buries real output.
+        if self.current_waypoint_idx >= len(self.waypoints):
+            return
+
         # 检查是否到达当前路径点
         distance = np.linalg.norm(current_pos - self.target_pos)
         if distance < self.waypoint_tolerance:
