@@ -127,15 +127,25 @@
                                pos="0 -0.028 0.082" xyaxes="-1 0 0 0 -0.574 0.819" fovy="110" -->
                         <camera name="wrist_cam" pos="0 -0.075 0.105" xyaxes="1 0 0.004  0 1 0.025" fovy="85"/>
 
-                        <!-- True end-effector: midpoint between the jaws, where a grasped object
-                             actually sits. This is 7.2 cm from the gripper_assembly body origin
-                             (the clamp meshes carry large offsets), so using the body origin as
-                             an EE proxy puts the reaching cost 7.2 cm off -- wider than a 4 cm
-                             target cube, i.e. the optimiser converges "on target" with the object
-                             outside the jaws. Position is invariant to both gripper aperture
-                             (the clamps slide symmetrically) and arm pose, so a static site is
-                             exact rather than an approximation. -->
-                        <site name="grasp_site" pos="0.00043 -0.07236 -0.00018" size="0.006"
+                        <!-- True end-effector: the point midway between the jaws' INNER FACES,
+                             where a grasped object actually sits.
+
+                             Two corrections are baked into this position:
+                               - 72 mm from the gripper_assembly body origin. The clamp meshes
+                                 carry large offsets, so the body origin is not near the jaws at
+                                 all; using it as the EE reference put the w_ee cost 72 mm off.
+                               - a further 21 mm laterally from the midpoint of the two clamp
+                                 GEOM ORIGINS. The clamp meshes are asymmetric, so origin-midpoint
+                                 is not face-midpoint. Measured from mesh vertices in the gripping
+                                 band, the true jaw centre is x = -0.0228 (world, zero pose) while
+                                 the origin midpoint reads -0.0016.
+
+                             The lesson both times: measure from the geometry that touches the
+                             object, never from body or geom origins.
+
+                             Invariant to gripper aperture (the clamps slide symmetrically) and to
+                             arm pose, so a static site is exact rather than an approximation. -->
+                        <site name="grasp_site" pos="-0.02077 -0.07236 -0.00018" size="0.006"
                               rgba="1 0.5 0 0.9" type="sphere"/>
                         
                         <body name="clamp_1" pos="-0.052134 -0.220077 -0.186037">
@@ -158,16 +168,51 @@
             </body>
         </body>
 
-        <!-- Pick target. 40 mm cube (size is the half-extent), so the jaws need
-             aperture >= ~0.015 to clear it on approach: jaw separation runs 10.7 mm
-             closed to 84.6 mm fully open. Resting on the ground at z = half-extent.
-             collect_demos.py randomises this pose per episode; the position here is
-             only the reset default. Placed on +y, the side the arm reaches toward at
-             positive Joint_1 and the side scene_cam faces. -->
-        <body name="target_object" pos="0 0.35 0.02">
+        <!-- Pedestal. The arm reaches at most 0.271 m below the body while the legs
+             hang 0.200 m down, so picking off the floor would mean hovering at ~0.29 m
+             with 9 cm of leg clearance at the j2 joint limit -- no margin against a
+             0.10 m controller tolerance. Raising the work surface puts the grasp in
+             the middle of the arm's envelope instead of at its edge.
+             Long in x, narrow in y (0.40 x 0.10). The drone grasps from directly
+             overhead -- straight down is the arm's comfortable direction, reaching
+             0.254 m with j2 only at 0.8, whereas forward reach plus depth together
+             pushes j2 to its 1.6 limit. Hovering overhead is only safe because the
+             legs sit at y = +-0.088 and so straddle a 0.05 half-width surface; a
+             wide table would foul them. The x extent gives pick and place two
+             distinct spots on the same surface.
+             Static -- collect_demos.py repositions it by writing model.body_pos. -->
+        <body name="pedestal" pos="0 0.35 0.25">
+            <geom type="box" size="0.20 0.05 0.25" rgba="0.45 0.42 0.38 1"
+                  friction="1.0 0.005 0.0001"/>
+        </body>
+
+        <!-- Pick target: a 20 x 20 x 80 mm upright post.
+             Both dimensions are dictated by the gripper geometry, measured from
+             the meshes rather than from body origins:
+
+               WIDTH. The true inner-face gap between the jaws is 30.7 mm at full
+               aperture (0.037) and closes to overlap. Note this is NOT the
+               origin-to-origin distance, which reads 87.2 mm -- the same trap as
+               using the gripper_assembly body origin for the end effector. 20 mm
+               leaves ~5 mm either side on approach.
+
+               HEIGHT. Fingertips reach 49.2 mm BELOW the jaw midpoint while the
+               housing obstructs from ~0 mm ABOVE it, so the object must sit
+               entirely below the midpoint and be gripped over the 49 mm beneath.
+               At 80 mm tall, grasped 5 mm above its top face, the fingertips
+               still clear the surface by ~36 mm.
+
+             A 40 mm cube (the original) was unpickable on both counts: too wide
+             for the jaws, and shorter than the fingers, so any midpoint clearing
+             the surface sat above the cube entirely.
+             collect_demos.py randomises this per episode; the pose here is only
+             the reset default. On +y, the side the arm reaches toward at positive
+             Joint_1 and the side scene_cam faces. -->
+        <body name="target_object" pos="0 0.35 0.54">
             <freejoint name="target_free_joint"/>
-            <inertial pos="0 0 0" mass="0.05" diaginertia="1.3e-5 1.3e-5 1.3e-5"/>
-            <geom type="box" size="0.02 0.02 0.02" rgba="0.85 0.2 0.2 1"
+            <inertial pos="0 0 0" mass="0.05"
+                      diaginertia="2.8e-5 2.8e-5 3.3e-6"/>
+            <geom type="box" size="0.010 0.010 0.040" rgba="0.85 0.2 0.2 1"
                   friction="1.0 0.005 0.0001"/>
         </body>
 
