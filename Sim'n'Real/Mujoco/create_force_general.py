@@ -101,6 +101,17 @@ class PureMPPIController:
         # drive this per phase; leaving it at zeros makes MPPI hold the arm still,
         # which is the correct behaviour for hovering.
         self.target_q = np.zeros(2)
+
+        # The arm command the rollouts must assume. CRITICAL: the arm actuators are
+        # <position>, so control channels 4/5 are setpoints in RADIANS, not torques.
+        # If the rollouts keep sampling them, every predicted trajectory flings the
+        # arm to a different random angle while the real arm follows the commanded
+        # one -- MPPI then plans body torques against dynamics that never happen,
+        # and any real arm motion destabilises the drone (measured: survives with
+        # the arm frozen, crashes within 1.5 s the moment it moves).
+        # An external driver (the demo collector's FSM) sets this to whatever it is
+        # actually commanding, so prediction and reality agree.
+        self.arm_cmd = np.zeros(2)
         
         # 轨迹跟踪
         self.waypoints = []
@@ -160,9 +171,14 @@ class PureMPPIController:
         """
         lo, hi = self.model.actuator_ctrlrange[:, 0], self.model.actuator_ctrlrange[:, 1]
         i = self.idx
+        # Arm channels come from arm_cmd, NOT from the sampled control vector --
+        # see the arm_cmd comment in __init__. Sampling a position setpoint makes
+        # the rollout's arm behave differently from the real one, which is the
+        # difference between MPPI compensating the arm's reaction and fighting a
+        # phantom.
         for slot, chan in ((i["thrust"], control[0]), (i["roll"], control[1]),
                            (i["pitch"], control[2]), (i["yaw"], control[3]),
-                           (i["joint1"], control[4]), (i["joint2"], control[5])):
+                           (i["joint1"], self.arm_cmd[0]), (i["joint2"], self.arm_cmd[1])):
             sim_data.ctrl[slot] = np.clip(chan, lo[slot], hi[slot])
 
     def simulate_step(self, sim_data, control, dt):

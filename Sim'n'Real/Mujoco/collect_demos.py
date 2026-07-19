@@ -92,8 +92,13 @@ trusting a 50-episode batch.
 """
 
 import argparse
+import shutil
+from pathlib import Path
+
 import numpy as np
 import mujoco
+import mujoco.viewer   # must be module level: importing it inside main() would
+                       # rebind `mujoco` as a local and shadow this import
 
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
@@ -194,6 +199,21 @@ class SkyGripController:
         self._u[0] = self.mppi.nominal_hover_thrust
         self._servo_to = None
         self._ik = None
+        self._q_cmd = np.zeros(2)   # slewed arm command actually sent to ctrl
+
+    # Max arm setpoint change per control step, rad. Joint_1 rotates about x and
+    # so does body ROLL, which means arm reaction torque couples straight into the
+    # axis the flight controller is weakest on: the arm actuators have +-6 N*m
+    # while roll_torque has +-1 N*m. An unrestricted setpoint jump (e.g. the
+    # 0 -> [0.89, -0.80] step at episode start) swings the arm in ~70 ms and rolls
+    # the drone past 15 deg before MPPI can respond; it never recovers. Slewing
+    # spreads the same motion over ~1 s so the reaction stays inside the body's
+    # control authority.
+    # NOTE: this is rad per SECOND, converted to a per-physics-step increment in
+    # step(). Expressing it per call is a trap -- step() runs at the physics rate
+    # (1 kHz), not the control rate, so a per-call cap gets applied ~33x per frame
+    # and does nothing. 0.6 rad/s spreads the opening 0.89 rad swing over ~1.5 s.
+    ARM_SLEW_RATE = 0.6
 
     def set_targets(self, drone_xyz, joints, gripper, servo_to=None, ik=None):
         """servo_to: optional WORLD point the jaws should hold, closed-loop.
@@ -228,6 +248,10 @@ class SkyGripController:
         self._last_ctrl = -np.inf
         self._u = np.zeros(6)
         self._u[0] = self.mppi.nominal_hover_thrust
+        # Start the slew from where the arm physically IS, not from the last
+        # episode's command -- otherwise episode 2 opens with the same jump
+        # this mechanism exists to prevent.
+        self._q_cmd = np.array([self.data.qpos[7], self.data.qpos[8]])
 
     def step(self):
         # Replan at CONTROL_HZ, not every physics step -- an MPPI solve is
@@ -241,10 +265,14 @@ class SkyGripController:
             # drone ACTUALLY is, not where it was asked to be, so the jaws stay on
             # the target while the body drifts inside its 0.10 m tolerance.
             if self._servo_to is not None and self._ik is not None:
-                want = self._servo_to - self.data.qpos[0:3]
-                want[0] = self._ik.x_offset      # arm cannot move in x; do not ask
-                q, err = self._ik.solve(want)
-                if err < 0.02:                   # ignore solves outside the envelope
+                # Correct the vertical drop ONLY. The arm could also swing to fix
+                # lateral error, but doing so throws its CoM sideways and stands up
+                # a roll moment on the axis the body is weakest about -- the very
+                # thing that was crashing the drone. Vertical is where the 5 mm
+                # grasp window lives; lateral is the body's job.
+                drop = float(self._servo_to[2] - self.data.qpos[2])
+                q, off = self._ik.solve_drop(-drop if drop < 0 else drop)
+                if abs(abs(off[2]) - abs(drop)) < 0.02:   # inside the envelope
                     self.joint_target = q
                     self.mppi.target_q = q
 
@@ -253,8 +281,17 @@ class SkyGripController:
         # for them is discarded in favour of the commanded setpoint. MPPI re-plans
         # from measured state every step, so it absorbs the difference rather than
         # fighting it.
-        self.data.ctrl[self.idx_arm[0]] = self.joint_target[0]
-        self.data.ctrl[self.idx_arm[1]] = self.joint_target[1]
+        #
+        # The COMMANDED setpoint is slewed toward the target rather than applied
+        # directly -- see ARM_SLEW. self._q_cmd is what the actuator actually sees.
+        step_max = self.ARM_SLEW_RATE * self.model.opt.timestep
+        delta = np.clip(self.joint_target - self._q_cmd, -step_max, step_max)
+        self._q_cmd = self._q_cmd + delta
+        # Tell MPPI what the arm is actually being commanded to do, so its rollouts
+        # predict the real reaction torque instead of a sampled fiction.
+        self.mppi.arm_cmd = self._q_cmd
+        self.data.ctrl[self.idx_arm[0]] = self._q_cmd[0]
+        self.data.ctrl[self.idx_arm[1]] = self._q_cmd[1]
         self.data.ctrl[self.idx_gripper] = self.gripper_cmd
 
     def action(self):
@@ -389,9 +426,36 @@ class ArmIK:
         # joint can produce, and the solver returns its closest pose with a residual
         # of exactly that offset. The DRONE has to absorb it by flying x_offset to
         # one side of the object.
+        # Lateral CoM offset of the arm for each grid pose. A 2-DOF arm reaching a
+        # point in the y-z plane has multiple solutions, and they are NOT equally
+        # good on a flying base: a folded "Z" pose can reach the same grasp point
+        # while throwing the arm's mass ~50 mm to one side, which is a standing
+        # ~0.1 N*m roll moment the flight controller then has to trim continuously.
+        # Joint_1 rotates about x and so does roll, so this lands on the weakest
+        # axis. Measured: the folded solution for a 0.169 m drop crashed the drone;
+        # the straight-down solution for the SAME drop has zero offset.
+        self._com_dy = np.array([self._com_offset(a, b) for a, b in self._grid])
+
         self.x_offset = float(np.mean(self._offsets[:, 0]))
         spread = float(np.ptp(self._offsets[:, 0]))
         assert spread < 1e-6, f"arm moves in x by {spread:.4f} m -- x_offset is not constant"
+
+    # Weight on lateral CoM offset when choosing between IK solutions, in metres
+    # of apparent position error per metre of CoM offset. Large enough to prefer
+    # the straight-hanging solution whenever both reach the target, small enough
+    # not to trade away real reach accuracy (the grasp window is ~5 mm).
+    COM_PENALTY = 0.30
+
+    def _com_offset(self, j1, j2):
+        """Lateral (y) offset of the arm subtree's CoM from the drone body."""
+        d = self._d
+        d.qpos[:] = 0.0
+        d.qpos[3] = 1.0
+        d.qpos[self._j1] = j1
+        d.qpos[self._j2] = j2
+        mujoco.mj_forward(self._m, d)
+        return float(d.subtree_com[self._m.body("Link_1").id][1]
+                     - d.xpos[self._m.body("base_link").id][1])
 
     def _offset(self, j1, j2):
         """grasp_site position relative to the drone body, in body coordinates."""
@@ -403,6 +467,32 @@ class ArmIK:
         mujoco.mj_kinematics(self._m, d)
         return d.site_xpos[self._sid] - d.xpos[self._m.body("base_link").id]
 
+    def solve_drop(self, drop):
+        """Pose that achieves a vertical `drop` with the arm hanging as straight
+        as possible. Returns (joint angles, full 3-D body->jaws offset).
+
+        Do NOT ask for a specific lateral position here. At j1=j2=0 the jaws hang
+        at y = -102 mm, so demanding y=0 forces the arm to swing forward, throwing
+        its CoM ~45 mm sideways and standing up a ~0.085 N*m roll moment that the
+        flight controller must trim forever. Joint_1 rotates about x and so does
+        roll, so it loads the weakest axis and this alone crashed the drone.
+
+        Instead: take the straightest pose for the required drop and let the
+        CALLER move the drone to put those naturally-hanging jaws over the target
+        -- the same treatment x_offset already gets, and the reason it works is
+        the reason overhead grasping works at all: keep the mass on the gravity
+        axis rather than slinging it out on a lever.
+        """
+        want_z = -abs(drop)
+        errs = np.abs(self._offsets[:, 2] - want_z)
+        feasible = errs < 0.01
+        if not np.any(feasible):
+            k = int(np.argmin(errs))
+            return self._grid[k].copy(), self._offsets[k].copy()
+        idx = np.where(feasible)[0]
+        k = int(idx[np.argmin(np.abs(self._com_dy[idx]))])
+        return self._grid[k].copy(), self._offsets[k].copy()
+
     def solve(self, target_offset):
         """Joint angles putting the jaws at `target_offset` from the body.
 
@@ -412,9 +502,16 @@ class ArmIK:
         reach the object.
         """
         t = np.asarray(target_offset, dtype=np.float64)
-        k = int(np.argmin(np.linalg.norm(self._offsets - t, axis=1)))
+
+        def score(err, dy):
+            """Reach error plus a penalty on slinging the arm's mass sideways."""
+            return err + self.COM_PENALTY * abs(dy)
+
+        errs = np.linalg.norm(self._offsets - t, axis=1)
+        k = int(np.argmin(errs + self.COM_PENALTY * np.abs(self._com_dy)))
         best = self._grid[k].copy()
-        best_err = np.linalg.norm(self._offsets[k] - t)
+        best_err = float(errs[k])
+        best_score = score(best_err, self._com_dy[k])
 
         span = (self._lim[0][1] - self._lim[0][0]) / len(np.unique(self._grid[:, 0]))
         for _ in range(self._refine_steps):
@@ -423,9 +520,11 @@ class ArmIK:
                 for d2 in (-span, 0.0, span):
                     a = np.clip(best[0] + d1, *self._lim[0])
                     b = np.clip(best[1] + d2, *self._lim[1])
-                    err = np.linalg.norm(self._offset(a, b) - t)
-                    if err < best_err - 1e-9:
-                        best, best_err, improved = np.array([a, b]), err, True
+                    err = float(np.linalg.norm(self._offset(a, b) - t))
+                    s = score(err, self._com_offset(a, b))
+                    if s < best_score - 1e-9:
+                        best = np.array([a, b])
+                        best_err, best_score, improved = err, s, True
             span *= 0.5
             if not improved:
                 span *= 0.5
@@ -459,23 +558,19 @@ def build_plan(ik, obj, place, obj_half_height):
     # if the block is resized.
     GRASP_RISE = obj_half_height + 0.030
 
-    # Solve at the arm's fixed lateral offset -- x is not a free variable.
-    q_grasp, e_grasp = ik.solve([ik.x_offset, 0.0, -GRASP_DROP])
-    q_travel, e_travel = ik.solve([ik.x_offset, 0.0, -TRAVEL_DROP])
-    for name, err in (("grasp", e_grasp), ("travel", e_travel)):
-        if err > 0.01:
-            raise RuntimeError(
-                f"IK for the {name} pose is {err*1000:.0f} mm off -- outside the "
-                f"arm's envelope. Adjust GRASP_DROP/TRAVEL_DROP.")
+    # Straightest pose for each required drop; the returned offset is where the
+    # jaws end up relative to the body, in all three axes.
+    q_grasp, off_grasp = ik.solve_drop(GRASP_DROP)
+    q_travel, off_travel = ik.solve_drop(TRAVEL_DROP)
 
-    # Body target = where the jaws must be, minus the body-to-jaw offset. The x
-    # term is what makes the drone fly slightly to one side so the off-centre
-    # gripper lands on the object rather than beside it.
-    to_body = np.array([-ik.x_offset, 0.0, GRASP_RISE + GRASP_DROP])
-    over_obj = obj + np.array([-ik.x_offset, 0.0, CRUISE])
-    at_obj = obj + to_body
-    over_place = place + np.array([-ik.x_offset, 0.0, CRUISE])
-    at_place = place + to_body
+    # Body target = jaw target MINUS the body->jaw offset, in all three axes.
+    # Using the full offset (not just x) is what lets the arm hang straight: the
+    # drone flies to wherever puts the naturally-hanging jaws over the object,
+    # rather than the arm reaching sideways to meet a body-centred target.
+    at_obj = obj + np.array([0.0, 0.0, GRASP_RISE]) - off_grasp
+    at_place = place + np.array([0.0, 0.0, GRASP_RISE]) - off_grasp
+    over_obj = obj + np.array([0.0, 0.0, CRUISE]) - off_travel
+    over_place = place + np.array([0.0, 0.0, CRUISE]) - off_travel
 
     # Phases that must actually land on the object carry a world-space servo
     # point; transit phases do not need one.
@@ -492,7 +587,8 @@ def build_plan(ik, obj, place, obj_half_height):
     }
 
 
-def run_episode(model, data, renderer, controller, ik, rng, task_text):
+def run_episode(model, data, renderer, controller, ik, rng, task_text,
+                viewer=None, verbose=False):
     obj = randomise_episode(model, data, rng)
     controller.reset_after_randomisation()
 
@@ -535,6 +631,8 @@ def run_episode(model, data, renderer, controller, ik, rng, task_text):
             for _ in range(substeps):
                 controller.step()
                 mujoco.mj_step(model, data)
+            if viewer is not None:
+                viewer.sync()
 
             tol = ARRIVE_TOL_PRECISE if servo_to is not None else ARRIVE_TOL_TRANSIT
             if np.linalg.norm(data.qpos[0:3] - drone_xyz) < tol:
@@ -547,21 +645,71 @@ def run_episode(model, data, renderer, controller, ik, rng, task_text):
                 "action": controller.action(),
                 "task": task_text,
             }
-            for key, cam in CAMERAS.items():
-                renderer.update_scene(data, camera=cam)
-                frame[f"observation.images.{key}"] = renderer.render().copy()
+            # Rendering two 480x640 cameras per frame dominates runtime, and a
+            # --no-save run discards them. Skip it there so visual debugging with
+            # --view stays responsive.
+            if renderer is not None:
+                for key, cam in CAMERAS.items():
+                    renderer.update_scene(data, camera=cam)
+                    frame[f"observation.images.{key}"] = renderer.render().copy()
             frames.append(frame)
 
             if held >= HOLD_FRAMES:
                 break
 
+        if verbose:
+            err = np.linalg.norm(data.qpos[0:3] - drone_xyz)
+            gs = grasp_site_pos(model, data)
+            print(f"    {phase:<10} {f_i + 1:3d} frames "
+                  f"{'ARRIVED' if held >= HOLD_FRAMES else 'timeout'} | "
+                  f"body {np.round(data.qpos[0:3], 3)} err={err:.3f} | "
+                  f"jaws z={gs[2]:.3f} | "
+                  f"roll/pitch={np.degrees(_rp(data)):.0f}/{np.degrees(_rp(data,1)):.0f} deg")
+
     return frames
+
+
+def _rp(data, idx=0):
+    """Roll (idx 0) or pitch (idx 1) from the drone quaternion."""
+    w, x, y, z = data.qpos[3:7]
+    if idx == 0:
+        return np.arctan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y))
+    return np.arcsin(np.clip(2 * (w * y - z * x), -1, 1))
+
+
+def pick_rgb_encoder():
+    """Choose a video codec that actually exists in this environment.
+
+    LeRobot defaults to libsvtav1, which is not in the pyav wheel on Windows --
+    RGBEncoderConfig() then raises "Unsupported video codec" before a single
+    frame is written. Rather than hardcode a codec (which would break on the
+    machine that DOES have svtav1), ask pyav what it has and take the first
+    preference that is present.
+
+    h264 is preferred over the AV1 codecs on purpose: torchcodec is unavailable
+    on Windows so decoding falls back to pyav, and h264 decodes considerably
+    faster there. Training reads these videos far more often than we write them.
+    """
+    from lerobot.configs.video import RGBEncoderConfig
+    from lerobot.datasets import detect_available_encoders_pyav
+
+    preference = ["h264", "libsvtav1", "hevc", "libaom-av1"]
+    available = detect_available_encoders_pyav(preference)
+    for codec in preference:
+        if codec in available:
+            if codec != preference[0]:
+                print(f"note: falling back to '{codec}' (h264 unavailable here)")
+            return RGBEncoderConfig(vcodec=codec)
+    raise RuntimeError(
+        f"pyav has none of {preference}. Either install a fuller ffmpeg build, or "
+        f"pass use_videos=False to LeRobotDataset.create to store PNG frames instead."
+    )
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--episodes", type=int, default=50)
-    ap.add_argument("--out_repo_id", type=str, required=True)
+    ap.add_argument("--out_repo_id", type=str, default=None)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--task", type=str,
                     default="pick up the red cube and place it to the side")
@@ -570,7 +718,31 @@ def main():
                          "~1.8 s at 50, and an episode needs ~140 solves. Drop to "
                          "~20 for a quick smoke run.")
     ap.add_argument("--horizon", type=int, default=10)
+    ap.add_argument("--verbose", action="store_true",
+                    help="Print a per-phase summary: frames used, whether the phase "
+                         "arrived or timed out, body position/error, jaw height and "
+                         "attitude. This is what tells you WHERE an episode fails.")
+    ap.add_argument("--view", action="store_true",
+                    help="Open the MuJoCo viewer and watch the episode run.")
+    ap.add_argument("--no-save", action="store_true",
+                    help="Skip LeRobot entirely -- fly the FSM and render nothing "
+                         "to disk. Pair with --view for pure visual debugging; it "
+                         "also sidesteps any video-encoding problems in the env.")
+    ap.add_argument("--overwrite", action="store_true",
+                    help="Delete an existing dataset at this repo_id first. "
+                         "LeRobotDataset.create() calls mkdir(exist_ok=False), so "
+                         "a re-run otherwise dies with FileExistsError.")
     args = ap.parse_args()
+
+    if not args.no_save and not args.out_repo_id:
+        ap.error("--out_repo_id is required unless --no-save is given")
+
+    if args.overwrite and not args.no_save:
+        from lerobot.utils.constants import HF_LEROBOT_HOME
+        root = Path(HF_LEROBOT_HOME) / args.out_repo_id
+        if root.exists():
+            shutil.rmtree(root)
+            print(f"removed existing dataset at {root}")
 
     rng = np.random.default_rng(args.seed)
 
@@ -579,7 +751,8 @@ def main():
     controller = SkyGripController(
         MODEL_PATH, MPPIParams(num_samples=args.samples, horizon=args.horizon))
     model, data = controller.model, controller.data
-    renderer = mujoco.Renderer(model, height=IMG_H, width=IMG_W)
+    # No renderer when nothing is being saved -- see run_episode.
+    renderer = None if args.no_save else mujoco.Renderer(model, height=IMG_H, width=IMG_W)
     ik = ArmIK(model)
 
     solves_per_ep = len(PHASES) * FPS * (controller.CONTROL_HZ / FPS)
@@ -607,20 +780,49 @@ def main():
         "dtype": "float32", "shape": (len(ACTION_NAMES),), "names": ACTION_NAMES,
     }
 
-    dataset = LeRobotDataset.create(
-        repo_id=args.out_repo_id, fps=FPS, features=features, robot_type="skygrip",
-    )
+    dataset = None
+    if not args.no_save:
+        dataset = LeRobotDataset.create(
+            repo_id=args.out_repo_id, fps=FPS, features=features,
+            robot_type="skygrip", rgb_encoder=pick_rgb_encoder(),
+        )
 
-    for ep in range(args.episodes):
-        for f in run_episode(model, data, renderer, controller, ik, rng, args.task):
-            dataset.add_frame(f)          # v3.0: task lives INSIDE the frame dict
-        dataset.save_episode()
-        print(f"episode {ep + 1}/{args.episodes} ({len(PHASES) * FPS} frames)")
+    viewer = None
+    if args.view:
+        viewer = mujoco.viewer.launch_passive(model, data)
+        viewer.cam.distance = 2.0
+        viewer.cam.elevation = -20
+        viewer.cam.azimuth = 135
 
-    # Without finalize() the parquet footer is never written and the dataset
-    # is invalid -- not merely incomplete.
-    dataset.finalize()
-    print("done. dataset.push_to_hub() to upload.")
+    try:
+        for ep in range(args.episodes):
+            frames = run_episode(model, data, renderer, controller, ik, rng,
+                                 args.task, viewer=viewer, verbose=args.verbose)
+            if dataset is not None:
+                for f in frames:
+                    dataset.add_frame(f)   # v3.0: task lives INSIDE the frame dict
+                dataset.save_episode()
+
+            # Report the outcome rather than just the frame count -- "it ran" and
+            # "it worked" are different things, and only the second one matters.
+            obj_z = data.qpos[model.jnt_qposadr[
+                model.body_jntadr[model.body("target_object").id]] + 2]
+            drone_z = data.qpos[2]
+            lifted = obj_z > 0.55          # pedestal top 0.50 + half-height 0.04
+            print(f"episode {ep + 1}/{args.episodes}: {len(frames)} frames | "
+                  f"drone z={drone_z:.2f} ({'airborne' if drone_z > 0.35 else 'CRASHED'}) | "
+                  f"object z={obj_z:.3f} ({'MOVED' if lifted else 'not lifted'})")
+    finally:
+        if viewer is not None:
+            viewer.close()
+
+    if dataset is not None:
+        # Without finalize() the parquet footer is never written and the dataset
+        # is invalid -- not merely incomplete.
+        dataset.finalize()
+        print("done. dataset.push_to_hub() to upload.")
+    else:
+        print("done (--no-save: nothing written).")
 
 
 if __name__ == "__main__":
