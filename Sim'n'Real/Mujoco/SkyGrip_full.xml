@@ -301,13 +301,16 @@
         </body>
 
         <body name="current_target" pos="0 0 1.5" mocap="true">
-            <geom type="sphere" size="0.05" rgba="0 1 0 0.8" contype="0" conaffinity="0"/>
+            <!-- Debug marker, alpha 0: nothing moves it any more (the PD controller
+                 does not use it), so it just sits at (0,0,1.5). Made invisible so it
+                 can never leak into an onboard training frame. -->
+            <geom type="sphere" size="0.05" rgba="0 1 0 0" contype="0" conaffinity="0"/>
         </body>
         <body name="waypoint_0" pos="0 0 1.5" mocap="true">
-            <geom type="sphere" size="0.02" rgba="0.5 0.5 1 0.5" contype="0" conaffinity="0"/>
+            <geom type="sphere" size="0.02" rgba="0.5 0.5 1 0" contype="0" conaffinity="0"/>
         </body>
         <body name="waypoint_1" pos="0 0 1.5" mocap="true">
-            <geom type="sphere" size="0.02" rgba="0.5 0.5 1 0.5" contype="0" conaffinity="0"/>
+            <geom type="sphere" size="0.02" rgba="0.5 0.5 1 0" contype="0" conaffinity="0"/>
         </body>
     </worldbody>
 </mujoco>

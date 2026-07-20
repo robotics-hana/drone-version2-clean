@@ -202,6 +202,10 @@ PHASE_FRAME_BUDGET = {
     # HOLD_FRAMES, so a generous cap costs nothing on the fast overhead path.
     "REACH_OUT": int(12.0 * FPS),
     "DRAW_IN": int(12.0 * FPS),
+    # HOLD is the dwell at the safe hover in a refusal episode -- it deliberately
+    # runs its FULL budget (see the phase loop) so the "keep holding, not engaging"
+    # behaviour is demonstrated for a few seconds rather than exited immediately.
+    "HOLD": int(4.0 * FPS),
     # PLACE both descends ~0.4 m AND translates to the place point while carrying
     # the block, so it needs longer than a plain transit. At 4 s it timed out
     # 168 mm short in y, and RELEASE then opened the jaws past the edge of the
@@ -487,6 +491,53 @@ class SkyGripController:
 _CAM_NOMINAL = {}
 
 
+def choose_episode(rng):
+    """Pick the episode kind and its colours, per the act/refuse mix.
+
+    Returns (mode, named_colour, colour_target_body, colour_distractor_body,
+    is_pick). The target-body colour goes on target_object (the block picked in an
+    act episode); the distractor-body colour on distractor_object. `named_colour`
+    is what the instruction says; in an act episode it equals the target-body
+    colour, in refuse_safety it is the forbidden colour present on a block, and in
+    refuse_ungrounded it is a colour that is NOT in the scene.
+    """
+    mode = str(rng.choice(EPISODE_MODES, p=EPISODE_MODE_P))
+    non_forbidden = [c for c in NAMED_COLOURS if c != FORBIDDEN_COLOUR]
+    if mode == "act":
+        ca = str(rng.choice(non_forbidden))                       # the picked block
+        # Distractor may be ANY other colour, including the forbidden one -- an act
+        # episode with a red distractor teaches "red present, but pick the named
+        # green", reinforcing the rule without a refusal.
+        cb = str(rng.choice([c for c in NAMED_COLOURS if c != ca]))
+        return mode, ca, ca, cb, True
+    if mode == "refuse_safety":
+        # The forbidden colour is present and named; refuse it. The other block is
+        # a permitted colour that (in this episode) is simply not asked for.
+        cb = str(rng.choice(non_forbidden))
+        return mode, FORBIDDEN_COLOUR, FORBIDDEN_COLOUR, cb, False
+    # refuse_ungrounded: both present blocks are permitted colours, and the named
+    # colour is a DIFFERENT permitted colour that is absent -- so the only reason
+    # to refuse is that it is not there (not the safety rule).
+    ca, cb = (str(x) for x in rng.choice(non_forbidden, size=2, replace=False))
+    absent = [c for c in non_forbidden if c not in (ca, cb)]
+    return mode, str(rng.choice(absent)), ca, cb, False
+
+
+def build_abstain_plan(ik, scene):
+    """Phase list for a refusal: retreat to the safe-observation hover and hold,
+    touching neither block. The arm folds to the neutral transit pose and the
+    gripper stays open -- a clear 'not engaging', distinct from every pick waypoint.
+    """
+    ped_y = float(scene["target"][1])
+    surface = float(scene["surface_z"])
+    q_travel, _ = ik.solve_drop(0.13)
+    safe = np.array([0.0, ped_y + SAFE_BACK, surface + SAFE_HEIGHT])
+    return [
+        ("RETREAT", safe, q_travel, GRIPPER_OPEN, None),
+        ("HOLD",    safe, q_travel, GRIPPER_OPEN, None),
+    ]
+
+
 def _place_block(model, data, body_name, x, ped_y, surface_z, colour_rgb, rng):
     """Size, place, yaw and colour one block on the surface. Returns (pos, half_h).
 
@@ -512,7 +563,7 @@ def _place_block(model, data, body_name, x, ped_y, surface_z, colour_rgb, rng):
     return pos, half_h
 
 
-def randomise_episode(model, data, rng):
+def randomise_episode(model, data, rng, colour_target, colour_distractor):
     """Domain-randomise object, drone start pose, surface, cameras and lighting.
 
     Volume alone overfits: LeRobot's own guidance pairs "~50 episodes" with 5
@@ -581,14 +632,13 @@ def randomise_episode(model, data, rng):
         [lum * (1.0 + warm), lum * (1.0 + 0.35 * warm), lum * (1.0 - 0.55 * warm)],
         0.05, 0.95)
 
-    # --- objects: TWO blocks for language grounding -- a target (the one to pick)
-    #     and a distractor. They get two DIFFERENT named colours; the episode task
-    #     names the target's. Which SIDE the target is on is randomised INDEPENDENTLY
-    #     of its colour, so the policy cannot shortcut on position ("always pick the
-    #     left one") and has to key on colour. Each block's SIZE/yaw comes from the
-    #     gripper's grip envelope (see _place_block / OBJ_*_RANGE).
-    tc, dc = rng.choice(list(NAMED_COLOURS), size=2, replace=False)
-    target_colour, distractor_colour = str(tc), str(dc)
+    # --- objects: TWO blocks. target_object gets colour_target, distractor_object
+    #     gets colour_distractor -- the CALLER chooses them (see choose_episode), so
+    #     the same scene machinery serves act and refuse episodes. Which SIDE the
+    #     target is on is randomised INDEPENDENTLY of colour, so the policy cannot
+    #     shortcut on position ("always pick the left one") and has to key on colour.
+    #     Each block's SIZE/yaw comes from the gripper's grip envelope (_place_block).
+    target_colour, distractor_colour = colour_target, colour_distractor
 
     # Target one side, distractor the other -> separation >= MULTI_OBJ_MIN_SEP.
     ts = float(rng.choice([-1.0, 1.0]))                 # which side the target sits
@@ -733,6 +783,30 @@ NAMED_COLOURS = {
 # point and the distractor -- so the grasp, the descent and the set-down never
 # foul the block that is meant to be left alone.
 MULTI_OBJ_MIN_SEP = 0.08
+
+# --- Abstention (safety) demonstrations ------------------------------------
+# The dataset mixes three episode kinds so ONE policy learns both to act and to
+# REFUSE -- which is what the abstention-direction study needs: act vs refuse with
+# the visual scene held fixed and only the instruction changing.
+#   act               -- named colour present and permitted -> pick it.
+#   refuse_safety     -- named colour is the FORBIDDEN one, present and perfectly
+#                        pickable, but refused: the safety-rule analogue of an LLM
+#                        declining a possible-but-disallowed request. Ablating the
+#                        refusal direction should make the policy pick it.
+#   refuse_ungrounded -- named colour is ABSENT: an impossible request.
+# The instruction template is IDENTICAL across all three ("Pick up the {colour}
+# block ..."); only the colour word and the scene decide act vs refuse, so a
+# difference-of-means over the two cases isolates the DECISION, not the phrasing.
+FORBIDDEN_COLOUR = "red"
+EPISODE_MODES = ["act", "refuse_safety", "refuse_ungrounded"]
+# Balanced act vs refuse (0.5 / 0.5); refuse split evenly between the two reasons.
+EPISODE_MODE_P = [0.5, 0.25, 0.25]
+
+# Active-retreat refusal: rise to a fixed safe-observation hover above the scene,
+# backed off in +y, arm folded, gripper open, and hold. A consistent, distinct,
+# learnable "I am not engaging" behaviour -- see build_abstain_plan.
+SAFE_HEIGHT = 0.60     # m above the work surface
+SAFE_BACK = 0.10       # m in +y, away from where the arm would reach
 
 OBJ_SIDE_RANGE = (0.018, 0.022)     # along the jaws' closing axis
 # Depth, along the gripper's BLIND axis. This is a hard clearance limit, not a
@@ -1136,90 +1210,106 @@ def build_plan(ik, obj, place, obj_half_height, reach_y=None):
 
 
 def episode_succeeded(model, data, info):
-    """Did the block actually get picked up and put down where it was asked?
+    """Did the episode do the right thing -- pick the named block, or refuse?
 
-    The old check was `obj_z > 0.55`, hardcoded to the original fixed 0.50 m
-    pedestal and 40 mm half-height. Once pedestal height and object size became
-    randomised that number meant nothing, and it reported a genuinely successful
-    pick-and-place as "not lifted". Success is defined against THIS episode's
-    geometry instead.
+    Success is defined against THIS episode's randomised geometry (an early bug
+    hardcoded obj_z > 0.55 to the original fixed pedestal and reported good picks
+    as failures). For a refusal, "right" means the opposite of a pick: touch
+    nothing and retreat to the safe hover.
     """
-    oadr = model.jnt_qposadr[model.body_jntadr[model.body("target_object").id]]
-    obj = data.qpos[oadr:oadr + 3]
-    place = info["place"]
     surface = info["surface_z"]
-    half_h = info["obj_half_height"]
+    oadr = model.jnt_qposadr[model.body_jntadr[model.body("target_object").id]]
+    dadr = model.jnt_qposadr[model.body_jntadr[model.body("distractor_object").id]]
+    obj = data.qpos[oadr:oadr + 3]
+    dist = data.qpos[dadr:dadr + 3]
+    tmoved = float(np.linalg.norm(obj[0:2] - info["obj_start"][0:2]))
+    dmoved = float(np.linalg.norm(dist[0:2] - info["distractor_start"][0:2]))
 
-    # Crash = the body has fallen to or below the work surface. This used to be a
-    # hard 0.35 m, which was fine while every pedestal put the grasp near 0.75 m,
-    # but a forward-reach grasp hangs the jaws ~20 mm shallower and so flies the
-    # body lower, and on the shortest pedestals (surface 0.12 m) it legitimately
-    # ends up hovering at ~0.33 m -- below 0.35, so a perfectly good pick was
-    # reported as a crash. Judging against the surface keeps the check meaningful
-    # at every working height: a real crash tumbles the drone to the floor, well
-    # below the surface, while a low-but-controlled hover stays above it.
+    # Crash = the body has fallen to or below the work surface. A hard 0.35 m used
+    # to falsely fail low-pedestal picks where the body legitimately hovers ~0.33 m;
+    # judging against the surface keeps it meaningful at every working height.
     if data.qpos[2] < surface + 0.05:
         return False, f"drone crashed (z={data.qpos[2]:.2f}, surface={surface:.2f})"
-    # On the floor means it was dropped, not placed.
+
+    if not info["is_pick"]:
+        # REFUSAL: the whole point is that NEITHER block was touched and the drone
+        # backed off to the safe hover. Picking or nudging a block here is a failed
+        # refusal even though the same motion would pass as a pick elsewhere.
+        if tmoved > DISTRACTOR_MOVE_TOL or dmoved > DISTRACTOR_MOVE_TOL:
+            return False, (f"refusal disturbed a block (target {tmoved*1000:.0f} mm, "
+                           f"distractor {dmoved*1000:.0f} mm)")
+        if data.qpos[2] < info["safe_z"] - 0.12:
+            return False, (f"did not retreat to the safe hover "
+                           f"(z={data.qpos[2]:.2f}, wanted ~{info['safe_z']:.2f})")
+        return True, (f"refused [{info['mode']}] '{info['named_colour']}': touched "
+                      f"nothing, held safe hover at z={data.qpos[2]:.2f}")
+
+    # PICK: the named (target) block must end up on the surface at the place point,
+    # and the distractor must be left where it started -- picking or knocking the
+    # wrong block is a failure even if the target lands correctly.
+    place = info["place"]
+    half_h = info["obj_half_height"]
     if obj[2] < surface - 0.02:
         return False, f"object on the floor (z={obj[2]:.3f})"
-    # Resting on the surface, allowing for the block having settled or tipped.
     if abs(obj[2] - (surface + half_h)) > 2.5 * half_h:
         return False, f"object not resting on the surface (z={obj[2]:.3f})"
     d = float(np.linalg.norm(obj[0:2] - place[0:2]))
     if d > PLACE_TOL:
         return False, f"object {d*1000:.0f} mm from the place target"
-    # The DISTRACTOR must be left where it started. This is what makes an episode a
-    # valid grounding demonstration: picking the wrong block, or knocking the other
-    # one while manoeuvring, is a failure even if the target happens to end up in
-    # the right place. A few mm of settle is tolerated; a real disturbance is not.
-    dadr = model.jnt_qposadr[model.body_jntadr[model.body("distractor_object").id]]
-    dist = data.qpos[dadr:dadr + 3]
-    dmoved = float(np.linalg.norm(dist[0:2] - info["distractor_start"][0:2]))
     if dmoved > DISTRACTOR_MOVE_TOL:
         return False, (f"distractor ({info['distractor_colour']}) moved "
                        f"{dmoved*1000:.0f} mm -- wrong block disturbed")
-    moved = float(np.linalg.norm(obj[0:2] - info["obj_start"][0:2]))
     return True, (f"placed {info['target_colour']} block {d*1000:.0f} mm from "
-                  f"target, moved {moved*1000:.0f} mm ({info['distractor_colour']} "
+                  f"target, moved {tmoved*1000:.0f} mm ({info['distractor_colour']} "
                   f"distractor undisturbed)")
 
 
 def run_episode(model, data, renderer, controller, ik, rng, task_template,
                 viewer=None, verbose=False):
-    scene = randomise_episode(model, data, rng)
+    # Episode kind: act (pick the named block) or refuse (safety / ungrounded).
+    # choose_episode fixes the two blocks' colours and the named colour so that the
+    # instruction alone decides act vs refuse -- see its docstring.
+    mode, named_colour, colour_t, colour_d, is_pick = choose_episode(rng)
+    scene = randomise_episode(model, data, rng, colour_t, colour_d)
     controller.reset_after_randomisation()
 
-    # Two blocks now; we always pick the TARGET (the distractor is left alone). The
-    # scene already fixed both blocks' positions/colours and the place point, with
-    # the target's displacement steered away from the distractor -- see
-    # randomise_episode. The task NAMES the target's colour, so the instruction is
-    # what tells the policy which of the two to pick.
     obj = scene["target"]
     place = scene["place"]
     obj_half_height = scene["target_half_h"]
-    task_text = task_template.format(colour=scene["target_colour"])
+    # Identical instruction template for act and refuse; only the colour word (and
+    # the scene) differ. That is the whole point -- the policy must learn from the
+    # colour, not the phrasing, whether to pick or to refuse.
+    task_text = task_template.format(colour=named_colour)
 
-    # Per-episode approach style: mostly overhead, some forward-reach (see
-    # REACH_FRACTION). reach_y=None is the vertical descent; a value reaches out.
     reach_y = None
-    if rng.random() < REACH_FRACTION:
-        reach_y = float(rng.uniform(*REACH_Y_RANGE))
-    # The forward-reach gesture swings the arm gently; the overhead path keeps its
-    # faster slew. Reset every episode so a reach does not slow the next overhead.
-    controller.ARM_SLEW_RATE = REACH_SLEW if reach_y is not None else controller._base_slew
-    plan = build_plan(ik, obj, place, obj_half_height, reach_y=reach_y)
+    if is_pick:
+        # Approach style: mostly overhead, some forward-reach (see REACH_FRACTION).
+        if rng.random() < REACH_FRACTION:
+            reach_y = float(rng.uniform(*REACH_Y_RANGE))
+        # The reach gesture swings the arm gently; overhead keeps the faster slew.
+        controller.ARM_SLEW_RATE = REACH_SLEW if reach_y is not None else controller._base_slew
+        plan = build_plan(ik, obj, place, obj_half_height, reach_y=reach_y)
+    else:
+        controller.ARM_SLEW_RATE = controller._base_slew
+        plan = build_abstain_plan(ik, scene)
+
     info = {"place": place.copy(), "obj_start": obj.copy(),
-            "obj_half_height": obj_half_height,
-            "reach_y": reach_y, "task": task_text,
+            "obj_half_height": obj_half_height, "reach_y": reach_y,
+            "task": task_text, "mode": mode, "named_colour": named_colour,
+            "is_pick": is_pick,
             "target_colour": scene["target_colour"],
             "distractor_colour": scene["distractor_colour"],
             "distractor_start": scene["distractor"].copy(),
-            "surface_z": scene["surface_z"]}
+            "surface_z": scene["surface_z"],
+            "safe_z": scene["surface_z"] + SAFE_HEIGHT}
     if verbose:
-        style = f"FORWARD-REACH y={reach_y:+.3f}" if reach_y is not None else "OVERHEAD"
-        print(f"  task: \"{task_text}\"  ({scene['target_colour']} target vs "
-              f"{scene['distractor_colour']} distractor)  | {style}")
+        if is_pick:
+            style = f"FORWARD-REACH y={reach_y:+.3f}" if reach_y is not None else "OVERHEAD"
+            print(f"  ACT: \"{task_text}\"  ({scene['target_colour']} target vs "
+                  f"{scene['distractor_colour']} distractor)  | {style}")
+        else:
+            print(f"  {mode.upper()}: \"{task_text}\"  (scene has "
+                  f"{scene['target_colour']} + {scene['distractor_colour']})  -> REFUSE")
 
     frames = []
     # Physics runs at model timestep (1 ms); a frame is one 1/FPS interval, so
@@ -1287,6 +1377,10 @@ def run_episode(model, data, renderer, controller, ik, rng, task_template,
             # or LIFT starts before the block is held (see gripper_settled).
             if phase in ("GRASP", "RELEASE"):
                 arrived = arrived and controller.gripper_settled()
+            # HOLD is the refusal dwell: never "arrive", so it records its full
+            # budget of the drone holding station at the safe hover.
+            if phase == "HOLD":
+                arrived = False
             if arrived:
                 held += 1
             else:
@@ -1516,9 +1610,12 @@ def main():
                 # 50-episode run. Serialising costs some wall clock and makes
                 # the run survivable.
                 dataset.save_episode(parallel_encoding=False)
-            style = "reach" if info.get("reach_y") is not None else "overhead"
+            if info["is_pick"]:
+                label = "reach" if info.get("reach_y") is not None else "overhead"
+            else:
+                label = info["mode"]
             print(f"episode {saved}/{args.episodes} (attempt {attempts}): "
-                  f"{len(frames)} frames | SUCCESS | {style} | {why}")
+                  f"{len(frames)} frames | SUCCESS | {label} | {why}")
         if saved < args.episodes:
             print(f"WARNING: only {saved}/{args.episodes} succeeded in "
                   f"{attempts} attempts -- dataset is short.")
