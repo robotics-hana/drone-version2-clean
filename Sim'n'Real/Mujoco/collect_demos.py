@@ -64,31 +64,35 @@ validate_visual_features_consistency outright. The mapping to physical
 cameras is recorded in CAMERAS below.
 
 
-WHY THE ARM IS SERVOED, NOT SCRIPTED
+WHY A PD FLIGHT CONTROLLER, NOT MPPI
 ------------------------------------
-The single hardest constraint on this platform: the grasp window is ~5 mm tall
-(measured -- the band where the jaws both clear the object on approach and can
-close on it), while MPPI holds body position to ~70 mm. The body controller is
-an order of magnitude coarser than the task.
+The grasp needs the jaws within ~10 mm laterally: the open jaws clear a 20 mm
+block by only about 10 mm a side, so beyond that a jaw lands on the block instead
+of around it and sweeps it off the pedestal.
 
-Open-loop arm angles therefore cannot work, however good the IK is. The arm
-servos track setpoints to ~1 mm and Joint_2 directly sets the vertical drop, so
-the arm re-solves against the drone's MEASURED pose every control step and
-absorbs the body's error (SkyGripController.step, `servo_to`). Measured clean
-approaches: 78% with the body within +-100 mm, 89% within +-70 mm, 100% within
-+-50 mm -- hence ARRIVE_TOL_PRECISE.
+MPPI could not deliver that. Measured steady-state station keeping over 30 s,
+best of an 8-configuration sweep, was 106 mm RMS, and several tuned
+configurations flipped the drone outright. The cascaded PD+I in pd_flight.py
+holds 0.001 mm RMS. Episodes now track jaw-to-object error at 1-2 mm.
 
-This is a genuine difference from fixed-base SmolVLA setups, where the base
-never moves and the arm never has to reject base disturbance.
+MPPI is still selectable with --flight mppi, and create_force_general.py also
+gained a threaded batch rollout (7.6x, validated against the sequential path to
+2.9e-12 relative cost error), but it is not the default.
 
-STILL UNVERIFIED
-----------------
-Everything above is validated STATICALLY -- poses stepped through mj_forward and
-checked for contact/clearance. A full flying episode ending in a successful lift
-has NOT been demonstrated. The last end-to-end attempt fell, though its cause is
-understood and fixed (the old geometry drove the jaws 28 mm into the pedestal and
-the contact impulse threw the drone). Run a single episode and watch it before
-trusting a 50-episode batch.
+The body, not the arm, corrects residual error. Swinging the arm to correct
+flipped the drone during DESCEND; the PD tracks a shifted body setpoint instead.
+
+VERIFIED END TO END
+-------------------
+Full flying episodes now complete the whole task: the block is grasped, lifted
+~400 mm off the pedestal, carried, set back down and released, with the drone
+airborne and attitude inside a few degrees throughout. Success is checked
+against each episode's own randomised geometry (episode_succeeded) and FAILED
+EPISODES ARE DISCARDED, not saved -- a failed demonstration teaches the policy
+to fly the approach and then drop the block.
+
+Observed success rate at the time of writing: 2/3 to 2/2 per batch. Re-check it
+on a larger batch before assuming it holds across the full randomisation range.
 """
 
 import argparse
@@ -103,6 +107,7 @@ import mujoco.viewer   # must be module level: importing it inside main() would
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
 from create_force_general import PureMPPIController, MPPIParams
+from pd_flight import PDFlightController
 
 MODEL_PATH = "SkyGrip_full.xml"
 FPS = 30
@@ -119,7 +124,18 @@ CAMERAS = {
     "camera2": "scene_cam",    # forward/navigation view from the nose
 }
 
-PHASES = ["APPROACH", "DESCEND", "GRASP", "LIFT", "TRANSPORT", "PLACE", "RELEASE"]
+# EXTEND exists because the arm and the body must never move at the same time.
+# Joint_1 rotates about x and so does body roll, so arm reaction torque lands on
+# the axis the flight controller is weakest about: an isolation test flipped the
+# drone whenever the arm moved, and held attitude whenever it did not, in both
+# hover and transit. Doing the whole travel->grasp swing (0.747 rad) in its own
+# hovering phase means every other phase flies with a STATIC arm.
+# Nothing after EXTEND changes the joints -- q_grasp is held all the way through
+# PLACE. That is also the more stable pose: q_grasp is nearly straight down
+# (0.32, 0.05) while q_travel is bent (0.27, -0.69), so the mass hangs below the
+# thrust point instead of swinging out to one side.
+PHASES = ["APPROACH", "EXTEND", "DESCEND", "GRASP",
+          "LIFT", "TRANSPORT", "PLACE", "RELEASE"]
 
 STATE_NAMES = (
     ["joint1", "joint2", "gripper"]
@@ -130,34 +146,54 @@ STATE_NAMES = (
 )
 ACTION_NAMES = ["drone_x", "drone_y", "drone_z", "joint1", "joint2", "gripper"]
 
-# Gripper aperture, in metres of right_clamp travel. These map to the TRUE
-# inner-face gap between the jaws, measured from the clamp meshes:
-#     0.037 -> 30.7 mm   (fully open; the widest object the jaws can admit)
-#     0.031 -> ~19 mm
-#     0.025 ->   6.7 mm
-#     0.012 -> jaws overlapping
-# Do NOT size objects from the distance between clamp geom ORIGINS -- that reads
-# 87.2 mm at full aperture and is meaningless, the same error as using the
-# gripper_assembly body origin as the end effector.
-# The target post is 20 mm wide, so CLOSED squeezes it by ~1 mm to hold it.
-GRIPPER_OPEN = 0.037
-GRIPPER_CLOSED = 0.031
+# Gripper aperture, in metres of right_clamp travel. HIGHER ctrl = MORE CLOSED:
+# both clamps slide apart as the command decreases (read off the slide joints and
+# confirmed by measuring the pad gap, after an earlier mesh-face measurement got
+# the two sides swapped and reported the mapping backwards).
+# Gap between the pad_1/pad_2 contact faces:
+#     0.037 -> 16.7 mm   (fully closed; squeezes the 20 mm post by 3.3 mm)
+#     0.030 -> 30.7 mm
+#     0.025 -> 40.7 mm   (open; clears the post with room for approach error)
+#     0.000 -> 90.7 mm
+# Gripping is done by the pad_1/pad_2 boxes, not the clamp meshes -- the meshes
+# are asymmetric and only one of them presented a usable face. Do NOT size
+# objects from the clamp geom ORIGINS; that reads 87.2 mm and is meaningless.
+GRIPPER_OPEN = 0.025
+GRIPPER_CLOSED = 0.037
 
 # Phase advance. Two tolerances, because the phases have different needs:
-#   TRANSIT  -- matches the MPPI's own waypoint tolerance; asking for tighter than
-#               the controller resolves just makes every phase time out.
-#   PRECISE  -- used only where the jaws must land on something. Measured: with
-#               closed-loop arm compensation, approaches are clean 78% of the time
-#               if the body is held within +-100 mm, 89% within +-70 mm, and
-#               100% within +-50 mm. The residual failures are the jaw taper (a
-#               mesh property, not tunable), so holding tighter is the only lever.
+#   TRANSIT  -- just needs to get the body into the neighbourhood.
+#   PRECISE  -- used where the jaws must land on the object, and it is a HARD
+#               geometric requirement, not a preference: the jaws open to a
+#               40.7 mm gap around a ~20 mm post, so anything beyond ~10 mm of
+#               lateral error puts a jaw through the object instead of around
+#               it, and the object is swept off the pedestal.
+# These were 0.10/0.05, sized for the MPPI, which could not resolve better than
+# ~106 mm RMS. Under those tolerances a GRASP was allowed to proceed at 47 mm
+# error and duly knocked the object to the floor. The PD controller settles to
+# ~1 mm, so the tolerance is now set by what the GRIPPER needs rather than by
+# what the flight controller could manage.
 # HOLD_FRAMES requires the drone to STAY inside tolerance rather than clip through
 # it at speed, which is what makes the grasp repeatable. MAX caps a phase that
 # cannot converge so one bad episode does not stall a 50-episode run.
-ARRIVE_TOL_TRANSIT = 0.10
-ARRIVE_TOL_PRECISE = 0.05
+ARRIVE_TOL_TRANSIT = 0.05
+ARRIVE_TOL_PRECISE = 0.012
 HOLD_FRAMES = 8
 MAX_FRAMES_PER_PHASE = int(4.0 * FPS)
+
+# Per-phase overrides. EXTEND slews the arm 0.747 rad, which takes 2.5 s at
+# ARM_SLEW_RATE=0.30; 6 s leaves room for the hover to resettle afterwards.
+# Keeping this tight matters because hover endurance is finite -- the whole
+# episode has to fit inside the window where the controller holds station.
+PHASE_FRAME_BUDGET = {
+    "EXTEND": int(6.0 * FPS),
+    # PLACE both descends ~0.4 m AND translates to the place point while carrying
+    # the block, so it needs longer than a plain transit. At 4 s it timed out
+    # 168 mm short in y, and RELEASE then opened the jaws past the edge of the
+    # pedestal and dropped the block on the floor -- an otherwise successful
+    # pick-and-carry failing on the last phase.
+    "PLACE": int(8.0 * FPS),
+}
 
 
 class SkyGripController:
@@ -179,16 +215,49 @@ class SkyGripController:
     anticipate where the arm is going, but the command itself is direct.
     """
 
-    CONTROL_HZ = 20.0        # MPPI replan rate; physics runs at 1 kHz
+    CONTROL_HZ = 20.0        # replan rate; physics runs at 1 kHz
 
-    def __init__(self, model_path, params=None):
-        self.mppi = PureMPPIController(model_path, params or MPPIParams())
+    # Jaw-position trim (see step()). Deliberately conservative: this authority
+    # moves the whole aircraft, and the pedestal is close enough that an
+    # over-eager correction lands the legs on it.
+    # DISABLED (gain 0). This trim was written when the flight controller held
+    # position to ~100 mm and the jaws had to be dragged onto the target. With
+    # the PD controller the open-loop waypoints already put the jaws within
+    # ~25 mm, and every version of the trim tried made things worse: it drove
+    # the drone into the pedestal, and at lower gains still produced a 554 mm
+    # runaway in -y during DESCEND. With it off, DESCEND arrives cleanly at
+    # 25 mm. Re-enable only with a proper rate limit and a fix for that runaway.
+    SERVO_ENGAGE = 0.10      # only trim once the jaws are within 100 mm
+    SERVO_GAIN = 0.0         # per control step
+    SERVO_LIMIT = 0.06       # total body offset the trim may command
+
+    def __init__(self, model_path, params=None, flight="pd"):
+        # "self.mppi" is now just "the flight controller" -- the PD controller
+        # exposes the same mppi_step/apply_control/target_pos surface, so the FSM
+        # below is unchanged by the swap.
+        #
+        # PD is the default because the difference is not marginal. Measured
+        # steady-state station keeping over 30 s:
+        #     MPPI, best of an 8-config sweep : 106 mm RMS (and several
+        #                                       configurations flipped outright)
+        #     PD + gravity feed-forward       : 0.001 mm RMS
+        # The grasp needs ~10 mm, because the open jaws clear a 20 mm post by
+        # only about 10 mm a side, so MPPI was an order of magnitude short of
+        # being able to grasp at all. MPPI remains selectable for comparison.
+        if flight == "pd":
+            self.mppi = PDFlightController(model_path)
+        else:
+            self.mppi = PureMPPIController(model_path, params or MPPIParams())
         self.model = self.mppi.model
         self.data = self.mppi.data
 
         self.idx_arm = [self.model.actuator(n).id
                         for n in ("act_joint1", "act_joint2")]
         self.idx_gripper = self.model.actuator("act_gripper").id
+        # Left jaw is driven directly, mirrored. See the actuator comment in
+        # SkyGrip_full.xml: relying on the soft equality constraint to transmit
+        # squeeze left the pads 20.4 mm apart on a 20 mm block (no grip at all).
+        self.idx_gripper_left = self.model.actuator("act_gripper_left").id
         self.drone_target = np.array([0.0, 0.0, 1.5])
         self.joint_target = np.zeros(2)
         self.gripper_cmd = GRIPPER_OPEN
@@ -200,6 +269,7 @@ class SkyGripController:
         self._servo_to = None
         self._ik = None
         self._q_cmd = np.zeros(2)   # slewed arm command actually sent to ctrl
+        self._servo_corr = np.zeros(3)
 
     # Max arm setpoint change per control step, rad. Joint_1 rotates about x and
     # so does body ROLL, which means arm reaction torque couples straight into the
@@ -212,8 +282,23 @@ class SkyGripController:
     # NOTE: this is rad per SECOND, converted to a per-physics-step increment in
     # step(). Expressing it per call is a trap -- step() runs at the physics rate
     # (1 kHz), not the control rate, so a per-call cap gets applied ~33x per frame
-    # and does nothing. 0.6 rad/s spreads the opening 0.89 rad swing over ~1.5 s.
-    ARM_SLEW_RATE = 0.6
+    # and does nothing.
+    # Swept at 25 samples / horizon 8 while the arm still moved DURING descent:
+    # 0.6 and 0.3 flipped the drone, 0.12 stayed upright but never converged,
+    # 0.05 held attitude but was so slow it never actually reached the grasp pose
+    # inside the phase budget -- it bought stability by freezing the arm.
+    # The arm was never the main destabiliser -- short MPPI lookahead was. Once
+    # the horizon went from 8 (0.40 s) to 16 (0.80 s), a 30 s hover with the arm
+    # slewing held attitude at every rate up to 0.30 rad/s and only failed at
+    # 0.50. Measured max|roll| / final drift over 30 s:
+    #     0.05 -> 15.3 deg / 0.352 m    0.15 -> 14.2 deg / 0.385 m
+    #     0.30 -> 22.9 deg / 0.138 m    0.50 -> FLIPPED at t=0.62
+    # 0.30 is chosen because it finishes the 0.747 rad swing in 2.5 s. That
+    # matters beyond convenience: hover endurance is finite, so a shorter EXTEND
+    # leaves more of the stability budget for the phases that need precision.
+    # These outcomes are marginal and seed-dependent (an earlier 0.05 run failed
+    # at t=25.9 where this one held), so treat the margin as thin.
+    ARM_SLEW_RATE = 0.30
 
     def set_targets(self, drone_xyz, joints, gripper, servo_to=None, ik=None):
         """servo_to: optional WORLD point the jaws should hold, closed-loop.
@@ -232,6 +317,7 @@ class SkyGripController:
         self.mppi.target_pos = self.drone_target
         self.mppi.target_q = self.joint_target
         self._servo_to = None if servo_to is None else np.asarray(servo_to, float)
+        self._servo_corr = np.zeros(3)   # per-phase, never carried over
         self._ik = ik
 
     def reset_after_randomisation(self):
@@ -242,9 +328,15 @@ class SkyGripController:
         longer exists, which shows up as a lurch in the opening frames -- i.e.
         contaminating exactly the part of every episode the policy sees most.
         """
-        self.mppi.u_init[:] = 0.0
-        self.mppi.u_init[:, 0] = self.mppi.nominal_hover_thrust
-        self.mppi.u_prev = np.zeros(self.mppi.nu)
+        if hasattr(self.mppi, "u_init"):          # MPPI warm start
+            self.mppi.u_init[:] = 0.0
+            self.mppi.u_init[:, 0] = self.mppi.nominal_hover_thrust
+            self.mppi.u_prev = np.zeros(self.mppi.nu)
+        else:                                      # PD integrator / reference
+            # Carrying either across episodes would inject the previous episode's
+            # accumulated error into the opening frames of the next one.
+            self.mppi._i_pos = np.zeros(3)
+            self.mppi._sp = None
         self._last_ctrl = -np.inf
         self._u = np.zeros(6)
         self._u[0] = self.mppi.nominal_hover_thrust
@@ -264,7 +356,37 @@ class SkyGripController:
             # Closed-loop arm compensation. Re-solve the arm against where the
             # drone ACTUALLY is, not where it was asked to be, so the jaws stay on
             # the target while the body drifts inside its 0.10 m tolerance.
-            if self._servo_to is not None and self._ik is not None:
+            # Close the loop on the MEASURED jaw position by moving the BODY.
+            # The body reaches its waypoint to ~25 mm but the jaws still land
+            # 28 mm sideways and 59 mm high, because the body->jaw offset is a
+            # feed-forward from ik.solve_drop() and every error in it lands
+            # straight on the grasp. grasp_site is observable, so servo on it.
+            # The body is the right thing to move: swinging the ARM to correct
+            # was measured flipping the drone during DESCEND (roll 155 deg),
+            # whereas the PD controller tracks a shifted body setpoint to ~1 mm.
+            if self._servo_to is not None:
+                jaws = grasp_site_pos(self.model, self.data)
+                # Integral correction on the FIXED waypoint. Writing
+                # "target = current_position + error" instead makes the setpoint
+                # sit a constant distance from the drone forever, which is a
+                # velocity command, not a position one -- it flew the drone into
+                # the ground at 0.15 m per control step. Accumulating against
+                # drone_target converges: once the jaws reach servo_to the error
+                # is zero and the correction stops growing.
+                # Trim only, and only once the open-loop waypoint has already
+                # brought the jaws close. Engaging it on the full 350 mm error at
+                # the start of DESCEND saturated the clamp instantly, commanded
+                # the body a quarter-metre off its waypoint, and flew it into the
+                # pedestal. The waypoint flies the descent; this corrects the
+                # residual body->jaw offset error, which is tens of millimetres.
+                err = self._servo_to - jaws
+                if np.linalg.norm(err) < self.SERVO_ENGAGE:
+                    self._servo_corr = np.clip(
+                        self._servo_corr + self.SERVO_GAIN * err,
+                        -self.SERVO_LIMIT, self.SERVO_LIMIT)
+                self.mppi.target_pos = self.drone_target + self._servo_corr
+
+            if False and self._servo_to is not None and self._ik is not None:
                 # Correct the vertical drop ONLY. The arm could also swing to fix
                 # lateral error, but doing so throws its CoM sideways and stands up
                 # a roll moment on the axis the body is weakest about -- the very
@@ -293,6 +415,7 @@ class SkyGripController:
         self.data.ctrl[self.idx_arm[0]] = self._q_cmd[0]
         self.data.ctrl[self.idx_arm[1]] = self._q_cmd[1]
         self.data.ctrl[self.idx_gripper] = self.gripper_cmd
+        self.data.ctrl[self.idx_gripper_left] = -self.gripper_cmd
 
     def action(self):
         """Logged action = the COMMANDED setpoints, not MPPI's realised output.
@@ -305,12 +428,32 @@ class SkyGripController:
                                [self.gripper_cmd]]).astype(np.float32)
 
 
+# Nominal camera poses, captured once so jitter is applied about the design pose
+# rather than compounding episode to episode.
+_CAM_NOMINAL = {}
+
+
 def randomise_episode(model, data, rng):
-    """Domain-randomise object, drone start pose and lighting.
+    """Domain-randomise object, drone start pose, surface, cameras and lighting.
 
     Volume alone overfits: LeRobot's own guidance pairs "~50 episodes" with 5
     distinct object positions x 10 episodes, and documents 25 episodes as too
     few. Randomise per episode, not per batch of episodes.
+
+    Factor priority follows the published evidence, which is consistent that
+    SPATIAL factors matter far more than appearance ones:
+      * Factor World (arXiv 2307.03659) measured, from a 91.7% baseline, camera
+        position -45.9 pp and table texture -38.9 pp, but lighting only -8.4 and
+        background -2.8.
+      * LIBERO-Plus (arXiv 2510.13626) ranks camera viewpoint and robot initial
+        state as the largest degradations across 10 VLAs including pi0.
+    So camera pose and object/surface geometry get the wide ranges here, and
+    lighting/colour get modest ones.
+
+    Note the ranges are deliberately narrow rather than maximal. RCAN
+    (arXiv 1812.07252) measured zero-shot grasp success of 37% under MILD
+    randomisation but 35% medium and 33% heavy -- widening the ranges made it
+    monotonically worse. Start narrow, widen only if real performance improves.
     """
     mujoco.mj_resetData(model, data)
 
@@ -318,20 +461,48 @@ def randomise_episode(model, data, rng):
     #     than qpos. Shifting the whole work surface (not just the object on it)
     #     stops the policy learning one fixed approach corridor.
     ped = model.body("pedestal").id
+    ped_gid = [g for g in range(model.ngeom) if model.geom_bodyid[g] == ped][0]
     ped_y = rng.uniform(0.28, 0.42)
-    model.body_pos[ped] = [0.0, ped_y, 0.25]
-    surface_z = 0.25 + model.geom_size[
-        [g for g in range(model.ngeom) if model.geom_bodyid[g] == ped][0]][2]
+    # Working HEIGHT varies too, so the policy cannot memorise one grasp altitude.
+    # The empirical study in arXiv 2603.22876 found table height the single
+    # largest real-world factor (~36.9% alone, above camera pose at ~23.5%).
+    # Half-height, so the surface lands between 0.40 m and 0.60 m.
+    ped_half_h = rng.uniform(0.20, 0.30)
+    model.geom_size[ped_gid, 2] = ped_half_h
+    model.body_pos[ped] = [0.0, ped_y, ped_half_h]
+    surface_z = 2.0 * ped_half_h
+    # Surface appearance: Factor World ranked table texture second only to camera
+    # pose (-38.9 pp). Without a texture library, vary the surface colour, which
+    # is the part of the wrist camera's view that dominates during the grasp.
+    model.geom_rgba[ped_gid, :3] = rng.uniform(0.25, 0.75, size=3)
 
     # --- object: on the pedestal surface, within its x extent, plus yaw so the
     #     grasp is not always axis-aligned (a fixed yaw teaches one approach only)
     bid = model.body("target_object").id
     adr = model.jnt_qposadr[model.body_jntadr[bid]]
-    # object centre sits half its height above the surface (block is 120 mm tall)
-    obj_half_h = model.geom_size[
-        [g for g in range(model.ngeom) if model.geom_bodyid[g] == bid][0]][2]
+    obj_gid = [g for g in range(model.ngeom) if model.geom_bodyid[g] == bid][0]
+
+    # --- object SIZE, bounded by what the gripper can actually hold. The pads
+    #     close to a 16.7 mm gap, and a square post of side s at yaw t presents
+    #     s*(|cos t| + |sin t|) across the jaws -- so size and yaw are coupled and
+    #     cannot be sampled independently. GRIP_ENVELOPE is measured, not assumed
+    #     (see grip_envelope.py); sampling outside it would generate episodes
+    #     where the demonstrated grasp fails, which is worse than no episode.
+    side = rng.uniform(*OBJ_SIDE_RANGE)
+    depth = rng.uniform(*OBJ_DEPTH_RANGE)
+    obj_half_h = rng.uniform(*OBJ_HALF_HEIGHT_RANGE)
+    model.geom_size[obj_gid] = [side / 2, depth / 2, obj_half_h]
+    # Widest presented width must still fit inside the closed gap plus the
+    # squeeze the pads can absorb.
+    # Yaw is limited by the BLIND axis, not the closing axis: rotating a
+    # 20 x 12 mm post swings its wide dimension into the direction the housing
+    # cannot clear. presented_depth(t) = side*|sin t| + depth*|cos t|, which at
+    # only 15 deg already turns a 12 mm depth into ~17 mm -- past the measured
+    # clearance limit. So this stays small; it is a property of the gripper, not
+    # a randomisation preference.
+    max_yaw = min(_max_safe_yaw(side), np.radians(10.0))
     obj = np.array([rng.uniform(-0.14, 0.14), ped_y, surface_z + obj_half_h])
-    yaw = rng.uniform(-np.pi / 4, np.pi / 4)
+    yaw = rng.uniform(-max_yaw, max_yaw)
     data.qpos[adr:adr + 3] = obj
     data.qpos[adr + 3:adr + 7] = [np.cos(yaw / 2), 0, 0, np.sin(yaw / 2)]
 
@@ -356,11 +527,89 @@ def randomise_episode(model, data, rng):
     model.light_diffuse[fill] = [amb, amb, amb]
 
     # --- object colour, so the policy keys on shape/position not one RGB
-    gid = [g for g in range(model.ngeom) if model.geom_bodyid[g] == bid][0]
-    model.geom_rgba[gid, :3] = rng.uniform(0.15, 0.9, size=3)
+    model.geom_rgba[obj_gid, :3] = rng.uniform(0.15, 0.9, size=3)
+
+    # --- camera pose jitter. The highest-value factor in the literature and the
+    #     one this script previously did not vary at all. Ranges follow NVIDIA's
+    #     SO-101 sim-to-real recipe (x,y +-0.02 m, z +-0.01 m, +-0.05 rad).
+    #     There is a platform-specific reason to keep these rather than trim
+    #     them: UMI-on-Air (arXiv 2510.02614) injects noise matching a measured
+    #     ~3 cm hover tracking error on real aerial manipulators, so a drone's
+    #     effective camera pose is genuinely less repeatable than a fixed base.
+    for cam_name in CAMERAS.values():
+        cid = model.camera(cam_name).id
+        if cid not in _CAM_NOMINAL:
+            _CAM_NOMINAL[cid] = (model.cam_pos[cid].copy(),
+                                 model.cam_quat[cid].copy())
+        pos0, quat0 = _CAM_NOMINAL[cid]
+        model.cam_pos[cid] = pos0 + rng.uniform([-0.02, -0.02, -0.01],
+                                                [0.02, 0.02, 0.01])
+        # Small-angle perturbation applied to the nominal orientation.
+        ax = _unit(rng.normal(size=3))
+        ang = rng.uniform(-0.05, 0.05)
+        dq = np.array([np.cos(ang / 2), *(np.sin(ang / 2) * ax)])
+        q = np.zeros(4)
+        mujoco.mju_mulQuat(q, dq, quat0)
+        model.cam_quat[cid] = q
 
     mujoco.mj_forward(model, data)
     return obj
+
+
+# Measured grip envelope -- see grip_envelope.py. Sampling outside this produces
+# demonstrations where the grasp fails, so these bounds are a correctness
+# constraint on the randomisation, not a style choice.
+# Jaws aim this far behind the object centre in y, so the block sits in the
+# clear part of the opening rather than against the housing.
+GRASP_Y_OFFSET = 0.008
+
+# How close to the requested place point the block must end up for the
+# episode to count as a demonstration worth training on.
+PLACE_TOL = 0.06
+
+OBJ_SIDE_RANGE = (0.018, 0.022)     # along the jaws' closing axis
+# Depth, along the gripper's BLIND axis. This is a hard clearance limit, not a
+# style choice: the gripper housing occupies the column on the +y side of
+# grasp_site, so a deep object is struck by the housing on the way down. Measured
+# by descending onto posts of varying depth -- 20 mm and 16 mm were both swept
+# off the pedestal (-0.5 m), 12 mm was left undisturbed with clean two-sided pad
+# contact. Keep this well inside that limit.
+OBJ_DEPTH_RANGE = (0.010, 0.013)
+# Half-height. Short on purpose. The jaws grip 10 mm below the top face, so on a
+# tall post that grip point sits far above the base and any nudge from the closing
+# jaws has enormous leverage -- a 70 mm post toppled every time (it fell flat,
+# a signature -29.0 mm drop, identical across every object width tried).
+# Shorter blocks put the grip point close to the centre of mass.
+# Half-height, squeezed between two opposing constraints:
+#   TOO TALL  -> the jaws grip 10 mm below the top face, far above the base, so
+#                the closing nudge has huge leverage. A 70 mm post toppled every
+#                time (a signature -29.0 mm drop as it fell flat).
+#   TOO SHORT -> the legs sit 0.01 m below the jaws, so leg-to-surface clearance
+#                is (object_height - 0.020). A 28 mm block left ~8 mm and the
+#                legs struck the pedestal during DESCEND and flipped the drone.
+# 44-56 mm keeps 24-36 mm of leg clearance while staying well under the height
+# that topples.
+OBJ_HALF_HEIGHT_RANGE = (0.022, 0.028)
+MAX_PRESENTED_WIDTH = 0.024      # pads close to 16.7 mm; this is the squeeze limit
+
+
+def _max_safe_yaw(side):
+    """Largest |yaw| whose presented width still fits the jaws.
+
+    presented(t) = side * (|cos t| + |sin t|), which is monotonic on [0, 45 deg]
+    and peaks at sqrt(2)*side. Solved rather than tabulated so it stays correct
+    when OBJ_SIDE_RANGE changes.
+    """
+    if side * np.sqrt(2.0) <= MAX_PRESENTED_WIDTH:
+        return np.pi / 4
+    lo, hi = 0.0, np.pi / 4
+    for _ in range(40):
+        mid = 0.5 * (lo + hi)
+        if side * (np.cos(mid) + np.sin(mid)) <= MAX_PRESENTED_WIDTH:
+            lo = mid
+        else:
+            hi = mid
+    return lo
 
 
 def _unit(v):
@@ -546,17 +795,33 @@ def build_plan(ik, obj, place, obj_half_height):
     # only 41 mm spare and a +80 mm body error left a 39 mm residual; 0.19 gives
     # ~81 mm, covering MPPI's error band in both directions. Costs leg clearance
     # (legs sit 0.20 m below the body) but still leaves ~100 mm over the pedestal.
+    # GRASP_DROP is how far below the body the jaws hang, and it sets LEG
+    # CLEARANCE: the legs sit 0.20 m below the body, so the gap between the legs
+    # and the work surface is (GRASP_DROP - 0.20) plus the object's height.
+    # Kept at 0.19 because that is the drop whose IK solution hangs the gripper
+    # VERTICALLY: solve_drop(0.19) -> q=[0.32, 0.05], jaws pointing straight down.
+    # Asking for 0.25 to buy leg clearance was a bad trade -- solve_drop(0.25)
+    # returns q=[0.27, 0.59], swinging Joint_2 through 0.53 rad and tilting the
+    # jaws off vertical, so they no longer descend squarely onto an upright block
+    # (and the body->jaw lateral offset shifts 21 mm as well).
+    # Leg clearance is bought with OBJECT HEIGHT instead: legs sit 0.01 m below
+    # the jaws here, so clearance = object_height - 0.020.
     GRASP_DROP, TRAVEL_DROP = 0.19, 0.13
     CRUISE = 0.42                      # body height above the surface in transit
 
-    # Put the jaw midpoint just ABOVE the object's top face. The gripper housing
-    # obstructs from ~0 mm above the midpoint, so the object must sit entirely
-    # BELOW it -- aiming at the object's centre buries its top half in the housing.
-    # 5 mm of clearance above the top face; the fingers then grip the 44 mm of the
-    # block immediately beneath, and the fingertips (49.2 mm down) still clear the
-    # surface by ~56 mm. Derived from the object's half-height so it stays correct
-    # if the block is resized.
-    GRASP_RISE = obj_half_height + 0.030
+    # Put the jaw midpoint 15 mm BELOW the object's top face, so the contact pads
+    # (24 mm tall, centred on grasp_site) close on the upper part of the block.
+    # The previous +0.030 put the pads 30 mm ABOVE the top face and they shut on
+    # empty air -- the object was never touched, which is exactly what the episode
+    # logs showed (object z unchanged at 0.540). Grip verified over an 8-20 mm
+    # band below the top face, so 15 mm sits in the middle of the window.
+    # Derived from the half-height so it stays correct if the block is resized.
+    # 10 mm below the top face. The clear column above grasp_site is only about
+    # 12.6 mm tall before the housing intrudes, so letting the object protrude
+    # 15 mm above the site left no margin and the housing clipped it on the way
+    # down. 10 mm keeps the protrusion inside the clearance while still putting
+    # the 24 mm pads on the upper part of the block.
+    GRASP_RISE = obj_half_height - 0.010
 
     # Straightest pose for each required drop; the returned offset is where the
     # jaws end up relative to the body, in all three axes.
@@ -567,24 +832,70 @@ def build_plan(ik, obj, place, obj_half_height):
     # Using the full offset (not just x) is what lets the arm hang straight: the
     # drone flies to wherever puts the naturally-hanging jaws over the object,
     # rather than the arm reaching sideways to meet a body-centred target.
-    at_obj = obj + np.array([0.0, 0.0, GRASP_RISE]) - off_grasp
-    at_place = place + np.array([0.0, 0.0, GRASP_RISE]) - off_grasp
+    at_obj = obj + np.array([0.0, GRASP_Y_OFFSET, GRASP_RISE]) - off_grasp
+    at_place = place + np.array([0.0, GRASP_Y_OFFSET, GRASP_RISE]) - off_grasp
     over_obj = obj + np.array([0.0, 0.0, CRUISE]) - off_travel
     over_place = place + np.array([0.0, 0.0, CRUISE]) - off_travel
+    # Same cruise waypoints, but for the phases flown AFTER the arm has extended.
+    # The body->jaw offset differs between the two arm poses, so reusing the
+    # off_travel version would ask the body to fly somewhere that puts the
+    # now-extended jaws in the wrong place.
+    over_obj_g = obj + np.array([0.0, 0.0, CRUISE]) - off_grasp
+    over_place_g = place + np.array([0.0, 0.0, CRUISE]) - off_grasp
 
     # Phases that must actually land on the object carry a world-space servo
     # point; transit phases do not need one.
-    grasp_pt = obj + np.array([0.0, 0.0, GRASP_RISE])
-    place_pt = place + np.array([0.0, 0.0, GRASP_RISE])
+    # Aim the jaws slightly BEHIND the object in y. The clear volume between the
+    # jaws is not centred on grasp_site: the housing intrudes from about +5 mm on
+    # the +y side, so an object centred on the site overlaps it by a millimetre or
+    # two and gets shoved forwards on the way down (measured: the block was driven
+    # +250 mm in +y and the reaction flipped the drone). Offsetting the aim point
+    # puts the whole block inside the clear region.
+    grasp_pt = obj + np.array([0.0, GRASP_Y_OFFSET, GRASP_RISE])
+    place_pt = place + np.array([0.0, GRASP_Y_OFFSET, GRASP_RISE])
     return {
+        # Fly out with the arm folded, then reconfigure ONCE while hovering.
         "APPROACH":  (over_obj,   q_travel, GRIPPER_OPEN, None),
+        "EXTEND":    (over_obj,   q_grasp,  GRIPPER_OPEN, None),
+        # Everything below flies with a static arm at q_grasp.
         "DESCEND":   (at_obj,     q_grasp,  GRIPPER_OPEN, grasp_pt),
         "GRASP":     (at_obj,     q_grasp,  GRIPPER_CLOSED, grasp_pt),
-        "LIFT":      (over_obj,   q_travel, GRIPPER_CLOSED, None),
-        "TRANSPORT": (over_place, q_travel, GRIPPER_CLOSED, None),
+        "LIFT":      (over_obj_g, q_grasp,  GRIPPER_CLOSED, None),
+        "TRANSPORT": (over_place_g, q_grasp, GRIPPER_CLOSED, None),
         "PLACE":     (at_place,   q_grasp,  GRIPPER_CLOSED, place_pt),
         "RELEASE":   (at_place,   q_grasp,  GRIPPER_OPEN, place_pt),
     }
+
+
+def episode_succeeded(model, data, info):
+    """Did the block actually get picked up and put down where it was asked?
+
+    The old check was `obj_z > 0.55`, hardcoded to the original fixed 0.50 m
+    pedestal and 40 mm half-height. Once pedestal height and object size became
+    randomised that number meant nothing, and it reported a genuinely successful
+    pick-and-place as "not lifted". Success is defined against THIS episode's
+    geometry instead.
+    """
+    oadr = model.jnt_qposadr[model.body_jntadr[model.body("target_object").id]]
+    obj = data.qpos[oadr:oadr + 3]
+    place = info["place"]
+    surface = info["surface_z"]
+    half_h = info["obj_half_height"]
+
+    if data.qpos[2] < 0.35:
+        return False, f"drone crashed (z={data.qpos[2]:.2f})"
+    # On the floor means it was dropped, not placed.
+    if obj[2] < surface - 0.02:
+        return False, f"object on the floor (z={obj[2]:.3f})"
+    # Resting on the surface, allowing for the block having settled or tipped.
+    if abs(obj[2] - (surface + half_h)) > 2.5 * half_h:
+        return False, f"object not resting on the surface (z={obj[2]:.3f})"
+    d = float(np.linalg.norm(obj[0:2] - place[0:2]))
+    if d > PLACE_TOL:
+        return False, f"object {d*1000:.0f} mm from the place target"
+    moved = float(np.linalg.norm(obj[0:2] - info["obj_start"][0:2]))
+    return True, (f"placed {d*1000:.0f} mm from target, "
+                  f"moved {moved*1000:.0f} mm from start")
 
 
 def run_episode(model, data, renderer, controller, ik, rng, task_text,
@@ -600,6 +911,9 @@ def run_episode(model, data, renderer, controller, ik, rng, task_text,
         [g for g in range(model.ngeom)
          if model.geom_bodyid[g] == model.body('target_object').id][0]][2]
     plan = build_plan(ik, obj, place, obj_half_height)
+    info = {"place": place.copy(), "obj_start": obj.copy(),
+            "obj_half_height": obj_half_height,
+            "surface_z": float(obj[2] - obj_half_height)}
 
     frames = []
     # Physics runs at model timestep (1 ms); a frame is one 1/FPS interval, so
@@ -627,15 +941,33 @@ def run_episode(model, data, renderer, controller, ik, rng, task_text,
         # (so GRASP/RELEASE still show the jaws moving); MAX stops a phase that
         # cannot converge from hanging the whole run.
         held = 0
-        for f_i in range(MAX_FRAMES_PER_PHASE):
+        budget = PHASE_FRAME_BUDGET.get(phase, MAX_FRAMES_PER_PHASE)
+        for f_i in range(budget):
             for _ in range(substeps):
                 controller.step()
                 mujoco.mj_step(model, data)
             if viewer is not None:
                 viewer.sync()
 
-            tol = ARRIVE_TOL_PRECISE if servo_to is not None else ARRIVE_TOL_TRANSIT
-            if np.linalg.norm(data.qpos[0:3] - drone_xyz) < tol:
+            # On precise phases, judge arrival by where the JAWS are, not where
+            # the body is. The body setpoint is being actively shifted by the
+            # servo above, so body-vs-waypoint error no longer means anything
+            # there -- and the jaws are what has to be on the object.
+            if servo_to is not None:
+                tol = ARRIVE_TOL_PRECISE
+                arrived = np.linalg.norm(
+                    grasp_site_pos(model, data) - servo_to) < tol
+            else:
+                tol = ARRIVE_TOL_TRANSIT
+                arrived = np.linalg.norm(data.qpos[0:3] - drone_xyz) < tol
+            # An arm-reconfiguration phase is finished when the ARM gets there.
+            # Judging it by body position alone would let it exit the moment the
+            # hover settles, with the joints still mid-slew -- which is precisely
+            # how the jaws ended up 36 mm short of the grasp pose.
+            if phase == "EXTEND":
+                arrived = arrived and np.max(
+                    np.abs(data.qpos[7:9] - joints)) < 0.02
+            if arrived:
                 held += 1
             else:
                 held = 0
@@ -660,13 +992,21 @@ def run_episode(model, data, renderer, controller, ik, rng, task_text,
         if verbose:
             err = np.linalg.norm(data.qpos[0:3] - drone_xyz)
             gs = grasp_site_pos(model, data)
+            oadr = model.jnt_qposadr[
+                model.body_jntadr[model.body("target_object").id]]
+            op = data.qpos[oadr:oadr + 3]
+            # Jaw-to-object offset is what actually decides the grasp, so print
+            # that rather than only the body's error against its own waypoint --
+            # the body can be perfectly on target while the jaws miss the object.
+            dxy = np.linalg.norm(gs[0:2] - op[0:2])
             print(f"    {phase:<10} {f_i + 1:3d} frames "
                   f"{'ARRIVED' if held >= HOLD_FRAMES else 'timeout'} | "
                   f"body {np.round(data.qpos[0:3], 3)} err={err:.3f} | "
-                  f"jaws z={gs[2]:.3f} | "
+                  f"jaws z={gs[2]:.3f} | obj {np.round(op, 3)} "
+                  f"jaw-obj dxy={dxy*1000:.0f}mm dz={(gs[2]-op[2])*1000:+.0f}mm | "
                   f"roll/pitch={np.degrees(_rp(data)):.0f}/{np.degrees(_rp(data,1)):.0f} deg")
 
-    return frames
+    return frames, info
 
 
 def _rp(data, idx=0):
@@ -717,7 +1057,26 @@ def main():
                     help="MPPI rollouts per solve. Dominates runtime: a solve is "
                          "~1.8 s at 50, and an episode needs ~140 solves. Drop to "
                          "~20 for a quick smoke run.")
-    ap.add_argument("--horizon", type=int, default=10)
+    # Horizon 16 = 0.80 s of lookahead. Measured over a 20 s frozen-arm hover:
+    # horizon 8 (0.40 s) diverged at t=2.3, horizon 16 held station (max roll
+    # 26 deg, drift 0.21 m), horizon 25 diverged at t=0.5. Short lookahead, not
+    # arm reaction torque, is what had been flipping the drone -- every phase
+    # that ever reported ARRIVED was <=4 s, inside the window before divergence.
+    ap.add_argument("--horizon", type=int, default=16)
+    ap.add_argument("--max_attempts", type=int, default=None,
+                    help="Cap on total attempts when retrying to reach the "
+                         "requested number of SUCCESSFUL episodes. Defaults "
+                         "to 4x --episodes.")
+    ap.add_argument("--flight", choices=["pd", "mppi"], default="pd",
+                    help="Flight controller. 'pd' is the cascaded PD+I with "
+                         "gravity feed-forward (0.001 mm RMS station keeping); "
+                         "'mppi' is the original sampler (106 mm at best, and "
+                         "flips on some tunings). The grasp needs ~10 mm.")
+    ap.add_argument("--slew", type=float, default=None,
+                    help="Override ARM_SLEW_RATE (rad/s). The arm's reaction "
+                         "torque couples into body roll, so how FAST the arm "
+                         "reconfigures is a stability parameter, not just a "
+                         "cosmetic one. Lower = gentler = slower phases.")
     ap.add_argument("--verbose", action="store_true",
                     help="Print a per-phase summary: frames used, whether the phase "
                          "arrived or timed out, body position/error, jaw height and "
@@ -748,8 +1107,11 @@ def main():
 
     # The controller owns the model/data -- see SkyGripController. Rendering and
     # state must read the same MjData the MPPI is stepping.
+    if args.slew is not None:
+        SkyGripController.ARM_SLEW_RATE = args.slew
     controller = SkyGripController(
-        MODEL_PATH, MPPIParams(num_samples=args.samples, horizon=args.horizon))
+        MODEL_PATH, MPPIParams(num_samples=args.samples, horizon=args.horizon),
+        flight=args.flight)
     model, data = controller.model, controller.data
     # No renderer when nothing is being saved -- see run_episode.
     renderer = None if args.no_save else mujoco.Renderer(model, height=IMG_H, width=IMG_W)
@@ -795,23 +1157,38 @@ def main():
         viewer.cam.azimuth = 135
 
     try:
-        for ep in range(args.episodes):
-            frames = run_episode(model, data, renderer, controller, ik, rng,
-                                 args.task, viewer=viewer, verbose=args.verbose)
+        # Retry until the requested number of SUCCESSFUL episodes is banked.
+        # A failed demonstration is not neutral training data -- it teaches the
+        # policy to fly the approach and then drop the block, so failures are
+        # discarded rather than saved. Attempts are capped so a regression that
+        # makes every episode fail stops instead of looping forever.
+        saved = attempts = 0
+        max_attempts = args.max_attempts or (args.episodes * 4)
+        while saved < args.episodes and attempts < max_attempts:
+            attempts += 1
+            frames, info = run_episode(model, data, renderer, controller, ik,
+                                       rng, args.task, viewer=viewer,
+                                       verbose=args.verbose)
+            ok, why = episode_succeeded(model, data, info)
+            if not ok:
+                print(f"  attempt {attempts}: DISCARDED -- {why}")
+                continue
+            saved += 1
             if dataset is not None:
                 for f in frames:
                     dataset.add_frame(f)   # v3.0: task lives INSIDE the frame dict
                 dataset.save_episode()
+            print(f"episode {saved}/{args.episodes} (attempt {attempts}): "
+                  f"{len(frames)} frames | SUCCESS | {why}")
+        if saved < args.episodes:
+            print(f"WARNING: only {saved}/{args.episodes} succeeded in "
+                  f"{attempts} attempts -- dataset is short.")
+        else:
+            print(f"banked {saved} successful episodes in {attempts} attempts "
+                  f"({100.0*saved/attempts:.0f}% success rate)")
 
             # Report the outcome rather than just the frame count -- "it ran" and
             # "it worked" are different things, and only the second one matters.
-            obj_z = data.qpos[model.jnt_qposadr[
-                model.body_jntadr[model.body("target_object").id]] + 2]
-            drone_z = data.qpos[2]
-            lifted = obj_z > 0.55          # pedestal top 0.50 + half-height 0.04
-            print(f"episode {ep + 1}/{args.episodes}: {len(frames)} frames | "
-                  f"drone z={drone_z:.2f} ({'airborne' if drone_z > 0.35 else 'CRASHED'}) | "
-                  f"object z={obj_z:.3f} ({'MOVED' if lifted else 'not lifted'})")
     finally:
         if viewer is not None:
             viewer.close()

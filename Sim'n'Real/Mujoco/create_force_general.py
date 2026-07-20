@@ -125,6 +125,116 @@ class PureMPPIController:
         print(f"  Samples: {self.params.num_samples}")
         print(f"  Control dt: {self.params.dt:.3f} s")
     
+    # ---------------- threaded batch rollout ----------------
+    # The sequential sample loop is ~1.08 s per solve (25 samples x 8 horizon x
+    # 50 substeps = 10,000 mj_step calls in Python). mujoco.rollout runs the same
+    # steps in threaded C++: measured 0.141 s on 14 threads, a 7.6x speedup with
+    # IDENTICAL dynamics -- same model, same timestep, contacts still enabled.
+    # (Coarsening the rollout timestep was tried first and rejected: dt=0.005
+    # hits NaN in QACC and dt=0.002 already shifts the trajectory materially,
+    # because the arm's position actuators are stiff at kp=998.)
+    def _ensure_rollout(self):
+        if getattr(self, "_rollout", None) is not None:
+            return
+        from mujoco import rollout as _mjrollout
+        import multiprocessing
+        nth = max(1, min(14, multiprocessing.cpu_count() - 2))
+        self._nstate = mujoco.mj_stateSize(
+            self.model, mujoco.mjtState.mjSTATE_FULLPHYSICS)
+        self._rollout = _mjrollout.Rollout(nthread=nth)
+        self._rollout_data = [mujoco.MjData(self.model) for _ in range(nth)]
+        self._sub = max(1, int(self.params.dt / self.model.opt.timestep))
+        print(f"  Threaded rollout: {nth} threads, {self._sub} substeps/step")
+
+    @staticmethod
+    def _quat_to_euler(q):
+        """Batched quaternion -> (roll, pitch, yaw), matching get_state()."""
+        w, x, y, z = q[..., 0], q[..., 1], q[..., 2], q[..., 3]
+        # Rows of the rotation matrix that get_state() reads out of xmat.
+        r20 = 2 * (x * z - w * y)
+        r21 = 2 * (y * z + w * x)
+        r22 = 1 - 2 * (x * x + y * y)
+        r00 = 1 - 2 * (y * y + z * z)
+        r10 = 2 * (x * y + w * z)
+        roll = np.arctan2(r21, r22)
+        pitch = np.arcsin(np.clip(-r20, -1.0, 1.0))
+        yaw = np.arctan2(r10, r00)
+        return np.stack([roll, pitch, yaw], axis=-1)
+
+    def _batch_costs(self, u_samples, current_state):
+        """Roll out every sample at once and score them. Mirrors the sequential
+        simulate_step + compute_trajectory_cost pair exactly."""
+        self._ensure_rollout()
+        ns, H, _ = u_samples.shape
+        sub, nq, nv = self._sub, self.model.nq, self.model.nv
+
+        # Expand the 6-D control into per-actuator ctrl, held across substeps.
+        lo, hi = self.model.actuator_ctrlrange[:, 0], self.model.actuator_ctrlrange[:, 1]
+        i = self.idx
+        ctrl = np.zeros((ns, H, self.model.nu))
+        ctrl[:, :, i["thrust"]] = u_samples[:, :, 0]
+        ctrl[:, :, i["roll"]] = u_samples[:, :, 1]
+        ctrl[:, :, i["pitch"]] = u_samples[:, :, 2]
+        ctrl[:, :, i["yaw"]] = u_samples[:, :, 3]
+        # Arm channels follow arm_cmd, never the sampled vector -- same rule as
+        # _write_ctrl. Sampling them makes the rollout arm diverge from the real one.
+        ctrl[:, :, i["joint1"]] = self.arm_cmd[0]
+        ctrl[:, :, i["joint2"]] = self.arm_cmd[1]
+        ctrl = np.clip(ctrl, lo, hi)
+        ctrl = np.repeat(ctrl, sub, axis=1)          # hold across the substeps
+
+        state0 = np.zeros((ns, self._nstate))
+        s = np.zeros(self._nstate)
+        mujoco.mj_getState(self.model, self.data, s,
+                           mujoco.mjtState.mjSTATE_FULLPHYSICS)
+        state0[:] = s
+
+        out, _ = self._rollout.rollout(self.model, self._rollout_data, state0, ctrl)
+
+        # Keep only the horizon boundaries, and prepend the shared current state.
+        idx = np.arange(1, H + 1) * sub - 1
+        qpos = out[:, idx, 1:1 + nq]
+        qvel = out[:, idx, 1 + nq:1 + nq + nv]
+        bad = ~np.all(np.isfinite(qpos), axis=(1, 2))
+
+        pos = np.concatenate([np.broadcast_to(current_state['pos'], (ns, 1, 3)),
+                              qpos[:, :, 0:3]], axis=1)
+        vel = np.concatenate([np.broadcast_to(current_state['vel'], (ns, 1, 3)),
+                              qvel[:, :, 0:3]], axis=1)
+        omega = np.concatenate([np.broadcast_to(current_state['omega'], (ns, 1, 3)),
+                                qvel[:, :, 3:6]], axis=1)
+        qj = np.concatenate([np.broadcast_to(current_state['q_joints'], (ns, 1, 2)),
+                             qpos[:, :, 7:9]], axis=1)
+        eul = np.concatenate([np.broadcast_to(current_state['euler'], (ns, 1, 3)),
+                              self._quat_to_euler(qpos[:, :, 3:7])], axis=1)
+
+        p = self.params
+        perr = pos - self.target_pos
+        cost = p.w_pos * np.sum(perr ** 2, axis=(1, 2))
+        cost += p.w_vel * np.sum(vel ** 2, axis=(1, 2))
+        cost += p.w_att * np.sum(eul[:, :, 0] ** 2 + eul[:, :, 1] ** 2
+                                 + 0.1 * eul[:, :, 2] ** 2, axis=1)
+        cost += p.w_omega * np.sum(omega ** 2, axis=(1, 2))
+        cost += p.w_joint * np.sum((qj - self.target_q) ** 2, axis=(1, 2))
+
+        u = u_samples
+        te = (u[:, :, 0] - self.nominal_hover_thrust) / self.nominal_hover_thrust
+        cost += p.w_ctrl * np.sum(te ** 2 + 10 * np.sum(u[:, :, 1:4] ** 2, axis=2)
+                                  + np.sum(u[:, :, 4:6] ** 2, axis=2), axis=1)
+        du = np.diff(u, axis=1)
+        cost += p.w_smooth * np.sum(0.01 * du[:, :, 0] ** 2
+                                    + np.sum(du[:, :, 1:4] ** 2, axis=2)
+                                    + 0.1 * np.sum(du[:, :, 4:6] ** 2, axis=2), axis=1)
+
+        tilt = (np.abs(eul[:, :, 0]) > 0.5) | (np.abs(eul[:, :, 1]) > 0.5)
+        cost += 500.0 * np.sum(tilt, axis=1)
+
+        d = np.linalg.norm(perr, axis=2)
+        cost -= 20.0 * np.sum(d[:, :-1] - d[:, 1:], axis=1)
+
+        cost[bad] = 1e6
+        return cost
+
     def get_state(self, data=None):
         """获取系统状态"""
         if data is None:
@@ -255,15 +365,30 @@ class PureMPPIController:
         self.noise = np.random.randn(self.params.num_samples, self.params.horizon, self.nu)
         self.noise *= self.params.noise_sigma
         
-        # 保存当前仿真状态
+        # Threaded path: identical dynamics and identical cost, evaluated for all
+        # samples at once. Falls back to the sequential loop if use_threads=False.
+        if getattr(self, "use_threads", True):
+            u_all = self.u_init[None, :, :] + self.noise
+            u_all[:, :, 0] = np.clip(u_all[:, :, 0],
+                                     self.nominal_hover_thrust * 0.3,
+                                     self.nominal_hover_thrust * 2.0)
+            tc = getattr(self, 'torque_clip', 0.5)
+            u_all[:, :, 1:4] = np.clip(u_all[:, :, 1:4], -tc, tc)
+            u_all[:, :, 4:6] = np.clip(u_all[:, :, 4:6], -1.0, 1.0)
+            self.costs = self._batch_costs(u_all, current_state)
+            valid_samples = int(np.sum(self.costs < 1e5))
+        else:
+            valid_samples = self._sequential_costs(current_state)
+
+        return self._finish_step(valid_samples)
+
+    def _sequential_costs(self, current_state):
         saved_state = {
             'qpos': self.data.qpos.copy(),
             'qvel': self.data.qvel.copy(),
             'ctrl': self.data.ctrl.copy(),
-            'time': self.data.time
+            'time': self.data.time,
         }
-        
-        # 评估每个样本
         valid_samples = 0
         for i in range(self.params.num_samples):
             # 获取仿真数据
@@ -283,7 +408,8 @@ class PureMPPIController:
             u_sample[:, 0] = np.clip(u_sample[:, 0], 
                                      self.nominal_hover_thrust * 0.3, 
                                      self.nominal_hover_thrust * 2.0)
-            u_sample[:, 1:4] = np.clip(u_sample[:, 1:4], -0.5, 0.5)
+            tc = getattr(self, 'torque_clip', 0.5)
+            u_sample[:, 1:4] = np.clip(u_sample[:, 1:4], -tc, tc)
             u_sample[:, 4:6] = np.clip(u_sample[:, 4:6], -1.0, 1.0)
             
             # 仿真轨迹
@@ -305,7 +431,9 @@ class PureMPPIController:
                     valid_samples += 1
             except:
                 self.costs[i] = 1e6
-        
+        return valid_samples
+
+    def _finish_step(self, valid_samples):
         # 检查是否有有效样本
         if valid_samples == 0:
             print("WARNING: No valid samples in MPPI")
@@ -336,7 +464,8 @@ class PureMPPIController:
         u_optimal[0] = np.clip(u_optimal[0], 
                               self.nominal_hover_thrust * 0.5,
                               self.nominal_hover_thrust * 1.8)
-        u_optimal[1:4] = np.clip(u_optimal[1:4], -0.5, 0.5)
+        tc = getattr(self, 'torque_clip', 0.5)
+        u_optimal[1:4] = np.clip(u_optimal[1:4], -tc, tc)
         u_optimal[4:6] = np.clip(u_optimal[4:6], -1.5, 1.5)
         
         # 时域滚动

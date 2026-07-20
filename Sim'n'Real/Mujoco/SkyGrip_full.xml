@@ -58,6 +58,14 @@
         <position name="act_joint1" joint="Joint_1" ctrlrange="-1.6 1.6" forcerange="-6 6" kp="998.22" kv="2.731"/>
         <position name="act_joint2" joint="Joint_2" ctrlrange="-1.6 1.6" forcerange="-4 4" kp="998.22" kv="2.731"/>
         <position name="act_gripper" joint="right_clamp" ctrlrange="0 0.037" forcerange="-3.5 3.5" kp="998.22" kv="2.731"/>
+        <!-- The LEFT jaw is driven directly rather than through the equality
+             constraint. With only right_clamp actuated, closing on an object left
+             the pads 20.4 mm apart on a 20 mm block - the soft equality let
+             contact shove the unactuated jaw back instead of transmitting squeeze,
+             so normal force was ~0 and nothing could be lifted at any object
+             width. Driving both jaws makes the grip symmetric and preloaded.
+             collect_demos mirrors this channel: ctrl = -gripper_cmd. -->
+        <position name="act_gripper_left" joint="left_clamp" ctrlrange="-0.038 0" forcerange="-3.5 3.5" kp="998.22" kv="2.731"/>
         <motor name="thrust" site="thrust_point" gear="0 0 1 0 0 0" ctrlrange="0 30"/>
         <motor name="roll_torque" site="thrust_point" gear="0 0 0 1 0 0" ctrlrange="-1 1"/>
         <motor name="pitch_torque" site="thrust_point" gear="0 0 0 0 1 0" ctrlrange="-1 1"/>
@@ -113,7 +121,21 @@
                         <inertial pos="-0.00058149 -0.04152732 0.01506014" mass="0.10"
                                   fullinertia="1.39530e-05 2.37113e-05 1.77618e-05 2.1541e-08 -1.08927e-07 -2.01421e-06"/>
                         <geom type="mesh" pos="-0.007062 0.120627 -0.152066" contype="0" conaffinity="0" group="1" density="0" mesh="link5_1"/>
-                        <geom type="mesh" pos="-0.007062 0.120627 -0.152066" mesh="link5_1"/>
+                        <!-- Housing collision DISABLED, and this is load-bearing for the
+                             whole task. MuJoCo collides meshes as their CONVEX HULL, so this
+                             C-shaped housing - which in reality has an open mouth between the
+                             jaws - becomes a solid block spanning the entire jaw opening.
+                             Measured by descending onto a post: first contact was
+                             gripper_assembly:geom10 at 62 mm ABOVE the object's top face, while
+                             the jaws need to reach 10 mm BELOW it. The gripper could therefore
+                             never close on anything standing on a surface; every descent shoved
+                             the block off the pedestal and the reaction flipped the drone.
+                             Grasping is done by the pad_1/pad_2 boxes, so nothing needs this
+                             hull to be collidable. The drone body and legs still collide.
+                             If housing collision is ever wanted back, it must be built from
+                             primitives that leave the mouth open, NOT from this mesh. -->
+                        <geom type="mesh" pos="-0.007062 0.120627 -0.152066" mesh="link5_1"
+                              contype="0" conaffinity="0" group="1"/>
 
                         <!-- Manipulation close-up. Top-down over the jaws at 10.5 cm.
                              A ray-cast sweep of 1915 mount points around the gripper found NONE
@@ -153,7 +175,18 @@
                                       mass="0.002" diaginertia="4.39584e-05 3.72410e-05 2.06103e-05"/>
                             <joint name="right_clamp" pos="0 0 0" axis="0.999848 -0.000154 0.017451" type="slide"
                                    range="0 0.037" actuatorfrcrange="-1.9 1.9" damping="0.5" frictionloss="0.1"/>
-                            <geom pos="0.045072 0.340704 0.033971" type="mesh" mesh="clamp_1"/>
+                            <geom pos="0.045072 0.340704 0.033971" type="mesh" mesh="clamp_1"
+                                  contype="0" conaffinity="0" group="1"/>
+                            <!-- Contact pad. The clamp STLs are asymmetric: measured against the
+                                 object, clamp_1 only presents a ~7 mm tall usable band 6-13 mm
+                                 below grasp_site while clamp_2 presents ~45 mm, so mesh-on-mesh
+                                 grasping caught on one jaw only and scattered the object. The
+                                 meshes stay for visuals (contype=0); these boxes do the gripping.
+                                 Face sits flush with the mesh's inner surface, so the open
+                                 aperture is unchanged at 30.7 mm. -->
+                            <geom name="pad_1" type="box" pos="-0.019030 0.147723 0.185211"
+                                  size="0.005 0.010 0.012" rgba="0.2 0.8 0.3 1"
+                                  friction="1.5 0.01 0.001" solref="0.004 1"/>
                         </body>
 
                         <body name="clamp_2" pos="0.072828 -0.222278 -0.183875">
@@ -161,7 +194,11 @@
                                       mass="0.002" diaginertia="4.39584e-05 3.72410e-05 2.06103e-05"/>
                             <joint name="left_clamp" pos="0 0 0" axis="0.999848 -0.000154 0.017451" type="slide"
                                    range="-0.038 0" actuatorfrcrange="-1.9 1.9" damping="0.5" frictionloss="0.1"/>
-                            <geom pos="-0.07989 0.342905 0.031809" type="mesh" mesh="clamp_2"/>
+                            <geom pos="-0.07989 0.342905 0.031809" type="mesh" mesh="clamp_2"
+                                  contype="0" conaffinity="0" group="1"/>
+                            <geom name="pad_2" type="box" pos="-0.043304 0.149912 0.184341"
+                                  size="0.005 0.010 0.012" rgba="0.2 0.8 0.3 1"
+                                  friction="1.5 0.01 0.001" solref="0.004 1"/>
                         </body>
                     </body>
                 </body>
@@ -182,8 +219,11 @@
              distinct spots on the same surface.
              Static -- collect_demos.py repositions it by writing model.body_pos. -->
         <body name="pedestal" pos="0 0.35 0.25">
+            <!-- Friction lowered to match the target object. Contact friction is
+                 the element-wise max of the pair, so the block can only slide
+                 freely on this surface if BOTH are low -- see target_object. -->
             <geom type="box" size="0.20 0.05 0.25" rgba="0.45 0.42 0.38 1"
-                  friction="1.0 0.005 0.0001"/>
+                  friction="0.3 0.005 0.0001"/>
         </body>
 
         <!-- Pick target: a 20 x 20 x 80 mm upright post.
@@ -210,10 +250,25 @@
              Joint_1 and the side scene_cam faces. -->
         <body name="target_object" pos="0 0.35 0.54">
             <freejoint name="target_free_joint"/>
-            <inertial pos="0 0 0" mass="0.05"
-                      diaginertia="2.8e-5 2.8e-5 3.3e-6"/>
+            <!-- No explicit <inertial>: collect_demos randomises geom_size per
+                 episode, and a hardcoded diaginertia would silently describe the
+                 wrong shape. Letting MuJoCo derive it from the geom keeps mass
+                 properties consistent with whatever size was sampled.
+
+                 mass 10 g (was 50 g). Light on purpose: the jaws inevitably nudge
+                 the block as they close, and a light block is both easier to hold
+                 (weight 0.098 N against ~5 N of measured grip) and carries less
+                 momentum when shifted, so it settles instead of toppling.
+
+                 friction 0.3 (was 1.0), and the PEDESTAL is lowered to match.
+                 MuJoCo takes the element-wise MAXIMUM of the two geoms' friction,
+                 so lowering only this one would have changed nothing while the
+                 pedestal stayed at 1.0. Low friction against the table lets a
+                 nudged block SLIDE rather than catch an edge and tip. The pads
+                 are 1.5, and max(1.5, 0.3) = 1.5, so the grip itself is
+                 unaffected -- slippery on the table, grippy in the jaws. -->
             <geom type="box" size="0.010 0.010 0.040" rgba="0.85 0.2 0.2 1"
-                  friction="1.0 0.005 0.0001"/>
+                  mass="0.010" friction="0.3 0.005 0.0001"/>
         </body>
 
         <body name="current_target" pos="0 0 1.5" mocap="true">
