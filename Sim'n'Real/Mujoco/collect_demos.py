@@ -567,6 +567,15 @@ GRASP_Y_OFFSET = 0.008
 # episode to count as a demonstration worth training on.
 PLACE_TOL = 0.06
 
+# How far the block is asked to travel, and how far out along the pedestal a
+# place point may sit. The object spawns within +-0.14 and the pedestal is
+# 0.20 half-length, so with a 0.16 limit the roomier side always has at least
+# 0.16 m available -- the requested shift is therefore never truncated, and
+# every episode is a genuine transport rather than a nudge.
+PLACE_MIN_SHIFT = 0.10
+PLACE_MAX_SHIFT = 0.16
+PEDESTAL_X_LIMIT = 0.16
+
 OBJ_SIDE_RANGE = (0.018, 0.022)     # along the jaws' closing axis
 # Depth, along the gripper's BLIND axis. This is a hard clearance limit, not a
 # style choice: the gripper housing occupies the column on the +y side of
@@ -903,10 +912,25 @@ def run_episode(model, data, renderer, controller, ik, rng, task_text,
     obj = randomise_episode(model, data, rng)
     controller.reset_after_randomisation()
 
-    # place target: same surface, offset along the pedestal's long axis
-    place = np.array([obj[0] + rng.choice([-1.0, 1.0]) * rng.uniform(0.10, 0.16),
-                      obj[1], obj[2]])
-    place[0] = np.clip(place[0], -0.16, 0.16)
+    # Place target: same surface, offset along the pedestal's long axis.
+    #
+    # The direction is chosen by which side has ROOM, not at random. Sampling the
+    # sign and then clipping to the pedestal (the previous approach) silently
+    # collapsed the displacement whenever the block spawned near an edge and the
+    # sign pointed outward: observed episodes that moved the block only 21 mm and
+    # 31 mm where others moved 120 mm. Those still pass the success check -- the
+    # block does reach the requested point -- but they are near-no-op
+    # demonstrations, and training a VLA on "pick and place" examples where the
+    # object barely moves teaches an inconsistent notion of the task.
+    reach = rng.uniform(PLACE_MIN_SHIFT, PLACE_MAX_SHIFT)
+    room_pos = PEDESTAL_X_LIMIT - obj[0]      # room to the +x side
+    room_neg = obj[0] + PEDESTAL_X_LIMIT      # room to the -x side
+    if room_pos >= reach and room_neg >= reach:
+        direction = float(rng.choice([-1.0, 1.0]))       # both fit: free choice
+    else:
+        direction = 1.0 if room_pos > room_neg else -1.0  # take the roomier side
+    reach = min(reach, room_pos if direction > 0 else room_neg)
+    place = np.array([obj[0] + direction * reach, obj[1], obj[2]])
     obj_half_height = model.geom_size[
         [g for g in range(model.ngeom)
          if model.geom_bodyid[g] == model.body('target_object').id][0]][2]
