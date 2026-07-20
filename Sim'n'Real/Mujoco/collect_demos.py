@@ -576,6 +576,10 @@ PLACE_MIN_SHIFT = 0.10
 PLACE_MAX_SHIFT = 0.16
 PEDESTAL_X_LIMIT = 0.16
 
+# Release height above the grasp height. Sets the block down instead of
+# driving it into the surface -- see place_pt in build_plan.
+PLACE_CLEARANCE = 0.006
+
 OBJ_SIDE_RANGE = (0.018, 0.022)     # along the jaws' closing axis
 # Depth, along the gripper's BLIND axis. This is a hard clearance limit, not a
 # style choice: the gripper housing occupies the column on the +y side of
@@ -842,7 +846,8 @@ def build_plan(ik, obj, place, obj_half_height):
     # drone flies to wherever puts the naturally-hanging jaws over the object,
     # rather than the arm reaching sideways to meet a body-centred target.
     at_obj = obj + np.array([0.0, GRASP_Y_OFFSET, GRASP_RISE]) - off_grasp
-    at_place = place + np.array([0.0, GRASP_Y_OFFSET, GRASP_RISE]) - off_grasp
+    at_place = place + np.array([0.0, GRASP_Y_OFFSET,
+                                 GRASP_RISE + PLACE_CLEARANCE]) - off_grasp
     over_obj = obj + np.array([0.0, 0.0, CRUISE]) - off_travel
     over_place = place + np.array([0.0, 0.0, CRUISE]) - off_travel
     # Same cruise waypoints, but for the phases flown AFTER the arm has extended.
@@ -861,7 +866,15 @@ def build_plan(ik, obj, place, obj_half_height):
     # +250 mm in +y and the reaction flipped the drone). Offsetting the aim point
     # puts the whole block inside the clear region.
     grasp_pt = obj + np.array([0.0, GRASP_Y_OFFSET, GRASP_RISE])
-    place_pt = place + np.array([0.0, GRASP_Y_OFFSET, GRASP_RISE])
+    # PLACE aims slightly HIGHER than GRASP. At the same height the block's base
+    # reaches the surface before the jaws reach their target, so the drone spends
+    # the whole phase pressing the block into the pedestal trying to close an
+    # error it physically cannot -- PLACE timed out on its full budget in every
+    # episode, successful or not, and that sustained fight is what destabilised
+    # the failures (one crashed at roll 77 deg, another flung the block 0.7 m).
+    # Releasing from a few millimetres up costs nothing: the block is 10 g.
+    place_pt = place + np.array([0.0, GRASP_Y_OFFSET,
+                                 GRASP_RISE + PLACE_CLEARANCE])
     return {
         # Fly out with the arm folded, then reconfigure ONCE while hovering.
         "APPROACH":  (over_obj,   q_travel, GRIPPER_OPEN, None),
