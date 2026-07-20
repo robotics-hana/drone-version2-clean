@@ -1088,8 +1088,17 @@ def main():
     ap.add_argument("--episodes", type=int, default=50)
     ap.add_argument("--out_repo_id", type=str, default=None)
     ap.add_argument("--seed", type=int, default=0)
+    # Held CONSTANT across episodes, which is what the evidence supports for
+    # single-task fine-tuning: LeRobot's own rollout instructions say to reuse
+    # the recording task string verbatim, and LIBERO-Plus (arXiv 2510.13626)
+    # found VLAs largely ignore the instruction semantically while remaining
+    # sensitive to phrasing as a distribution shift -- so varying it buys little
+    # and risks a mismatch at inference.
+    # No longer says "red cube": the object colour is randomised per episode and
+    # it is a rectangular block, so the old string was simply false for most of
+    # the data. Short and action-verb-first, per the SmolVLA dataset guidance.
     ap.add_argument("--task", type=str,
-                    default="pick up the red cube and place it to the side")
+                    default="Pick up the block and place it")
     ap.add_argument("--samples", type=int, default=50,
                     help="MPPI rollouts per solve. Dominates runtime: a solve is "
                          "~1.8 s at 50, and an episode needs ~140 solves. Drop to "
@@ -1214,7 +1223,13 @@ def main():
             if dataset is not None:
                 for f in frames:
                     dataset.add_frame(f)   # v3.0: task lives INSIDE the frame dict
-                dataset.save_episode()
+                # parallel_encoding=False: with the default (True), LeRobot's
+                # per-episode stats pass races the encoder, which has already
+                # consumed and deleted the frame PNGs it is trying to sample --
+                # FileNotFoundError on frame-000000.png three episodes into a
+                # 50-episode run. Serialising costs some wall clock and makes
+                # the run survivable.
+                dataset.save_episode(parallel_encoding=False)
             print(f"episode {saved}/{args.episodes} (attempt {attempts}): "
                   f"{len(frames)} frames | SUCCESS | {why}")
         if saved < args.episodes:
