@@ -190,12 +190,18 @@ ARRIVE_TOL_PLACE = 0.035
 HOLD_FRAMES = 8
 MAX_FRAMES_PER_PHASE = int(4.0 * FPS)
 
-# Per-phase overrides. EXTEND slews the arm 0.747 rad, which takes 2.5 s at
-# ARM_SLEW_RATE=0.30; 6 s leaves room for the hover to resettle afterwards.
-# Keeping this tight matters because hover endurance is finite -- the whole
-# episode has to fit inside the window where the controller holds station.
+# Per-phase overrides. These are CAPS, not durations: a phase exits as soon as it
+# arrives and holds (HOLD_FRAMES), so a generous cap only matters for a phase that
+# is still slewing. Overhead EXTEND finishes its 0.747 rad in ~2.5 s at 0.30 rad/s
+# and exits then; the 12 s ceiling is there for the forward-reach reconfigures,
+# which slew a larger angle at the gentle REACH_SLEW.
 PHASE_FRAME_BUDGET = {
-    "EXTEND": int(6.0 * FPS),
+    "EXTEND": int(12.0 * FPS),
+    # Forward-reach reconfigure phases. They slew the arm gently (REACH_SLEW) over
+    # a large angle, so they need room; a phase that arrives sooner exits early on
+    # HOLD_FRAMES, so a generous cap costs nothing on the fast overhead path.
+    "REACH_OUT": int(12.0 * FPS),
+    "DRAW_IN": int(12.0 * FPS),
     # PLACE both descends ~0.4 m AND translates to the place point while carrying
     # the block, so it needs longer than a plain transit. At 4 s it timed out
     # 168 mm short in y, and RELEASE then opened the jaws past the edge of the
@@ -278,7 +284,12 @@ class SkyGripController:
         self._servo_to = None
         self._ik = None
         self._q_cmd = np.zeros(2)   # slewed arm command actually sent to ctrl
+        self._grip_cmd = GRIPPER_OPEN   # slewed gripper command (see step())
         self._servo_corr = np.zeros(3)
+        # Overhead slew rate to restore between reach episodes -- captured here so a
+        # --slew override (which sets the class attribute before construction) is
+        # still respected. run_episode drops to REACH_SLEW for reach episodes.
+        self._base_slew = self.ARM_SLEW_RATE
 
     # Max arm setpoint change per control step, rad. Joint_1 rotates about x and
     # so does body ROLL, which means arm reaction torque couples straight into the
@@ -308,6 +319,20 @@ class SkyGripController:
     # These outcomes are marginal and seed-dependent (an earlier 0.05 run failed
     # at t=25.9 where this one held), so treat the margin as thin.
     ARM_SLEW_RATE = 0.30
+
+    # Max gripper command change per second. The gripper used to be written
+    # straight to ctrl, so it SLAMMED from open (0.013) to closed (0.000) in a
+    # single step. Overhead that is harmless -- the jaws are directly below the
+    # body, so the closing-contact reaction is vertical and makes almost no body
+    # moment. But on a FORWARD-REACH grasp the jaws are ~0.14 m out in front, so
+    # the same impulsive contact acts on a long lever and torques the drone over:
+    # measured GRASP flipping to roll 135-160 deg and knocking the block to the
+    # floor even after a clean, millimetre-accurate descent. Closing over ~1.6 s
+    # instead spreads the contact impulse so the attitude loop and the gravity
+    # feed-forward keep up. It is also gentler on a 10 g low-friction block.
+    # Per SECOND, converted to a per-physics-step increment in step() -- same unit
+    # convention as ARM_SLEW_RATE.
+    GRIPPER_SLEW_RATE = 0.008
 
     def set_targets(self, drone_xyz, joints, gripper, servo_to=None, ik=None):
         """servo_to: optional WORLD point the jaws should hold, closed-loop.
@@ -353,6 +378,10 @@ class SkyGripController:
         # episode's command -- otherwise episode 2 opens with the same jump
         # this mechanism exists to prevent.
         self._q_cmd = np.array([self.data.qpos[7], self.data.qpos[8]])
+        # Every episode opens in APPROACH with the jaws open; seed the slewed
+        # gripper command to match so it does not carry over the last episode's
+        # closed state and lurch open in the opening frames.
+        self._grip_cmd = GRIPPER_OPEN
 
     def step(self):
         # Replan at CONTROL_HZ, not every physics step -- an MPPI solve is
@@ -423,8 +452,24 @@ class SkyGripController:
         self.mppi.arm_cmd = self._q_cmd
         self.data.ctrl[self.idx_arm[0]] = self._q_cmd[0]
         self.data.ctrl[self.idx_arm[1]] = self._q_cmd[1]
-        self.data.ctrl[self.idx_gripper] = self.gripper_cmd
-        self.data.ctrl[self.idx_gripper_left] = -self.gripper_cmd
+        # Gripper is rate-limited the same way the arm is -- see GRIPPER_SLEW_RATE.
+        # A slammed close flips a forward-reach grasp. self._grip_cmd is what the
+        # actuator actually sees; the left jaw is the mirror of it.
+        grip_step = self.GRIPPER_SLEW_RATE * self.model.opt.timestep
+        self._grip_cmd += np.clip(self.gripper_cmd - self._grip_cmd,
+                                  -grip_step, grip_step)
+        self.data.ctrl[self.idx_gripper] = self._grip_cmd
+        self.data.ctrl[self.idx_gripper_left] = -self._grip_cmd
+
+    def gripper_settled(self):
+        """True once the slewed gripper command has reached its target.
+
+        The gripper now closes over ~1.6 s (GRIPPER_SLEW_RATE), but GRASP/RELEASE
+        arrival is judged by JAW POSITION, which is satisfied the instant DESCEND
+        finishes -- long before the jaws have actually closed. Without gating on
+        this, GRASP would exit and LIFT would start lifting mid-close, dropping the
+        block. So those phases wait for the grip to complete."""
+        return abs(self._grip_cmd - self.gripper_cmd) < 1e-4
 
     def action(self):
         """Logged action = the COMMANDED setpoints, not MPPI's realised output.
@@ -615,6 +660,25 @@ PEDESTAL_X_LIMIT = 0.16
 # driving it into the surface -- see place_pt in build_plan.
 PLACE_CLEARANCE = 0.006
 
+# Forward-reach variety. A fraction of episodes reach the arm OUT to the object
+# instead of descending vertically onto it, so the policy sees the manipulator
+# extend forward and does not learn a single canned overhead approach (the user's
+# request). The overhead grasp is kept as the majority because it is the most
+# stable and highest-yield; forward reach is an additional variant, not a
+# replacement. REACH_Y_RANGE is in body-frame y (the default straight-down pose
+# hangs the jaws at ~-0.056); -0.09..-0.15 is the span proven flyable and
+# leg-clear in reach_hover.py / leg_clear.py, with the mouth within ~10 deg of
+# vertical so the jaws still descend squarely.
+REACH_FRACTION = 0.5
+REACH_Y_RANGE = (-0.15, -0.09)
+# Arm slew rate for the forward-reach reconfigure phases. The overhead default is
+# 0.30 rad/s, but the reach gesture swings the arm through a much larger angle, and
+# at 0.30 the reaction torque of that fast swing shoves the body ~0.2 m off its
+# hover before the phase finishes. 0.10 spreads the same motion over ~3x the time
+# so the flight controller holds station throughout (measured: EXTEND then arrives
+# at err ~0.01 m and dead level, vs timing out 0.1-0.2 m off at 0.30).
+REACH_SLEW = 0.10
+
 
 OBJ_SIDE_RANGE = (0.018, 0.022)     # along the jaws' closing axis
 # Depth, along the gripper's BLIND axis. This is a hard clearance limit, not a
@@ -734,6 +798,13 @@ class ArmIK:
         # the straight-down solution for the SAME drop has zero offset.
         self._com_dy = np.array([self._com_offset(a, b) for a, b in self._grid])
 
+        # How vertical the jaw MOUTH is at each pose: |local-z . world-z| of
+        # grasp_site, 1.0 = pointing straight down. solve_reach uses it to keep
+        # the jaws descending squarely onto an upright block even when the arm is
+        # slung forward. Both joints rotate about x, so this only ever tilts the
+        # mouth in the y-z plane -- the closing axis (x) stays horizontal.
+        self._mouthz = np.array([self._mouth_align(a, b) for a, b in self._grid])
+
         self.x_offset = float(np.mean(self._offsets[:, 0]))
         spread = float(np.ptp(self._offsets[:, 0]))
         assert spread < 1e-6, f"arm moves in x by {spread:.4f} m -- x_offset is not constant"
@@ -764,6 +835,45 @@ class ArmIK:
         d.qpos[self._j2] = j2
         mujoco.mj_kinematics(self._m, d)
         return d.site_xpos[self._sid] - d.xpos[self._m.body("base_link").id]
+
+    def _mouth_align(self, j1, j2):
+        """|local-z . world-z| of grasp_site: 1.0 = jaws pointing straight down."""
+        d = self._d
+        d.qpos[:] = 0.0
+        d.qpos[3] = 1.0
+        d.qpos[self._j1] = j1
+        d.qpos[self._j2] = j2
+        mujoco.mj_kinematics(self._m, d)
+        return abs(float(d.site_xmat[self._sid].reshape(3, 3)[2, 2]))
+
+    def solve_reach(self, drop, reach_y):
+        """Pose that reaches FORWARD to a given lateral `reach_y` while keeping
+        the jaw mouth as vertical as possible. Returns (angles, body->jaws offset).
+
+        This is the deliberate opposite of solve_drop's CoM handling. solve_drop
+        picks the straightest-hanging pose to keep the arm's mass on the gravity
+        axis; reaching forward necessarily slings that mass sideways (up to
+        ~0.11 m of lateral CoM at full reach). That was the configuration the old
+        IK docstrings warn crashed the drone -- but that was under MPPI. The PD
+        controller feeds the resulting gravity moment forward exactly, and a hover
+        at full reach was re-measured holding station to <0.02 mm with zero tilt
+        (reach_hover.py). So this ignores CoM and optimises for a vertical mouth
+        instead, which is what lets the forward-reaching jaws still descend
+        squarely onto an upright block.
+
+        The requested `reach_y` is a target, not a guarantee: whatever grid pose
+        is nearest is returned together with its TRUE offset, so the caller flying
+        to (grasp_pt - offset) still lands the jaws exactly on the object.
+        """
+        want = np.array([reach_y, -abs(drop)])
+        dyz = np.linalg.norm(self._offsets[:, 1:3] - want, axis=1)
+        near = dyz < 0.015
+        if not np.any(near):
+            k = int(np.argmin(dyz))
+            return self._grid[k].copy(), self._offsets[k].copy()
+        idx = np.where(near)[0]
+        k = int(idx[np.argmax(self._mouthz[idx])])
+        return self._grid[k].copy(), self._offsets[k].copy()
 
     def solve_drop(self, drop):
         """Pose that achieves a vertical `drop` with the arm hanging as straight
@@ -829,13 +939,20 @@ class ArmIK:
         return best, best_err
 
 
-def build_plan(ik, obj, place, obj_half_height):
+def build_plan(ik, obj, place, obj_half_height, reach_y=None):
     """Per-phase (drone target, joint target, gripper) with joints from IK.
 
     The drone grasps from directly overhead. GRASP_DROP is the vertical distance
     from the body to the jaws, so the body flies to object_z + GRASP_DROP and the
     jaws land on the object. TRAVEL_DROP tucks the arm up between waypoints so
     the payload is not swinging at full extension during transit.
+
+    reach_y: if given, the arm reaches FORWARD to hang the jaws at this body-frame
+    y instead of the straight-down default (~-0.056). The body then flies further
+    back to put the extended jaws over the object, so the arm visibly extends out
+    rather than descending vertically. Everything downstream is unchanged: it uses
+    the TRUE body->jaw offset returned for the pose, so the jaws still land exactly
+    on the object regardless of how far forward the arm is reaching.
     """
     # GRASP_DROP is the NOMINAL body-to-jaw distance; the arm swings around it to
     # absorb body error. Deliberately well short of the 0.271 m envelope: the
@@ -872,8 +989,23 @@ def build_plan(ik, obj, place, obj_half_height):
     # the 24 mm pads on the upper part of the block.
     GRASP_RISE = obj_half_height - 0.010
 
-    # Straightest pose for each required drop; the returned offset is where the
-    # jaws end up relative to the body, in all three axes.
+    # Reaching poses hang shallower than the straight-down pose (the arm trades
+    # depth for forward extension), so ask for a slightly smaller drop when
+    # reaching -- 0.178 m is what the forward poses actually achieve while staying
+    # within ~10 deg of vertical (see reach_probe2.py). The body altitude
+    # self-adjusts through off_grasp, so this only affects how far down the jaws
+    # are; leg clearance at these poses was measured at +12 mm or better.
+    # The GRASP is ALWAYS overhead, even on a forward-reach episode. Gripping at
+    # full forward extension is not stable on this airframe and it is not a tuning
+    # miss: the instant the jaws firmly grip a block that is still resting on the
+    # table, the drone is kinematically pinned to the ground through the arm at a
+    # ~0.14 m horizontal lever, and the position/attitude loop diverges (measured
+    # roll 0 -> 60 deg in ~0.5 s, dragging the gripped block with it; lifting
+    # immediately does not break it in time). Overhead the same grip pins the
+    # drone directly below its CoM -- zero lever, zero destabilising moment -- so
+    # that is where the close happens. The forward reach is delivered instead as
+    # an approach GESTURE with the gripper OPEN (no ground tether, provably
+    # stable), which then draws in to this overhead pose before closing.
     q_grasp, off_grasp = ik.solve_drop(GRASP_DROP)
     q_travel, off_travel = ik.solve_drop(TRAVEL_DROP)
 
@@ -885,11 +1017,10 @@ def build_plan(ik, obj, place, obj_half_height):
     at_place = place + np.array([0.0, GRASP_Y_OFFSET,
                                  GRASP_RISE + PLACE_CLEARANCE]) - off_grasp
     over_obj = obj + np.array([0.0, 0.0, CRUISE]) - off_travel
-    over_place = place + np.array([0.0, 0.0, CRUISE]) - off_travel
-    # Same cruise waypoints, but for the phases flown AFTER the arm has extended.
-    # The body->jaw offset differs between the two arm poses, so reusing the
-    # off_travel version would ask the body to fly somewhere that puts the
-    # now-extended jaws in the wrong place.
+    # Same cruise waypoint, but for the phases flown with the arm at the grasp
+    # pose. The body->jaw offset differs between the folded and grasp poses, so
+    # reusing the off_travel version would put the now-extended jaws in the wrong
+    # place.
     over_obj_g = obj + np.array([0.0, 0.0, CRUISE]) - off_grasp
     over_place_g = place + np.array([0.0, 0.0, CRUISE]) - off_grasp
 
@@ -911,18 +1042,43 @@ def build_plan(ik, obj, place, obj_half_height):
     # Releasing from a few millimetres up costs nothing: the block is 10 g.
     place_pt = place + np.array([0.0, GRASP_Y_OFFSET,
                                  GRASP_RISE + PLACE_CLEARANCE])
-    return {
-        # Fly out with the arm folded, then reconfigure ONCE while hovering.
-        "APPROACH":  (over_obj,   q_travel, GRIPPER_OPEN, None),
-        "EXTEND":    (over_obj,   q_grasp,  GRIPPER_OPEN, None),
-        # Everything below flies with a static arm at q_grasp.
-        "DESCEND":   (at_obj,     q_grasp,  GRIPPER_OPEN, grasp_pt),
-        "GRASP":     (at_obj,     q_grasp,  GRIPPER_CLOSED, grasp_pt),
-        "LIFT":      (over_obj_g, q_grasp,  GRIPPER_CLOSED, None),
-        "TRANSPORT": (over_place_g, q_grasp, GRIPPER_CLOSED, None),
-        "PLACE":     (at_place,   q_grasp,  GRIPPER_CLOSED, place_pt),
-        "RELEASE":   (at_place,   q_grasp,  GRIPPER_OPEN, place_pt),
-    }
+
+    # Return an ORDERED list of (name, body_target, joints, gripper, servo_point).
+    # The head varies with approach style; everything from DESCEND on is identical
+    # and always overhead.
+    if reach_y is None:
+        # Overhead: fly out with the arm folded, then reconfigure ONCE to the
+        # grasp pose while hovering.
+        head = [
+            ("APPROACH", over_obj, q_travel, GRIPPER_OPEN, None),
+            ("EXTEND",   over_obj, q_grasp,  GRIPPER_OPEN, None),
+        ]
+    else:
+        # Forward reach: the arm extends OUT and reaches DOWN toward the object
+        # with the gripper open (visibly a forward reach, and stable because there
+        # is no grip and so no ground tether), then DRAWS IN -- retracts to the
+        # vertical grasp pose over the object -- before the overhead grasp. The
+        # reaching jaws come to REACH_OUT_RISE above the grip point: low enough to
+        # read as reaching for the object, high enough that drawing the arm back up
+        # and over clears it.
+        REACH_DROP = 0.178
+        REACH_OUT_RISE = GRASP_RISE + 0.14
+        q_reach, off_reach = ik.solve_reach(REACH_DROP, reach_y)
+        reach_out = obj + np.array([0.0, GRASP_Y_OFFSET, REACH_OUT_RISE]) - off_reach
+        head = [
+            ("APPROACH", over_obj,   q_travel, GRIPPER_OPEN, None),
+            ("REACH_OUT", reach_out, q_reach,  GRIPPER_OPEN, None),
+            ("DRAW_IN",  over_obj_g, q_grasp,  GRIPPER_OPEN, None),
+        ]
+    return head + [
+        # Everything below flies with a static arm at the overhead grasp pose.
+        ("DESCEND",   at_obj,       q_grasp, GRIPPER_OPEN,   grasp_pt),
+        ("GRASP",     at_obj,       q_grasp, GRIPPER_CLOSED, grasp_pt),
+        ("LIFT",      over_obj_g,   q_grasp, GRIPPER_CLOSED, None),
+        ("TRANSPORT", over_place_g, q_grasp, GRIPPER_CLOSED, None),
+        ("PLACE",     at_place,     q_grasp, GRIPPER_CLOSED, place_pt),
+        ("RELEASE",   at_place,     q_grasp, GRIPPER_OPEN,   place_pt),
+    ]
 
 
 def episode_succeeded(model, data, info):
@@ -940,8 +1096,16 @@ def episode_succeeded(model, data, info):
     surface = info["surface_z"]
     half_h = info["obj_half_height"]
 
-    if data.qpos[2] < 0.35:
-        return False, f"drone crashed (z={data.qpos[2]:.2f})"
+    # Crash = the body has fallen to or below the work surface. This used to be a
+    # hard 0.35 m, which was fine while every pedestal put the grasp near 0.75 m,
+    # but a forward-reach grasp hangs the jaws ~20 mm shallower and so flies the
+    # body lower, and on the shortest pedestals (surface 0.12 m) it legitimately
+    # ends up hovering at ~0.33 m -- below 0.35, so a perfectly good pick was
+    # reported as a crash. Judging against the surface keeps the check meaningful
+    # at every working height: a real crash tumbles the drone to the floor, well
+    # below the surface, while a low-but-controlled hover stays above it.
+    if data.qpos[2] < surface + 0.05:
+        return False, f"drone crashed (z={data.qpos[2]:.2f}, surface={surface:.2f})"
     # On the floor means it was dropped, not placed.
     if obj[2] < surface - 0.02:
         return False, f"object on the floor (z={obj[2]:.3f})"
@@ -983,10 +1147,22 @@ def run_episode(model, data, renderer, controller, ik, rng, task_text,
     obj_half_height = model.geom_size[
         [g for g in range(model.ngeom)
          if model.geom_bodyid[g] == model.body('target_object').id][0]][2]
-    plan = build_plan(ik, obj, place, obj_half_height)
+    # Per-episode approach style: mostly overhead, some forward-reach (see
+    # REACH_FRACTION). reach_y=None is the vertical descent; a value reaches out.
+    reach_y = None
+    if rng.random() < REACH_FRACTION:
+        reach_y = float(rng.uniform(*REACH_Y_RANGE))
+    # The forward-reach gesture swings the arm gently; the overhead path keeps its
+    # faster slew. Reset every episode so a reach does not slow the next overhead.
+    controller.ARM_SLEW_RATE = REACH_SLEW if reach_y is not None else controller._base_slew
+    plan = build_plan(ik, obj, place, obj_half_height, reach_y=reach_y)
     info = {"place": place.copy(), "obj_start": obj.copy(),
             "obj_half_height": obj_half_height,
+            "reach_y": reach_y,
             "surface_z": float(obj[2] - obj_half_height)}
+    if verbose:
+        style = f"FORWARD-REACH y={reach_y:+.3f}" if reach_y is not None else "OVERHEAD"
+        print(f"  approach style: {style}")
 
     frames = []
     # Physics runs at model timestep (1 ms); a frame is one 1/FPS interval, so
@@ -1002,8 +1178,7 @@ def run_episode(model, data, renderer, controller, ik, rng, task_text,
     # (40 substeps) or timestep=1/30000 if you ever need them to agree exactly.
     substeps = max(1, round((1.0 / FPS) / model.opt.timestep))
 
-    for phase in PHASES:
-        drone_xyz, joints, grip, servo_to = plan[phase]
+    for phase, drone_xyz, joints, grip, servo_to in plan:
         controller.set_targets(drone_xyz, joints, grip, servo_to=servo_to, ik=ik)
 
         # Phases advance on ARRIVAL, not on a timer. A fixed 1 s per phase cuts
@@ -1045,10 +1220,16 @@ def run_episode(model, data, renderer, controller, ik, rng, task_text,
             # An arm-reconfiguration phase is finished when the ARM gets there.
             # Judging it by body position alone would let it exit the moment the
             # hover settles, with the joints still mid-slew -- which is precisely
-            # how the jaws ended up 36 mm short of the grasp pose.
-            if phase == "EXTEND":
+            # how the jaws ended up 36 mm short of the grasp pose. EXTEND (overhead)
+            # and REACH_OUT/DRAW_IN (forward-reach gesture) all slew the arm.
+            if phase in ("EXTEND", "REACH_OUT", "DRAW_IN"):
                 arrived = arrived and np.max(
                     np.abs(data.qpos[7:9] - joints)) < 0.02
+            # GRASP/RELEASE actuate the gripper, which now slews shut/open over
+            # ~1.6 s; the phase is not done until the jaws have finished moving,
+            # or LIFT starts before the block is held (see gripper_settled).
+            if phase in ("GRASP", "RELEASE"):
+                arrived = arrived and controller.gripper_settled()
             if arrived:
                 held += 1
             else:
@@ -1275,8 +1456,9 @@ def main():
                 # 50-episode run. Serialising costs some wall clock and makes
                 # the run survivable.
                 dataset.save_episode(parallel_encoding=False)
+            style = "reach" if info.get("reach_y") is not None else "overhead"
             print(f"episode {saved}/{args.episodes} (attempt {attempts}): "
-                  f"{len(frames)} frames | SUCCESS | {why}")
+                  f"{len(frames)} frames | SUCCESS | {style} | {why}")
         if saved < args.episodes:
             print(f"WARNING: only {saved}/{args.episodes} succeeded in "
                   f"{attempts} attempts -- dataset is short.")
