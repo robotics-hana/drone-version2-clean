@@ -472,18 +472,44 @@ def randomise_episode(model, data, rng):
     ped = model.body("pedestal").id
     ped_gid = [g for g in range(model.ngeom) if model.geom_bodyid[g] == ped][0]
     ped_y = rng.uniform(0.28, 0.42)
-    # Working HEIGHT varies too, so the policy cannot memorise one grasp altitude.
-    # The empirical study in arXiv 2603.22876 found table height the single
-    # largest real-world factor (~36.9% alone, above camera pose at ~23.5%).
-    # Half-height, so the surface lands between 0.40 m and 0.60 m.
-    ped_half_h = rng.uniform(0.20, 0.30)
+
+    # A fraction of episodes have NO table at all -- the block sits on the ground.
+    # This is the widest single change to the working height (0.40-0.60 m with a
+    # pedestal, 0 m without), and it also removes the large coloured slab that
+    # otherwise fills most of the wrist view, so the policy cannot rely on "the
+    # object is on the bright rectangle". The pedestal is parked far below the
+    # floor rather than deleted, since geometry cannot be added or removed from a
+    # compiled model at run time.
+    # Working HEIGHT varies widely, which is the single largest real-world factor
+    # in the empirical study in arXiv 2603.22876 (~36.9% alone, above camera pose
+    # at ~23.5%). Surface lands anywhere from 0.12 m to 0.60 m -- a 5x spread, so
+    # the approach altitude and the whole descent differ episode to episode.
+    #
+    # Removing the table ENTIRELY was tried and is not reachable on this airframe:
+    # the legs hang 0.20 m below the body and the arm reaches 0.19 m down, so a
+    # floor pickup needs the body at ~0.23 m, leaving the legs 30 mm of clearance.
+    # Both no-table episodes tested crashed on exactly that (drone down at
+    # z=0.23/0.24). Raising the grasp with a taller block just moves the failure
+    # to toppling, which is what the 70 mm blocks did. The height range below
+    # gives the same variety without asking for the impossible.
+    ped_half_h = rng.uniform(0.06, 0.30)
     model.geom_size[ped_gid, 2] = ped_half_h
     model.body_pos[ped] = [0.0, ped_y, ped_half_h]
     surface_z = 2.0 * ped_half_h
+
     # Surface appearance: Factor World ranked table texture second only to camera
-    # pose (-38.9 pp). Without a texture library, vary the surface colour, which
-    # is the part of the wrist camera's view that dominates during the grasp.
-    model.geom_rgba[ped_gid, :3] = rng.uniform(0.25, 0.75, size=3)
+    # pose (-38.9 pp). Without a texture library, vary the surface colour -- it is
+    # the part of the wrist camera's view that dominates during the grasp.
+    # Sampled as a warm grey rather than a free RGB: uniform(0.25,0.75) on all
+    # three channels independently produces saturated magentas, limes and cyans,
+    # which look nothing like a real bench and teach the policy to expect colours
+    # it will never see. `lum` sets how light the surface is, `warm` how far it
+    # leans from neutral grey towards brown/tan.
+    lum = rng.uniform(0.26, 0.62)
+    warm = rng.uniform(0.0, 0.30)
+    model.geom_rgba[ped_gid, :3] = np.clip(
+        [lum * (1.0 + warm), lum * (1.0 + 0.35 * warm), lum * (1.0 - 0.55 * warm)],
+        0.05, 0.95)
 
     # --- object: on the pedestal surface, within its x extent, plus yaw so the
     #     grasp is not always axis-aligned (a fixed yaw teaches one approach only)
@@ -588,6 +614,7 @@ PEDESTAL_X_LIMIT = 0.16
 # Release height above the grasp height. Sets the block down instead of
 # driving it into the surface -- see place_pt in build_plan.
 PLACE_CLEARANCE = 0.006
+
 
 OBJ_SIDE_RANGE = (0.018, 0.022)     # along the jaws' closing axis
 # Depth, along the gripper's BLIND axis. This is a hard clearance limit, not a
