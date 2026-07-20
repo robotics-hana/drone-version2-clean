@@ -94,7 +94,18 @@
                  Gripper is well framed when the arm is up-and-forward (Joint_1 ~1.0-1.6),
                  marginal at mid poses where it hangs near the lower frame edge.
                  Previous value: pos="0 0.01 0.15" -->
-            <camera name="scene_cam" pos="0 0.15 0.02" xyaxes="1.95 0.05 0 -0.02 0.98 1" fovy="100"/>
+            <!-- Aimed DOWN and BACK, not forward. The task is an overhead grasp: at
+                 GRASP the block sits 54 mm behind and 200 mm below the body (the
+                 body->jaw offset), so the previous forward-and-45-deg-down aim
+                 pointed straight past the workspace. Verified against the recorded
+                 dataset: camera2 showed only floor and horizon in every frame
+                 sampled, mid-grasp included, so that stream carried no task
+                 information at all.
+                 Mounted at the nose tip and below the body plane because anything
+                 inside the airframe just films the drone's own underside.
+                 50 deg from vertical; xyaxes y-column is (0, cos50, -sin50).
+                 Previous value: pos="0 0.15 0.02" xyaxes="1.95 0.05 0 -0.02 0.98 1" -->
+            <camera name="scene_cam" pos="0 0.18 -0.06" xyaxes="1 0 0  0 0.6428 -0.7660" fovy="95"/>
 
             <geom type="mesh" mesh="base_link" rgba="0.7 0.7 0.9 1"/>
             <geom name="leg_front_left" type="cylinder" size="0.008 0.12" pos="0.108 0.088 -0.08" rgba="0.2 0.2 0.2 1" density="0" mass="0.00"/>
@@ -168,7 +179,7 @@
                              Invariant to gripper aperture (the clamps slide symmetrically) and to
                              arm pose, so a static site is exact rather than an approximation. -->
                         <site name="grasp_site" pos="-0.02077 -0.07236 -0.00018" size="0.006"
-                              rgba="1 0.5 0 0.9" type="sphere"/>
+                              rgba="1 0.5 0 0" type="sphere"/>
                         
                         <body name="clamp_1" pos="-0.052134 -0.220077 -0.186037">
                             <inertial pos="0.0601695 0.144807 0.184483" quat="0.745779 0.661192 0.0475856 -0.0661414"
@@ -185,7 +196,7 @@
                                  Face sits flush with the mesh's inner surface, so the open
                                  aperture is unchanged at 30.7 mm. -->
                             <geom name="pad_1" type="box" pos="-0.019030 0.147723 0.185211"
-                                  size="0.005 0.010 0.012" rgba="0.2 0.8 0.3 1"
+                                  size="0.005 0.010 0.012" rgba="0.2 0.8 0.3 0"
                                   friction="1.5 0.01 0.001" solref="0.004 1"/>
                         </body>
 
@@ -197,7 +208,7 @@
                             <geom pos="-0.07989 0.342905 0.031809" type="mesh" mesh="clamp_2"
                                   contype="0" conaffinity="0" group="1"/>
                             <geom name="pad_2" type="box" pos="-0.043304 0.149912 0.184341"
-                                  size="0.005 0.010 0.012" rgba="0.2 0.8 0.3 1"
+                                  size="0.005 0.010 0.012" rgba="0.2 0.8 0.3 0"
                                   friction="1.5 0.01 0.001" solref="0.004 1"/>
                         </body>
                     </body>
