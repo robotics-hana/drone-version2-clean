@@ -487,6 +487,31 @@ class SkyGripController:
 _CAM_NOMINAL = {}
 
 
+def _place_block(model, data, body_name, x, ped_y, surface_z, colour_rgb, rng):
+    """Size, place, yaw and colour one block on the surface. Returns (pos, half_h).
+
+    Both the target and the distractor go through here, so they are drawn from the
+    same size/yaw distribution and differ only in position and colour -- exactly
+    what makes the colour, not some incidental shape cue, the thing the policy must
+    key on. Size and yaw bounds are the gripper's, see OBJ_*_RANGE / _max_safe_yaw;
+    they apply to the distractor too so it stays a plausible pickable block.
+    """
+    bid = model.body(body_name).id
+    adr = model.jnt_qposadr[model.body_jntadr[bid]]
+    gid = [g for g in range(model.ngeom) if model.geom_bodyid[g] == bid][0]
+    side = rng.uniform(*OBJ_SIDE_RANGE)
+    depth = rng.uniform(*OBJ_DEPTH_RANGE)
+    half_h = rng.uniform(*OBJ_HALF_HEIGHT_RANGE)
+    model.geom_size[gid] = [side / 2, depth / 2, half_h]
+    max_yaw = min(_max_safe_yaw(side), np.radians(10.0))
+    yaw = rng.uniform(-max_yaw, max_yaw)
+    pos = np.array([x, ped_y, surface_z + half_h])
+    data.qpos[adr:adr + 3] = pos
+    data.qpos[adr + 3:adr + 7] = [np.cos(yaw / 2), 0, 0, np.sin(yaw / 2)]
+    model.geom_rgba[gid, :3] = colour_rgb
+    return pos, half_h
+
+
 def randomise_episode(model, data, rng):
     """Domain-randomise object, drone start pose, surface, cameras and lighting.
 
@@ -556,35 +581,33 @@ def randomise_episode(model, data, rng):
         [lum * (1.0 + warm), lum * (1.0 + 0.35 * warm), lum * (1.0 - 0.55 * warm)],
         0.05, 0.95)
 
-    # --- object: on the pedestal surface, within its x extent, plus yaw so the
-    #     grasp is not always axis-aligned (a fixed yaw teaches one approach only)
-    bid = model.body("target_object").id
-    adr = model.jnt_qposadr[model.body_jntadr[bid]]
-    obj_gid = [g for g in range(model.ngeom) if model.geom_bodyid[g] == bid][0]
+    # --- objects: TWO blocks for language grounding -- a target (the one to pick)
+    #     and a distractor. They get two DIFFERENT named colours; the episode task
+    #     names the target's. Which SIDE the target is on is randomised INDEPENDENTLY
+    #     of its colour, so the policy cannot shortcut on position ("always pick the
+    #     left one") and has to key on colour. Each block's SIZE/yaw comes from the
+    #     gripper's grip envelope (see _place_block / OBJ_*_RANGE).
+    tc, dc = rng.choice(list(NAMED_COLOURS), size=2, replace=False)
+    target_colour, distractor_colour = str(tc), str(dc)
 
-    # --- object SIZE, bounded by what the gripper can actually hold. The pads
-    #     close to a 16.7 mm gap, and a square post of side s at yaw t presents
-    #     s*(|cos t| + |sin t|) across the jaws -- so size and yaw are coupled and
-    #     cannot be sampled independently. GRIP_ENVELOPE is measured, not assumed
-    #     (see grip_envelope.py); sampling outside it would generate episodes
-    #     where the demonstrated grasp fails, which is worse than no episode.
-    side = rng.uniform(*OBJ_SIDE_RANGE)
-    depth = rng.uniform(*OBJ_DEPTH_RANGE)
-    obj_half_h = rng.uniform(*OBJ_HALF_HEIGHT_RANGE)
-    model.geom_size[obj_gid] = [side / 2, depth / 2, obj_half_h]
-    # Widest presented width must still fit inside the closed gap plus the
-    # squeeze the pads can absorb.
-    # Yaw is limited by the BLIND axis, not the closing axis: rotating a
-    # 20 x 12 mm post swings its wide dimension into the direction the housing
-    # cannot clear. presented_depth(t) = side*|sin t| + depth*|cos t|, which at
-    # only 15 deg already turns a 12 mm depth into ~17 mm -- past the measured
-    # clearance limit. So this stays small; it is a property of the gripper, not
-    # a randomisation preference.
-    max_yaw = min(_max_safe_yaw(side), np.radians(10.0))
-    obj = np.array([rng.uniform(-0.14, 0.14), ped_y, surface_z + obj_half_h])
-    yaw = rng.uniform(-max_yaw, max_yaw)
-    data.qpos[adr:adr + 3] = obj
-    data.qpos[adr + 3:adr + 7] = [np.cos(yaw / 2), 0, 0, np.sin(yaw / 2)]
+    # Target one side, distractor the other -> separation >= MULTI_OBJ_MIN_SEP.
+    ts = float(rng.choice([-1.0, 1.0]))                 # which side the target sits
+    target_x = ts * rng.uniform(0.03, 0.09)
+    distractor_x = -ts * rng.uniform(0.05, 0.11)
+    obj, obj_half_h = _place_block(
+        model, data, "target_object", target_x, ped_y, surface_z,
+        NAMED_COLOURS[target_colour], rng)
+    distractor, _ = _place_block(
+        model, data, "distractor_object", distractor_x, ped_y, surface_z,
+        NAMED_COLOURS[distractor_colour], rng)
+
+    # Place point: shift the target further onto ITS OWN side, away from the
+    # distractor, and keep it on the pedestal -- so the set-down never approaches
+    # the block that must be left undisturbed.
+    shift = rng.uniform(0.06, 0.12)
+    place_x = float(np.clip(target_x + ts * shift,
+                            -PEDESTAL_X_LIMIT, PEDESTAL_X_LIMIT))
+    place = np.array([place_x, ped_y, surface_z + obj_half_h])
 
     # --- drone start pose: vary where the episode begins, so the policy sees
     #     approach from a spread of offsets rather than one canned trajectory.
@@ -606,8 +629,8 @@ def randomise_episode(model, data, rng):
     amb = rng.uniform(0.15, 0.40)
     model.light_diffuse[fill] = [amb, amb, amb]
 
-    # --- object colour, so the policy keys on shape/position not one RGB
-    model.geom_rgba[obj_gid, :3] = rng.uniform(0.15, 0.9, size=3)
+    # Object colours are set per block by _place_block above (discrete named
+    # colours, so the instruction can refer to them) -- not sampled here.
 
     # --- camera pose jitter. The highest-value factor in the literature and the
     #     one this script previously did not vary at all. Ranges follow NVIDIA's
@@ -633,7 +656,12 @@ def randomise_episode(model, data, rng):
         model.cam_quat[cid] = q
 
     mujoco.mj_forward(model, data)
-    return obj
+    return {
+        "target": obj, "target_half_h": obj_half_h,
+        "target_colour": target_colour,
+        "distractor": distractor, "distractor_colour": distractor_colour,
+        "place": place, "surface_z": surface_z,
+    }
 
 
 # Measured grip envelope -- see grip_envelope.py. Sampling outside this produces
@@ -646,6 +674,12 @@ GRASP_Y_OFFSET = 0.008
 # How close to the requested place point the block must end up for the
 # episode to count as a demonstration worth training on.
 PLACE_TOL = 0.06
+
+# How far the DISTRACTOR block may drift and the episode still count. It is never
+# touched deliberately, so this only tolerates a few mm of settle/airflow; a
+# larger move means the wrong block was picked or knocked, which is a failed
+# grounding demonstration.
+DISTRACTOR_MOVE_TOL = 0.03
 
 # How far the block is asked to travel, and how far out along the pedestal a
 # place point may sit. The object spawns within +-0.14 and the pedestal is
@@ -679,6 +713,26 @@ REACH_Y_RANGE = (-0.15, -0.09)
 # at err ~0.01 m and dead level, vs timing out 0.1-0.2 m off at 0.30).
 REACH_SLEW = 0.10
 
+
+# Discrete, nameable colours for language grounding. The task names the target's
+# colour ("pick up the red block"), so the colours must be distinct enough that a
+# human -- and the policy -- can tell them apart, and each must map to ONE word.
+# This replaces the earlier continuous rgb sampling, which produced muddy,
+# unnameable hues that could not appear in an instruction. Kept vivid and well
+# separated in hue; the target and distractor always get two DIFFERENT entries.
+NAMED_COLOURS = {
+    "red":    [0.85, 0.15, 0.15],
+    "green":  [0.15, 0.62, 0.22],
+    "blue":   [0.20, 0.35, 0.85],
+    "yellow": [0.90, 0.80, 0.15],
+    "orange": [0.90, 0.48, 0.12],
+    "purple": [0.58, 0.20, 0.72],
+}
+
+# Minimum separation in x between the two blocks, and between the target's place
+# point and the distractor -- so the grasp, the descent and the set-down never
+# foul the block that is meant to be left alone.
+MULTI_OBJ_MIN_SEP = 0.08
 
 OBJ_SIDE_RANGE = (0.018, 0.022)     # along the jaws' closing axis
 # Depth, along the gripper's BLIND axis. This is a hard clearance limit, not a
@@ -1115,38 +1169,37 @@ def episode_succeeded(model, data, info):
     d = float(np.linalg.norm(obj[0:2] - place[0:2]))
     if d > PLACE_TOL:
         return False, f"object {d*1000:.0f} mm from the place target"
+    # The DISTRACTOR must be left where it started. This is what makes an episode a
+    # valid grounding demonstration: picking the wrong block, or knocking the other
+    # one while manoeuvring, is a failure even if the target happens to end up in
+    # the right place. A few mm of settle is tolerated; a real disturbance is not.
+    dadr = model.jnt_qposadr[model.body_jntadr[model.body("distractor_object").id]]
+    dist = data.qpos[dadr:dadr + 3]
+    dmoved = float(np.linalg.norm(dist[0:2] - info["distractor_start"][0:2]))
+    if dmoved > DISTRACTOR_MOVE_TOL:
+        return False, (f"distractor ({info['distractor_colour']}) moved "
+                       f"{dmoved*1000:.0f} mm -- wrong block disturbed")
     moved = float(np.linalg.norm(obj[0:2] - info["obj_start"][0:2]))
-    return True, (f"placed {d*1000:.0f} mm from target, "
-                  f"moved {moved*1000:.0f} mm from start")
+    return True, (f"placed {info['target_colour']} block {d*1000:.0f} mm from "
+                  f"target, moved {moved*1000:.0f} mm ({info['distractor_colour']} "
+                  f"distractor undisturbed)")
 
 
-def run_episode(model, data, renderer, controller, ik, rng, task_text,
+def run_episode(model, data, renderer, controller, ik, rng, task_template,
                 viewer=None, verbose=False):
-    obj = randomise_episode(model, data, rng)
+    scene = randomise_episode(model, data, rng)
     controller.reset_after_randomisation()
 
-    # Place target: same surface, offset along the pedestal's long axis.
-    #
-    # The direction is chosen by which side has ROOM, not at random. Sampling the
-    # sign and then clipping to the pedestal (the previous approach) silently
-    # collapsed the displacement whenever the block spawned near an edge and the
-    # sign pointed outward: observed episodes that moved the block only 21 mm and
-    # 31 mm where others moved 120 mm. Those still pass the success check -- the
-    # block does reach the requested point -- but they are near-no-op
-    # demonstrations, and training a VLA on "pick and place" examples where the
-    # object barely moves teaches an inconsistent notion of the task.
-    reach = rng.uniform(PLACE_MIN_SHIFT, PLACE_MAX_SHIFT)
-    room_pos = PEDESTAL_X_LIMIT - obj[0]      # room to the +x side
-    room_neg = obj[0] + PEDESTAL_X_LIMIT      # room to the -x side
-    if room_pos >= reach and room_neg >= reach:
-        direction = float(rng.choice([-1.0, 1.0]))       # both fit: free choice
-    else:
-        direction = 1.0 if room_pos > room_neg else -1.0  # take the roomier side
-    reach = min(reach, room_pos if direction > 0 else room_neg)
-    place = np.array([obj[0] + direction * reach, obj[1], obj[2]])
-    obj_half_height = model.geom_size[
-        [g for g in range(model.ngeom)
-         if model.geom_bodyid[g] == model.body('target_object').id][0]][2]
+    # Two blocks now; we always pick the TARGET (the distractor is left alone). The
+    # scene already fixed both blocks' positions/colours and the place point, with
+    # the target's displacement steered away from the distractor -- see
+    # randomise_episode. The task NAMES the target's colour, so the instruction is
+    # what tells the policy which of the two to pick.
+    obj = scene["target"]
+    place = scene["place"]
+    obj_half_height = scene["target_half_h"]
+    task_text = task_template.format(colour=scene["target_colour"])
+
     # Per-episode approach style: mostly overhead, some forward-reach (see
     # REACH_FRACTION). reach_y=None is the vertical descent; a value reaches out.
     reach_y = None
@@ -1158,11 +1211,15 @@ def run_episode(model, data, renderer, controller, ik, rng, task_text,
     plan = build_plan(ik, obj, place, obj_half_height, reach_y=reach_y)
     info = {"place": place.copy(), "obj_start": obj.copy(),
             "obj_half_height": obj_half_height,
-            "reach_y": reach_y,
-            "surface_z": float(obj[2] - obj_half_height)}
+            "reach_y": reach_y, "task": task_text,
+            "target_colour": scene["target_colour"],
+            "distractor_colour": scene["distractor_colour"],
+            "distractor_start": scene["distractor"].copy(),
+            "surface_z": scene["surface_z"]}
     if verbose:
         style = f"FORWARD-REACH y={reach_y:+.3f}" if reach_y is not None else "OVERHEAD"
-        print(f"  approach style: {style}")
+        print(f"  task: \"{task_text}\"  ({scene['target_colour']} target vs "
+              f"{scene['distractor_colour']} distractor)  | {style}")
 
     frames = []
     # Physics runs at model timestep (1 ms); a frame is one 1/FPS interval, so
@@ -1320,11 +1377,14 @@ def main():
     # found VLAs largely ignore the instruction semantically while remaining
     # sensitive to phrasing as a distribution shift -- so varying it buys little
     # and risks a mismatch at inference.
-    # No longer says "red cube": the object colour is randomised per episode and
-    # it is a rectangular block, so the old string was simply false for most of
-    # the data. Short and action-verb-first, per the SmolVLA dataset guidance.
+    # A TEMPLATE with a {colour} field, filled per episode with the target block's
+    # colour. With two differently-coloured blocks in the scene the colour word is
+    # informative -- it is what disambiguates which block to pick -- so unlike the
+    # earlier single-object setup, naming it here is grounding, not noise. A literal
+    # string with no {colour} still works (it just formats to itself). Short and
+    # action-verb-first, per the SmolVLA dataset guidance.
     ap.add_argument("--task", type=str,
-                    default="Pick up the block and place it")
+                    default="Pick up the {colour} block and place it")
     ap.add_argument("--samples", type=int, default=50,
                     help="MPPI rollouts per solve. Dominates runtime: a solve is "
                          "~1.8 s at 50, and an episode needs ~140 solves. Drop to "

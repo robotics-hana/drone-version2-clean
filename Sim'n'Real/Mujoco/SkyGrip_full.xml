@@ -287,6 +287,19 @@
                   mass="0.010" friction="0.3 0.005 0.0001"/>
         </body>
 
+        <!-- Distractor: a second block, identical in kind to target_object but a
+             DIFFERENT colour, used for language grounding. The episode's task names
+             a colour ("pick up the red block"); with two differently-coloured
+             blocks present the instruction is now informative -- the policy has to
+             key on colour to pick the right one, and success requires leaving this
+             one untouched. collect_demos randomises its size/pose/colour per
+             episode; the pose here is only the reset default, parked to one side. -->
+        <body name="distractor_object" pos="-0.12 0.35 0.54">
+            <freejoint name="distractor_free_joint"/>
+            <geom type="box" size="0.010 0.010 0.040" rgba="0.2 0.35 0.85 1"
+                  mass="0.010" friction="0.3 0.005 0.0001"/>
+        </body>
+
         <body name="current_target" pos="0 0 1.5" mocap="true">
             <geom type="sphere" size="0.05" rgba="0 1 0 0.8" contype="0" conaffinity="0"/>
         </body>
