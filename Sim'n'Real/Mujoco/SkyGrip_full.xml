@@ -7,7 +7,11 @@
     <asset>
         <mesh name="base_link" content_type="model/stl" file="base_link.STL"/>
         <mesh name="Link_1" content_type="model/stl" file="Link_1.STL"/>
-        <mesh name="connect" content_type="model/stl" file="connect.STL" scale="0.001 0.001 0.001"/>
+        <!-- Filename case must match the file on disk EXACTLY. The file is
+             connect.stl (lowercase); this said connect.STL, which loads fine on
+             Windows because NTFS is case-insensitive but fails on Linux -- i.e.
+             it would have broken on the Spark GPU server, not here. -->
+        <mesh name="connect" content_type="model/stl" file="connect.stl" scale="0.001 0.001 0.001"/>
         <mesh name="link5_1" content_type="model/stl" file="link5_1.stl" scale="0.001 0.001 0.001"/>
         <mesh name="clamp_1" content_type="model/stl" file="clamp_1.stl" scale="0.001 0.001 0.001"/>
         <mesh name="clamp_2" content_type="model/stl" file="clamp_2.stl" scale="0.001 0.001 0.001"/>
