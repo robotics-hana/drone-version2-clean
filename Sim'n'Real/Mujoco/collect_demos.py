@@ -146,20 +146,25 @@ STATE_NAMES = (
 )
 ACTION_NAMES = ["drone_x", "drone_y", "drone_z", "joint1", "joint2", "gripper"]
 
-# Gripper aperture, in metres of right_clamp travel. HIGHER ctrl = MORE CLOSED:
-# both clamps slide apart as the command decreases (read off the slide joints and
-# confirmed by measuring the pad gap, after an earlier mesh-face measurement got
-# the two sides swapped and reported the mapping backwards).
-# Gap between the pad_1/pad_2 contact faces:
-#     0.037 -> 16.7 mm   (fully closed; squeezes the 20 mm post by 3.3 mm)
-#     0.030 -> 30.7 mm
-#     0.025 -> 40.7 mm   (open; clears the post with room for approach error)
-#     0.000 -> 90.7 mm
-# Gripping is done by the pad_1/pad_2 boxes, not the clamp meshes -- the meshes
-# are asymmetric and only one of them presented a usable face. Do NOT size
-# objects from the clamp geom ORIGINS; that reads 87.2 mm and is meaningless.
-GRIPPER_OPEN = 0.025
-GRIPPER_CLOSED = 0.037
+# Gripper aperture, in metres of clamp travel. LOWER ctrl = MORE CLOSED.
+#
+# This was previously coded the other way round (OPEN=0.025, CLOSED=0.037) and it
+# was wrong. Ray-casting straight through the grasp centre and rendering the jaws
+# at a sweep of commands both show the blades TOGETHER at 0.000 and WIDEST at
+# 0.037. The earlier "confirmation" from the slide-joint signs had the two clamps'
+# sides swapped.
+# Measured gap between the visible jaw faces (linear, 2 mm per 0.001 of command):
+#     0.000 -> 15.7 mm   (closed; squeezes a 20 mm block by 4.3 mm)
+#     0.005 -> 25.7 mm
+#     0.013 -> 41.7 mm   (open; clears a 20 mm block by ~11 mm a side)
+#     0.037 -> 89.7 mm   (fully open)
+# Collision is done by the clamp MESHES themselves, so what is rendered is what
+# grips. The invisible pad boxes that used to do this were removed: they had been
+# placed on the wrong sides of their own parent blades, so they scissored the
+# opposite way to the visible jaws and held the block 14 mm INSIDE the geometry
+# on screen -- the block appeared to be cut into the gripper.
+GRIPPER_OPEN = 0.013
+GRIPPER_CLOSED = 0.000
 
 # Phase advance. Two tolerances, because the phases have different needs:
 #   TRANSIT  -- just needs to get the body into the neighbourhood.

@@ -182,7 +182,7 @@
 
                              Invariant to gripper aperture (the clamps slide symmetrically) and to
                              arm pose, so a static site is exact rather than an approximation. -->
-                        <site name="grasp_site" pos="-0.02077 -0.07236 -0.00018" size="0.006"
+                        <site name="grasp_site" pos="0.00053 -0.07236 -0.00018" size="0.006"
                               rgba="1 0.5 0 0" type="sphere"/>
                         
                         <body name="clamp_1" pos="-0.052134 -0.220077 -0.186037">
@@ -192,15 +192,16 @@
                                    range="0 0.037" actuatorfrcrange="-1.9 1.9" damping="0.5" frictionloss="0.1"/>
                             <geom pos="0.045072 0.340704 0.033971" type="mesh" mesh="clamp_1"
                                   contype="0" conaffinity="0" group="1"/>
-                            <!-- Contact pad. The clamp STLs are asymmetric: measured against the
-                                 object, clamp_1 only presents a ~7 mm tall usable band 6-13 mm
-                                 below grasp_site while clamp_2 presents ~45 mm, so mesh-on-mesh
-                                 grasping caught on one jaw only and scattered the object. The
-                                 meshes stay for visuals (contype=0); these boxes do the gripping.
-                                 Face sits flush with the mesh's inner surface, so the open
-                                 aperture is unchanged at 30.7 mm. -->
-                            <geom name="pad_1" type="box" pos="-0.019030 0.147723 0.185211"
-                                  size="0.005 0.010 0.012" rgba="0.2 0.8 0.3 0"
+                            <!-- Collision pad, flush with the VISIBLE blade face.
+                                 Placement is ray-measured (mj_ray straight through the
+                                 grasp centre), not derived from mesh vertex bands -- the
+                                 previous pads were computed from a measurement that had
+                                 the two clamps' sides swapped, so each pad sat on the
+                                 opposite side from its own parent blade. They scissored
+                                 the wrong way and held the block 14 mm INSIDE the
+                                 geometry on screen. -->
+                            <geom name="pad_1" type="box" pos="0.064589 0.147719 0.185682"
+                                  size="0.004 0.010 0.012" rgba="0.2 0.8 0.3 0"
                                   friction="1.5 0.01 0.001" solref="0.004 1"/>
                         </body>
 
@@ -211,8 +212,8 @@
                                    range="-0.038 0" actuatorfrcrange="-1.9 1.9" damping="0.5" frictionloss="0.1"/>
                             <geom pos="-0.07989 0.342905 0.031809" type="mesh" mesh="clamp_2"
                                   contype="0" conaffinity="0" group="1"/>
-                            <geom name="pad_2" type="box" pos="-0.043304 0.149912 0.184341"
-                                  size="0.005 0.010 0.012" rgba="0.2 0.8 0.3 0"
+                            <geom name="pad_2" type="box" pos="-0.084082 0.149916 0.183870"
+                                  size="0.004 0.010 0.012" rgba="0.2 0.8 0.3 0"
                                   friction="1.5 0.01 0.001" solref="0.004 1"/>
                         </body>
                     </body>
