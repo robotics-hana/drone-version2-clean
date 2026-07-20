@@ -178,6 +178,10 @@ GRIPPER_CLOSED = 0.037
 # cannot converge so one bad episode does not stall a 50-episode run.
 ARRIVE_TOL_TRANSIT = 0.05
 ARRIVE_TOL_PRECISE = 0.012
+# Setting down is a coarser job than picking up: the jaws only have to get
+# the block near the surface before opening, and holding out for grasp
+# precision costs the block (see the tol choice in the phase loop).
+ARRIVE_TOL_PLACE = 0.035
 HOLD_FRAMES = 8
 MAX_FRAMES_PER_PHASE = int(4.0 * FPS)
 
@@ -991,7 +995,16 @@ def run_episode(model, data, renderer, controller, ik, rng, task_text,
             # servo above, so body-vs-waypoint error no longer means anything
             # there -- and the jaws are what has to be on the object.
             if servo_to is not None:
-                tol = ARRIVE_TOL_PRECISE
+                # Setting the block DOWN does not need grasp precision. Holding
+                # PLACE to the 12 mm grasp tolerance meant it usually could not
+                # arrive, ran its full 8 s budget, and spent that time hovering
+                # and nudging the block against the surface until it popped out
+                # of the jaws -- the block then landed wherever luck put it, on
+                # the pedestal in the successes and on the floor in the failures.
+                # Episodes where PLACE arrived quickly (~62 frames) succeeded;
+                # every episode where it timed out lost the block.
+                tol = (ARRIVE_TOL_PLACE if phase in ("PLACE", "RELEASE")
+                       else ARRIVE_TOL_PRECISE)
                 arrived = np.linalg.norm(
                     grasp_site_pos(model, data) - servo_to) < tol
             else:
