@@ -592,7 +592,12 @@ def randomise_episode(model, data, rng, colour_target, colour_distractor):
     #     stops the policy learning one fixed approach corridor.
     ped = model.body("pedestal").id
     ped_gid = [g for g in range(model.ngeom) if model.geom_bodyid[g] == ped][0]
-    ped_y = rng.uniform(0.28, 0.42)
+    # How far in FRONT the table sits (camera looks along -y, so larger y is
+    # further forward). Widened from 0.28-0.42: a nearer or further table changes
+    # how far the arm has to reach forward and the whole approach path, which -- with
+    # the mostly-forward-reach mix (REACH_FRACTION) -- is what diversifies the arm
+    # trajectory instead of the drone just recentring over the object every time.
+    ped_y = rng.uniform(0.24, 0.48)
 
     # A fraction of episodes have NO table at all -- the block sits on the ground.
     # This is the widest single change to the working height (0.40-0.60 m with a
@@ -753,8 +758,15 @@ PLACE_CLEARANCE = 0.006
 # hangs the jaws at ~-0.056); -0.09..-0.15 is the span proven flyable and
 # leg-clear in reach_hover.py / leg_clear.py, with the mouth within ~10 deg of
 # vertical so the jaws still descend squarely.
-REACH_FRACTION = 0.5
-REACH_Y_RANGE = (-0.15, -0.09)
+# Most PICK episodes now reach forward rather than descending straight down. The
+# overhead descent moves the arm the same short way every time (the drone just
+# recentres over the object), so it adds little trajectory diversity; the forward
+# reach actively swings Joint_1/Joint_2 out to the object and back, and varying how
+# far (REACH_Y_RANGE) makes each episode's arm path distinct. A minority stay
+# overhead so both styles are represented. reach_y is body-frame y; the default
+# straight-down pose sits at ~-0.056, so -0.08..-0.17 is a real forward extension.
+REACH_FRACTION = 0.65
+REACH_Y_RANGE = (-0.17, -0.08)
 # Arm slew rate for the forward-reach reconfigure phases. The overhead default is
 # 0.30 rad/s, but the reach gesture swings the arm through a much larger angle, and
 # at 0.30 the reaction torque of that fast swing shoves the body ~0.2 m off its
