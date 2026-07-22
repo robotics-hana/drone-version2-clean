@@ -111,6 +111,16 @@
                  Previous value: pos="0 0.15 0.02" xyaxes="1.95 0.05 0 -0.02 0.98 1" -->
             <camera name="scene_cam" pos="0 -0.07 0.15" xyaxes="-1.95 0.05 0  0.02 -0.98 1" fovy="100"/>
 
+            <!-- Chase view: behind and above the airframe, looking forward and down over
+                 the drone at the workspace. Mounted on base_link, NOT on the gripper --
+                 a gripper-mounted version swings with the arm and the framing breaks.
+                 Shows the drone, the arm hanging below, and the objects ahead in one
+                 frame. Replaces the earlier jaw-close-up, which framed the grasp well but
+                 left the gripper hanging in empty space with the objects as specks at the
+                 bottom edge during the whole approach. Pose derived in _chasecam.py /
+                 _tobase.py and chosen from rendered candidates. -->
+            <camera name="wrist_cam" pos="-0.002 0.4234 0.2879" xyaxes="-1 0 0  0 -0.7679 0.6406" fovy="65"/>
+
             <geom type="mesh" mesh="base_link" rgba="0.7 0.7 0.9 1"/>
             <geom name="leg_front_left" type="cylinder" size="0.008 0.12" pos="0.108 0.088 -0.08" rgba="0.2 0.2 0.2 1" density="0" mass="0.00"/>
             <geom name="leg_front_right" type="cylinder" size="0.008 0.12" pos="0.108 -0.088 -0.08" rgba="0.2 0.2 0.2 1" density="0" mass="0.00"/>
@@ -162,15 +172,6 @@
                              Previous value (renders as a flat grey plate at every pose -- the
                              camera sat inside the link5_1 mesh, blocked at 9 mm):
                                pos="0 -0.028 0.082" xyaxes="-1 0 0 0 -0.574 0.819" fovy="110" -->
-                        <!-- Manipulation view, mounted to look at the JAWS from the open
-                             (-y) side, slightly above, so the two pads and the grasped object
-                             fill the frame and the gripper is clearly visible. The earlier
-                             top-down pose framed the workspace but showed almost no gripper
-                             (the housing is hidden, so from above only the thin pad edges
-                             read). Computed in the gripper_assembly frame at the overhead
-                             grasp pose (see wristcam_solve.py); it moves with the gripper, so
-                             the jaws stay framed at every arm pose. -->
-                        <camera name="wrist_cam" pos="0.0005 -0.1752 0.0937" xyaxes="1 0 0  0 0.674 0.739" fovy="65"/>
 
                         <!-- True end-effector: the point midway between the jaws' INNER FACES,
                              where a grasped object actually sits.
