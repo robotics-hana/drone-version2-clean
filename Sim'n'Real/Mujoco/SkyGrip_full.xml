@@ -290,7 +290,11 @@
             <!-- Friction lowered to match the target object. Contact friction is
                  the element-wise max of the pair, so the block can only slide
                  freely on this surface if BOTH are low -- see target_object. -->
-            <geom type="box" size="0.20 0.05 0.25" rgba="0.45 0.42 0.38 1"
+            <!-- Enlarged from 0.20 x 0.05 to 0.32 x 0.09 half-extents (0.64 x 0.18 m
+                 surface) so three objects fit with real separation and the place point
+                 has somewhere to go. collect_demos rewrites geom_size[2] per episode for
+                 the working-height randomisation, so only x/y are fixed here. -->
+            <geom type="box" size="0.32 0.09 0.25" rgba="0.45 0.42 0.38 1"
                   friction="0.3 0.005 0.0001"/>
         </body>
 
@@ -349,6 +353,17 @@
         <body name="distractor_object" pos="-0.12 0.35 0.54">
             <freejoint name="distractor_free_joint"/>
             <geom type="box" size="0.010 0.010 0.040" rgba="0.2 0.35 0.85 1"
+                  mass="0.010" friction="0.3 0.005 0.0001"/>
+        </body>
+
+        <!-- Second distractor. Three objects on the surface makes the colour/shape
+             grounding a genuine 1-of-3 choice rather than 1-of-2, and success still
+             requires leaving BOTH unnamed objects untouched. Same size/mass/friction
+             family as the others; collect_demos randomises pose, size, shape and
+             colour per episode. -->
+        <body name="distractor_object_2" pos="0.12 0.35 0.54">
+            <freejoint name="distractor2_free_joint"/>
+            <geom type="box" size="0.010 0.010 0.040" rgba="0.85 0.7 0.2 1"
                   mass="0.010" friction="0.3 0.005 0.0001"/>
         </body>
 

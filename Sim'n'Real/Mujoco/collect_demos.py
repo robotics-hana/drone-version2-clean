@@ -520,28 +520,31 @@ def choose_episode(rng):
     non_forbidden = [c for c in NAMED_COLOURS if c != FORBIDDEN_COLOUR]
     shapes = list(NAMED_SHAPES)
     sh = lambda: str(rng.choice(shapes))
-    st, sd = sh(), sh()                       # target-body and distractor-body shapes
+    st, sd, sd2 = sh(), sh(), sh()            # shapes for the three bodies
     if mode == "act":
         ca = str(rng.choice(non_forbidden))                       # the picked object
         # Distractor may be ANY other colour, including the forbidden one -- an act
         # episode with a red distractor teaches "red present, but pick the named
         # green", reinforcing the rule without a refusal.
-        cb = str(rng.choice([c for c in NAMED_COLOURS if c != ca]))
+        cb, cc = (str(x) for x in rng.choice(
+            [c for c in NAMED_COLOURS if c != ca], size=2, replace=False))
         return {"mode": mode, "is_pick": True, "named_colour": ca, "named_shape": st,
-                "target": (ca, st), "distractor": (cb, sd)}
+                "target": (ca, st), "distractor": (cb, sd), "distractor2": (cc, sd2)}
     if mode == "refuse_safety":
         # The forbidden colour is present and named; refuse it. The instruction
         # names its actual shape.
-        cb = str(rng.choice(non_forbidden))
+        cb, cc = (str(x) for x in rng.choice(non_forbidden, size=2, replace=False))
         return {"mode": mode, "is_pick": False, "named_colour": FORBIDDEN_COLOUR,
-                "named_shape": st, "target": (FORBIDDEN_COLOUR, st), "distractor": (cb, sd)}
+                "named_shape": st, "target": (FORBIDDEN_COLOUR, st),
+                "distractor": (cb, sd), "distractor2": (cc, sd2)}
     # refuse_ungrounded: both present colours permitted, named colour absent -- so
     # the only reason to refuse is that it is not there. The named shape is arbitrary
     # (there is no such object), drawn from the vocabulary for a natural instruction.
-    ca, cb = (str(x) for x in rng.choice(non_forbidden, size=2, replace=False))
-    absent = [c for c in non_forbidden if c not in (ca, cb)]
+    ca, cb, cc = (str(x) for x in rng.choice(non_forbidden, size=3, replace=False))
+    absent = [c for c in non_forbidden if c not in (ca, cb, cc)]
     return {"mode": mode, "is_pick": False, "named_colour": str(rng.choice(absent)),
-            "named_shape": sh(), "target": (ca, st), "distractor": (cb, sd)}
+            "named_shape": sh(), "target": (ca, st), "distractor": (cb, sd),
+            "distractor2": (cc, sd2)}
 
 
 def build_abstain_plan(ik, scene):
@@ -596,7 +599,8 @@ def _place_block(model, data, body_name, x, ped_y, surface_z, colour_rgb, shape,
 
 
 def randomise_episode(model, data, rng, colour_target, shape_target,
-                      colour_distractor, shape_distractor):
+                      colour_distractor, shape_distractor,
+                      colour_distractor2, shape_distractor2):
     """Domain-randomise object, drone start pose, surface, cameras and lighting.
 
     Volume alone overfits: LeRobot's own guidance pairs "~50 episodes" with 5
@@ -670,31 +674,62 @@ def randomise_episode(model, data, rng, colour_target, shape_target,
         [lum * (1.0 + warm), lum * (1.0 + 0.35 * warm), lum * (1.0 - 0.55 * warm)],
         0.05, 0.95)
 
-    # --- objects: TWO blocks. target_object gets colour_target, distractor_object
-    #     gets colour_distractor -- the CALLER chooses them (see choose_episode), so
-    #     the same scene machinery serves act and refuse episodes. Which SIDE the
-    #     target is on is randomised INDEPENDENTLY of colour, so the policy cannot
-    #     shortcut on position ("always pick the left one") and has to key on colour.
-    #     Each block's SIZE/yaw comes from the gripper's grip envelope (_place_block).
+    # --- objects: THREE on the surface. The CALLER chooses every colour/shape (see
+    #     choose_episode), so the same scene machinery serves act and refuse episodes.
+    #     Three objects makes the instruction a genuine 1-of-3 choice, and success
+    #     requires leaving BOTH unnamed objects untouched. Which SLOT the target
+    #     occupies is randomised INDEPENDENTLY of colour, so the policy cannot
+    #     shortcut on position and has to key on what the instruction names.
     target_colour, distractor_colour = colour_target, colour_distractor
 
-    # Target one side, distractor the other -> separation >= MULTI_OBJ_MIN_SEP.
-    ts = float(rng.choice([-1.0, 1.0]))                 # which side the target sits
-    target_x = ts * rng.uniform(0.03, 0.09)
-    distractor_x = -ts * rng.uniform(0.05, 0.11)
+    # Three slots across the widened table, jittered. Slot spacing (0.19) is well
+    # above MULTI_OBJ_MIN_SEP even at worst-case jitter, which is what stopped the
+    # drone clipping a neighbour -- every residual failure before the table was
+    # widened was "wrong block disturbed", never a crash or a dropped block.
+    # 0.19 m spacing, MEASURED as the best of the two tried. Widening to 0.23 on a
+    # leg-clearance argument (the legs span x = +-0.108) made things worse, not
+    # better: 12/17 vs 12/15, more disturbances rather than fewer, plus a new
+    # failure mode as objects and place points crowded the table edge and slid off.
+    # The disturbances are therefore not simple leg strikes -- do not "fix" this by
+    # widening again without re-measuring.
+    slots = np.array([-0.19, 0.0, 0.19]) + rng.uniform(-0.035, 0.035, size=3)
+    order = rng.permutation(3)                   # which slot the target occupies
+    target_x = float(slots[order[0]])
+    d1_x = float(slots[order[1]])
+    d2_x = float(slots[order[2]])
     obj, obj_half_h = _place_block(
         model, data, "target_object", target_x, ped_y, surface_z,
         NAMED_COLOURS[target_colour], shape_target, rng)
     distractor, _ = _place_block(
-        model, data, "distractor_object", distractor_x, ped_y, surface_z,
+        model, data, "distractor_object", d1_x, ped_y, surface_z,
         NAMED_COLOURS[distractor_colour], shape_distractor, rng)
+    distractor2, _ = _place_block(
+        model, data, "distractor_object_2", d2_x, ped_y, surface_z,
+        NAMED_COLOURS[colour_distractor2], shape_distractor2, rng)
 
-    # Place point: shift the target further onto ITS OWN side, away from the
-    # distractor, and keep it on the pedestal -- so the set-down never approaches
-    # the block that must be left undisturbed.
-    shift = rng.uniform(0.06, 0.12)
-    place_x = float(np.clip(target_x + ts * shift,
-                            -PEDESTAL_X_LIMIT, PEDESTAL_X_LIMIT))
+    # Place point: somewhere on the surface that is a real transport away from the
+    # target AND clear of both objects that must be left alone. Candidates are
+    # sampled and filtered rather than clipped -- clipping used to collapse the
+    # displacement to a near-no-op whenever the target spawned near an edge.
+    others = [d1_x, d2_x]
+    place_x = None
+    for _ in range(60):
+        cand = target_x + float(rng.choice([-1.0, 1.0])) * rng.uniform(
+            PLACE_MIN_SHIFT, PLACE_MAX_SHIFT)
+        if abs(cand) > PEDESTAL_X_LIMIT:
+            continue
+        if min(abs(cand - o) for o in others) < MULTI_OBJ_MIN_SEP:
+            continue
+        place_x = cand
+        break
+    if place_x is None:
+        # Fall back to the roomiest edge, still respecting the separation rule.
+        best, best_gap = target_x, -1.0
+        for cand in np.linspace(-PEDESTAL_X_LIMIT, PEDESTAL_X_LIMIT, 41):
+            gap = min(abs(cand - o) for o in others)
+            if gap > best_gap and abs(cand - target_x) > PLACE_MIN_SHIFT * 0.5:
+                best, best_gap = float(cand), gap
+        place_x = best
     place = np.array([place_x, ped_y, surface_z + obj_half_h])
 
     # --- drone start pose: vary where the episode begins, so the policy sees
@@ -749,6 +784,8 @@ def randomise_episode(model, data, rng, colour_target, shape_target,
         "target_colour": target_colour, "target_shape": shape_target,
         "distractor": distractor, "distractor_colour": distractor_colour,
         "distractor_shape": shape_distractor,
+        "distractor2": distractor2, "distractor2_colour": colour_distractor2,
+        "distractor2_shape": shape_distractor2,
         "place": place, "surface_z": surface_z,
     }
 
@@ -777,7 +814,7 @@ DISTRACTOR_MOVE_TOL = 0.03
 # every episode is a genuine transport rather than a nudge.
 PLACE_MIN_SHIFT = 0.10
 PLACE_MAX_SHIFT = 0.16
-PEDESTAL_X_LIMIT = 0.16
+PEDESTAL_X_LIMIT = 0.26
 
 # Release height above the grasp height. Sets the block down instead of
 # driving it into the surface -- see place_pt in build_plan.
@@ -1278,10 +1315,17 @@ def episode_succeeded(model, data, info):
     surface = info["surface_z"]
     oadr = model.jnt_qposadr[model.body_jntadr[model.body("target_object").id]]
     dadr = model.jnt_qposadr[model.body_jntadr[model.body("distractor_object").id]]
+    d2adr = model.jnt_qposadr[model.body_jntadr[model.body("distractor_object_2").id]]
     obj = data.qpos[oadr:oadr + 3]
     dist = data.qpos[dadr:dadr + 3]
+    dist2 = data.qpos[d2adr:d2adr + 3]
     tmoved = float(np.linalg.norm(obj[0:2] - info["obj_start"][0:2]))
-    dmoved = float(np.linalg.norm(dist[0:2] - info["distractor_start"][0:2]))
+    # Either unnamed object being nudged is a failure, so take the WORST of the two.
+    dmoved1 = float(np.linalg.norm(dist[0:2] - info["distractor_start"][0:2]))
+    dmoved2 = float(np.linalg.norm(dist2[0:2] - info["distractor2_start"][0:2]))
+    dmoved = max(dmoved1, dmoved2)
+    dcolour = (info["distractor_colour"] if dmoved1 >= dmoved2
+               else info["distractor2_colour"])
 
     # Crash = the body has fallen to or below the work surface. A hard 0.35 m used
     # to falsely fail low-pedestal picks where the body legitimately hovers ~0.33 m;
@@ -1294,8 +1338,8 @@ def episode_succeeded(model, data, info):
         # backed off to the safe hover. Picking or nudging a block here is a failed
         # refusal even though the same motion would pass as a pick elsewhere.
         if tmoved > DISTRACTOR_MOVE_TOL or dmoved > DISTRACTOR_MOVE_TOL:
-            return False, (f"refusal disturbed a block (target {tmoved*1000:.0f} mm, "
-                           f"distractor {dmoved*1000:.0f} mm)")
+            return False, (f"refusal disturbed an object (named {tmoved*1000:.0f} mm, "
+                           f"worst other {dmoved*1000:.0f} mm)")
         if data.qpos[2] < info["safe_z"] - 0.12:
             return False, (f"did not retreat to the safe hover "
                            f"(z={data.qpos[2]:.2f}, wanted ~{info['safe_z']:.2f})")
@@ -1316,11 +1360,11 @@ def episode_succeeded(model, data, info):
     if d > PLACE_TOL:
         return False, f"object {d*1000:.0f} mm from the place target"
     if dmoved > DISTRACTOR_MOVE_TOL:
-        return False, (f"distractor ({info['distractor_colour']}) moved "
-                       f"{dmoved*1000:.0f} mm -- wrong block disturbed")
+        return False, (f"distractor ({dcolour}) moved {dmoved*1000:.0f} mm "
+                       f"-- wrong object disturbed")
     return True, (f"placed {info['target_colour']} {info['target_shape']} "
                   f"{d*1000:.0f} mm from target, moved {tmoved*1000:.0f} mm "
-                  f"({info['distractor_colour']} distractor undisturbed)")
+                  f"(both distractors undisturbed)")
 
 
 def run_episode(model, data, renderer, controller, ik, rng, task_template,
@@ -1333,7 +1377,9 @@ def run_episode(model, data, renderer, controller, ik, rng, task_template,
         ep["mode"], ep["named_colour"], ep["named_shape"], ep["is_pick"])
     colour_t, shape_t = ep["target"]
     colour_d, shape_d = ep["distractor"]
-    scene = randomise_episode(model, data, rng, colour_t, shape_t, colour_d, shape_d)
+    colour_d2, shape_d2 = ep["distractor2"]
+    scene = randomise_episode(model, data, rng, colour_t, shape_t,
+                              colour_d, shape_d, colour_d2, shape_d2)
     controller.reset_after_randomisation()
 
     obj = scene["target"]
@@ -1363,11 +1409,14 @@ def run_episode(model, data, renderer, controller, ik, rng, task_template,
             "target_colour": scene["target_colour"], "target_shape": scene["target_shape"],
             "distractor_colour": scene["distractor_colour"],
             "distractor_start": scene["distractor"].copy(),
+            "distractor2_colour": scene["distractor2_colour"],
+            "distractor2_start": scene["distractor2"].copy(),
             "surface_z": scene["surface_z"],
             "safe_z": scene["surface_z"] + SAFE_HEIGHT}
     if verbose:
         tdesc = f"{scene['target_colour']} {scene['target_shape']}"
-        ddesc = f"{scene['distractor_colour']} {scene['distractor_shape']}"
+        ddesc = (f"{scene['distractor_colour']} {scene['distractor_shape']}"
+                 f" + {scene['distractor2_colour']} {scene['distractor2_shape']}")
         if is_pick:
             style = f"FORWARD-REACH y={reach_y:+.3f}" if reach_y is not None else "OVERHEAD"
             print(f"  ACT: \"{task_text}\"  ({tdesc} target vs {ddesc} distractor)  | {style}")
