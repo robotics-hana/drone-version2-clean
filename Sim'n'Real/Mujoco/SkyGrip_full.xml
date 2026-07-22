@@ -145,7 +145,7 @@
                     <body name="gripper_assembly" pos="0 0 .03" quat="-0.7071068 0.7071068 0 0">
                         <inertial pos="-0.00058149 -0.04152732 0.01506014" mass="0.10"
                                   fullinertia="1.39530e-05 2.37113e-05 1.77618e-05 2.1541e-08 -1.08927e-07 -2.01421e-06"/>
-                        <geom type="mesh" pos="-0.007062 0.120627 -0.152066" contype="0" conaffinity="0" group="1" density="0" mesh="link5_1" rgba="0.6 0.6 0.6 0"/>
+                        <geom type="mesh" pos="-0.007062 0.120627 -0.152066" contype="0" conaffinity="0" group="1" density="0" mesh="link5_1" rgba="0.6 0.6 0.6 1"/>
                         <!-- Housing collision DISABLED, and this is load-bearing for the
                              whole task. MuJoCo collides meshes as their CONVEX HULL, so this
                              C-shaped housing - which in reality has an open mouth between the
@@ -160,7 +160,7 @@
                              If housing collision is ever wanted back, it must be built from
                              primitives that leave the mouth open, NOT from this mesh. -->
                         <geom type="mesh" pos="-0.007062 0.120627 -0.152066" mesh="link5_1"
-                              contype="0" conaffinity="0" group="1" rgba="0.6 0.6 0.6 0"/>
+                              contype="0" conaffinity="0" group="1" rgba="0.6 0.6 0.6 1"/>
 
                         <!-- Manipulation close-up. Top-down over the jaws at 10.5 cm.
                              A ray-cast sweep of 1915 mount points around the gripper found NONE
