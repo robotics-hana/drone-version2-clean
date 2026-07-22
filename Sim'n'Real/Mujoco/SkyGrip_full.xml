@@ -133,7 +133,7 @@
                  left the gripper hanging in empty space with the objects as specks at the
                  bottom edge during the whole approach. Pose derived in _chasecam.py /
                  _tobase.py and chosen from rendered candidates. -->
-            <camera name="wrist_cam" pos="-0.002 0.4234 0.2879" xyaxes="-1 0 0  0 -0.7679 0.6406" fovy="65"/>
+            <camera name="overview_cam" pos="-0.002 0.4234 0.2879" xyaxes="-1 0 0  0 -0.7679 0.6406" fovy="65"/>
 
             <geom type="mesh" mesh="base_link" rgba="0.7 0.7 0.9 1"/>
             <geom name="leg_front_left" type="cylinder" size="0.008 0.12" pos="0.108 0.088 -0.08" rgba="0.2 0.2 0.2 1" density="0" mass="0.00"/>
@@ -144,9 +144,12 @@
             <site name="thrust_point" pos="0 0 0" size="0.02" rgba="0 1 1 0.8" type="sphere"/>
 
             <body name="Link_1" pos="0.001 -2.5e-05 -0.038" quat="1 -0.000327565 0 0">
-                <inertial pos="-0.0016184 -7.0854E-06 -0.08892" 
-                            mass="0.08" 
-                            diaginertia="1.7491E-05 2.2905E-05 1.2e-5"/>
+                <!-- 0.008 kg, per the measured airframe. Was 0.08 (10x too heavy);
+                     diaginertia scaled by the same 0.1 so the tensor stays consistent
+                     with the geometry at the lower density. -->
+                <inertial pos="-0.0016184 -7.0854E-06 -0.08892"
+                            mass="0.008"
+                            diaginertia="1.7491E-06 2.2905E-06 1.2e-6"/>
                 <joint name="Joint_1" pos="0 0 0" axis="1 0 0" range="-1.6 1.6" damping="0.372" frictionloss="0.08"/>
                 <geom contype="0" conaffinity="0" type="mesh" mesh="Link_1" rgba="1 0.95 0.9 1"/>
 
@@ -157,8 +160,10 @@
                     <geom type="mesh" rgba="0.6 0.6 0.6 1" mesh="connect"/>
 
                     <body name="gripper_assembly" pos="0 0 .03" quat="-0.7071068 0.7071068 0 0">
-                        <inertial pos="-0.00058149 -0.04152732 0.01506014" mass="0.10"
-                                  fullinertia="1.39530e-05 2.37113e-05 1.77618e-05 2.1541e-08 -1.08927e-07 -2.01421e-06"/>
+                        <!-- 0.036 kg, per the measured airframe. Was 0.10; fullinertia
+                             scaled by the same 0.36. -->
+                        <inertial pos="-0.00058149 -0.04152732 0.01506014" mass="0.036"
+                                  fullinertia="5.02308e-06 8.53577e-06 6.39425e-06 7.7548e-09 -3.92137e-08 -7.25116e-07"/>
                         <geom type="mesh" pos="-0.007062 0.120627 -0.152066" contype="0" conaffinity="0" group="1" density="0" mesh="link5_1" rgba="0.6 0.6 0.6 1"/>
                         <!-- Housing collision DISABLED, and this is load-bearing for the
                              whole task. MuJoCo collides meshes as their CONVEX HULL, so this
@@ -175,6 +180,8 @@
                              primitives that leave the mouth open, NOT from this mesh. -->
                         <geom type="mesh" pos="-0.007062 0.120627 -0.152066" mesh="link5_1"
                               contype="0" conaffinity="0" group="1" rgba="0.6 0.6 0.6 0"/>
+
+                        <camera name="wrist_cam" pos="0 -0.06 0.082" xyaxes="-1 0 0 0 -0.574 0.819" fovy="110"/>
 
                         <!-- Manipulation close-up. Top-down over the jaws at 10.5 cm.
                              A ray-cast sweep of 1915 mount points around the gripper found NONE
@@ -209,8 +216,10 @@
                               rgba="1 0.5 0 0" type="sphere"/>
                         
                         <body name="clamp_1" pos="-0.052134 -0.220077 -0.186037">
+                            <!-- 0.010 kg per jaw, per the measured airframe (was 0.002);
+                                 diaginertia scaled by the same 5. -->
                             <inertial pos="0.0601695 0.144807 0.184483" quat="0.745779 0.661192 0.0475856 -0.0661414"
-                                      mass="0.002" diaginertia="4.39584e-05 3.72410e-05 2.06103e-05"/>
+                                      mass="0.010" diaginertia="2.19792e-04 1.86205e-04 1.03052e-04"/>
                             <joint name="right_clamp" pos="0 0 0" axis="0.999848 -0.000154 0.017451" type="slide"
                                    range="0 0.037" actuatorfrcrange="-1.9 1.9" damping="0.5" frictionloss="0.1"/>
                             <geom pos="0.045072 0.340704 0.033971" type="mesh" mesh="clamp_1"
@@ -237,7 +246,7 @@
 
                         <body name="clamp_2" pos="0.072828 -0.222278 -0.183875">
                             <inertial pos="-0.0800042 0.14701 0.185068" quat="0.661192 0.745779 0.0661414 -0.0475856"
-                                      mass="0.002" diaginertia="4.39584e-05 3.72410e-05 2.06103e-05"/>
+                                      mass="0.010" diaginertia="2.19792e-04 1.86205e-04 1.03052e-04"/>
                             <joint name="left_clamp" pos="0 0 0" axis="0.999848 -0.000154 0.017451" type="slide"
                                    range="-0.038 0" actuatorfrcrange="-1.9 1.9" damping="0.5" frictionloss="0.1"/>
                             <geom pos="-0.07989 0.342905 0.031809" type="mesh" mesh="clamp_2"
