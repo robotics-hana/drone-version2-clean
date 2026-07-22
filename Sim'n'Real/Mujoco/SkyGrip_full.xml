@@ -162,7 +162,15 @@
                              Previous value (renders as a flat grey plate at every pose -- the
                              camera sat inside the link5_1 mesh, blocked at 9 mm):
                                pos="0 -0.028 0.082" xyaxes="-1 0 0 0 -0.574 0.819" fovy="110" -->
-                        <camera name="wrist_cam" pos="0 -0.028 0.082" xyaxes="-1 0 0  0 -0.574 0.819" fovy="110"/>
+                        <!-- Manipulation view, mounted to look at the JAWS from the open
+                             (-y) side, slightly above, so the two pads and the grasped object
+                             fill the frame and the gripper is clearly visible. The earlier
+                             top-down pose framed the workspace but showed almost no gripper
+                             (the housing is hidden, so from above only the thin pad edges
+                             read). Computed in the gripper_assembly frame at the overhead
+                             grasp pose (see wristcam_solve.py); it moves with the gripper, so
+                             the jaws stay framed at every arm pose. -->
+                        <camera name="wrist_cam" pos="0.0005 -0.1752 0.0937" xyaxes="1 0 0  0 0.674 0.739" fovy="65"/>
 
                         <!-- True end-effector: the point midway between the jaws' INNER FACES,
                              where a grasped object actually sits.

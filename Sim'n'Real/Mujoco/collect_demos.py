@@ -492,35 +492,46 @@ _CAM_NOMINAL = {}
 
 
 def choose_episode(rng):
-    """Pick the episode kind and its colours, per the act/refuse mix.
+    """Pick the episode kind, its colours and its shapes, per the act/refuse mix.
 
-    Returns (mode, named_colour, colour_target_body, colour_distractor_body,
-    is_pick). The target-body colour goes on target_object (the block picked in an
-    act episode); the distractor-body colour on distractor_object. `named_colour`
-    is what the instruction says; in an act episode it equals the target-body
-    colour, in refuse_safety it is the forbidden colour present on a block, and in
-    refuse_ungrounded it is a colour that is NOT in the scene.
+    Returns a dict:
+      mode, is_pick,
+      named_colour, named_shape   -- what the instruction says to pick,
+      target  = (colour, shape)   -- goes on target_object (picked in an act),
+      distractor = (colour, shape)-- goes on distractor_object.
+
+    The two bodies always differ in COLOUR, so colour alone disambiguates and the
+    abstention rule keys on colour (present-permitted -> act, forbidden -> refuse,
+    absent -> refuse). SHAPE varies independently: it is real visual variety and a
+    second thing the instruction can name, but it is not what makes the pick
+    unambiguous, so it never conflicts with the colour-based decision.
     """
     mode = str(rng.choice(EPISODE_MODES, p=EPISODE_MODE_P))
     non_forbidden = [c for c in NAMED_COLOURS if c != FORBIDDEN_COLOUR]
+    shapes = list(NAMED_SHAPES)
+    sh = lambda: str(rng.choice(shapes))
+    st, sd = sh(), sh()                       # target-body and distractor-body shapes
     if mode == "act":
-        ca = str(rng.choice(non_forbidden))                       # the picked block
+        ca = str(rng.choice(non_forbidden))                       # the picked object
         # Distractor may be ANY other colour, including the forbidden one -- an act
         # episode with a red distractor teaches "red present, but pick the named
         # green", reinforcing the rule without a refusal.
         cb = str(rng.choice([c for c in NAMED_COLOURS if c != ca]))
-        return mode, ca, ca, cb, True
+        return {"mode": mode, "is_pick": True, "named_colour": ca, "named_shape": st,
+                "target": (ca, st), "distractor": (cb, sd)}
     if mode == "refuse_safety":
-        # The forbidden colour is present and named; refuse it. The other block is
-        # a permitted colour that (in this episode) is simply not asked for.
+        # The forbidden colour is present and named; refuse it. The instruction
+        # names its actual shape.
         cb = str(rng.choice(non_forbidden))
-        return mode, FORBIDDEN_COLOUR, FORBIDDEN_COLOUR, cb, False
-    # refuse_ungrounded: both present blocks are permitted colours, and the named
-    # colour is a DIFFERENT permitted colour that is absent -- so the only reason
-    # to refuse is that it is not there (not the safety rule).
+        return {"mode": mode, "is_pick": False, "named_colour": FORBIDDEN_COLOUR,
+                "named_shape": st, "target": (FORBIDDEN_COLOUR, st), "distractor": (cb, sd)}
+    # refuse_ungrounded: both present colours permitted, named colour absent -- so
+    # the only reason to refuse is that it is not there. The named shape is arbitrary
+    # (there is no such object), drawn from the vocabulary for a natural instruction.
     ca, cb = (str(x) for x in rng.choice(non_forbidden, size=2, replace=False))
     absent = [c for c in non_forbidden if c not in (ca, cb)]
-    return mode, str(rng.choice(absent)), ca, cb, False
+    return {"mode": mode, "is_pick": False, "named_colour": str(rng.choice(absent)),
+            "named_shape": sh(), "target": (ca, st), "distractor": (cb, sd)}
 
 
 def build_abstain_plan(ik, scene):
@@ -538,24 +549,35 @@ def build_abstain_plan(ik, scene):
     ]
 
 
-def _place_block(model, data, body_name, x, ped_y, surface_z, colour_rgb, rng):
-    """Size, place, yaw and colour one block on the surface. Returns (pos, half_h).
+def _place_block(model, data, body_name, x, ped_y, surface_z, colour_rgb, shape, rng):
+    """Size, place, orient and colour one object of the given SHAPE. Returns
+    (pos, half_h).
 
     Both the target and the distractor go through here, so they are drawn from the
-    same size/yaw distribution and differ only in position and colour -- exactly
-    what makes the colour, not some incidental shape cue, the thing the policy must
-    key on. Size and yaw bounds are the gripper's, see OBJ_*_RANGE / _max_safe_yaw;
-    they apply to the distractor too so it stays a plausible pickable block.
+    same size distribution and differ only in position, colour and shape. Size
+    bounds are the gripper's (see OBJ_*_RANGE) and apply to the distractor too so it
+    stays a plausible pickable object. geom_type is swapped at runtime, which MuJoCo
+    supports for primitives once mj_forward is called (done by the caller).
     """
     bid = model.body(body_name).id
     adr = model.jnt_qposadr[model.body_jntadr[bid]]
     gid = [g for g in range(model.ngeom) if model.geom_bodyid[g] == bid][0]
-    side = rng.uniform(*OBJ_SIDE_RANGE)
-    depth = rng.uniform(*OBJ_DEPTH_RANGE)
     half_h = rng.uniform(*OBJ_HALF_HEIGHT_RANGE)
-    model.geom_size[gid] = [side / 2, depth / 2, half_h]
-    max_yaw = min(_max_safe_yaw(side), np.radians(10.0))
-    yaw = rng.uniform(-max_yaw, max_yaw)
+    model.geom_type[gid] = NAMED_SHAPES[shape]
+    if shape == "cylinder":
+        # Round post: size is (radius, half-height). Radius from the half-side range
+        # so the presented width (2r) matches a box's, staying inside the jaw gap.
+        # Rotationally symmetric, so yaw is irrelevant.
+        radius = rng.uniform(*OBJ_SIDE_RANGE) / 2
+        model.geom_size[gid] = [radius, half_h, 0.0]
+        yaw = 0.0
+    else:  # block (box)
+        side = rng.uniform(*OBJ_SIDE_RANGE)
+        depth = rng.uniform(*OBJ_DEPTH_RANGE)
+        model.geom_size[gid] = [side / 2, depth / 2, half_h]
+        # Yaw is limited by the BLIND axis -- see the note where the range is used.
+        max_yaw = min(_max_safe_yaw(side), np.radians(10.0))
+        yaw = rng.uniform(-max_yaw, max_yaw)
     pos = np.array([x, ped_y, surface_z + half_h])
     data.qpos[adr:adr + 3] = pos
     data.qpos[adr + 3:adr + 7] = [np.cos(yaw / 2), 0, 0, np.sin(yaw / 2)]
@@ -563,7 +585,8 @@ def _place_block(model, data, body_name, x, ped_y, surface_z, colour_rgb, rng):
     return pos, half_h
 
 
-def randomise_episode(model, data, rng, colour_target, colour_distractor):
+def randomise_episode(model, data, rng, colour_target, shape_target,
+                      colour_distractor, shape_distractor):
     """Domain-randomise object, drone start pose, surface, cameras and lighting.
 
     Volume alone overfits: LeRobot's own guidance pairs "~50 episodes" with 5
@@ -651,10 +674,10 @@ def randomise_episode(model, data, rng, colour_target, colour_distractor):
     distractor_x = -ts * rng.uniform(0.05, 0.11)
     obj, obj_half_h = _place_block(
         model, data, "target_object", target_x, ped_y, surface_z,
-        NAMED_COLOURS[target_colour], rng)
+        NAMED_COLOURS[target_colour], shape_target, rng)
     distractor, _ = _place_block(
         model, data, "distractor_object", distractor_x, ped_y, surface_z,
-        NAMED_COLOURS[distractor_colour], rng)
+        NAMED_COLOURS[distractor_colour], shape_distractor, rng)
 
     # Place point: shift the target further onto ITS OWN side, away from the
     # distractor, and keep it on the pedestal -- so the set-down never approaches
@@ -713,8 +736,9 @@ def randomise_episode(model, data, rng, colour_target, colour_distractor):
     mujoco.mj_forward(model, data)
     return {
         "target": obj, "target_half_h": obj_half_h,
-        "target_colour": target_colour,
+        "target_colour": target_colour, "target_shape": shape_target,
         "distractor": distractor, "distractor_colour": distractor_colour,
+        "distractor_shape": shape_distractor,
         "place": place, "surface_z": surface_z,
     }
 
@@ -795,6 +819,18 @@ NAMED_COLOURS = {
 # point and the distractor -- so the grasp, the descent and the set-down never
 # foul the block that is meant to be left alone.
 MULTI_OBJ_MIN_SEP = 0.08
+
+# Object shapes, a nameable vocabulary parallel to the colours. A runtime geom_type
+# swap (verified) lets one body be a box or a cylinder per episode, so the scene is
+# not always rectangular blocks -- both to stop the policy overfitting to one shape
+# and, optionally, as a second grounding cue in the instruction. Only shapes the
+# parallel jaws can actually hold are included: a sphere or ellipsoid would roll out
+# from between flat pads. "block" is the accurate word for the rectangular post it
+# has always been; "cylinder" is an upright round post of similar size.
+NAMED_SHAPES = {
+    "block":    mujoco.mjtGeom.mjGEOM_BOX,
+    "cylinder": mujoco.mjtGeom.mjGEOM_CYLINDER,
+}
 
 # --- Abstention (safety) demonstrations ------------------------------------
 # The dataset mixes three episode kinds so ONE policy learns both to act and to
@@ -1253,8 +1289,9 @@ def episode_succeeded(model, data, info):
         if data.qpos[2] < info["safe_z"] - 0.12:
             return False, (f"did not retreat to the safe hover "
                            f"(z={data.qpos[2]:.2f}, wanted ~{info['safe_z']:.2f})")
-        return True, (f"refused [{info['mode']}] '{info['named_colour']}': touched "
-                      f"nothing, held safe hover at z={data.qpos[2]:.2f}")
+        return True, (f"refused [{info['mode']}] '{info['named_colour']} "
+                      f"{info['named_shape']}': touched nothing, held safe hover "
+                      f"at z={data.qpos[2]:.2f}")
 
     # PICK: the named (target) block must end up on the surface at the place point,
     # and the distractor must be left where it started -- picking or knocking the
@@ -1271,27 +1308,31 @@ def episode_succeeded(model, data, info):
     if dmoved > DISTRACTOR_MOVE_TOL:
         return False, (f"distractor ({info['distractor_colour']}) moved "
                        f"{dmoved*1000:.0f} mm -- wrong block disturbed")
-    return True, (f"placed {info['target_colour']} block {d*1000:.0f} mm from "
-                  f"target, moved {tmoved*1000:.0f} mm ({info['distractor_colour']} "
-                  f"distractor undisturbed)")
+    return True, (f"placed {info['target_colour']} {info['target_shape']} "
+                  f"{d*1000:.0f} mm from target, moved {tmoved*1000:.0f} mm "
+                  f"({info['distractor_colour']} distractor undisturbed)")
 
 
 def run_episode(model, data, renderer, controller, ik, rng, task_template,
                 viewer=None, verbose=False):
-    # Episode kind: act (pick the named block) or refuse (safety / ungrounded).
-    # choose_episode fixes the two blocks' colours and the named colour so that the
-    # instruction alone decides act vs refuse -- see its docstring.
-    mode, named_colour, colour_t, colour_d, is_pick = choose_episode(rng)
-    scene = randomise_episode(model, data, rng, colour_t, colour_d)
+    # Episode kind: act (pick the named object) or refuse (safety / ungrounded).
+    # choose_episode fixes both objects' colours+shapes and the named colour+shape so
+    # that the instruction alone decides act vs refuse -- see its docstring.
+    ep = choose_episode(rng)
+    mode, named_colour, named_shape, is_pick = (
+        ep["mode"], ep["named_colour"], ep["named_shape"], ep["is_pick"])
+    colour_t, shape_t = ep["target"]
+    colour_d, shape_d = ep["distractor"]
+    scene = randomise_episode(model, data, rng, colour_t, shape_t, colour_d, shape_d)
     controller.reset_after_randomisation()
 
     obj = scene["target"]
     place = scene["place"]
     obj_half_height = scene["target_half_h"]
-    # Identical instruction template for act and refuse; only the colour word (and
-    # the scene) differ. That is the whole point -- the policy must learn from the
-    # colour, not the phrasing, whether to pick or to refuse.
-    task_text = task_template.format(colour=named_colour)
+    # Identical instruction template for act and refuse; only the colour/shape words
+    # (and the scene) differ. That is the whole point -- the policy must learn from
+    # what is named, not the phrasing, whether to pick or to refuse.
+    task_text = task_template.format(colour=named_colour, shape=named_shape)
 
     reach_y = None
     if is_pick:
@@ -1308,20 +1349,20 @@ def run_episode(model, data, renderer, controller, ik, rng, task_template,
     info = {"place": place.copy(), "obj_start": obj.copy(),
             "obj_half_height": obj_half_height, "reach_y": reach_y,
             "task": task_text, "mode": mode, "named_colour": named_colour,
-            "is_pick": is_pick,
-            "target_colour": scene["target_colour"],
+            "named_shape": named_shape, "is_pick": is_pick,
+            "target_colour": scene["target_colour"], "target_shape": scene["target_shape"],
             "distractor_colour": scene["distractor_colour"],
             "distractor_start": scene["distractor"].copy(),
             "surface_z": scene["surface_z"],
             "safe_z": scene["surface_z"] + SAFE_HEIGHT}
     if verbose:
+        tdesc = f"{scene['target_colour']} {scene['target_shape']}"
+        ddesc = f"{scene['distractor_colour']} {scene['distractor_shape']}"
         if is_pick:
             style = f"FORWARD-REACH y={reach_y:+.3f}" if reach_y is not None else "OVERHEAD"
-            print(f"  ACT: \"{task_text}\"  ({scene['target_colour']} target vs "
-                  f"{scene['distractor_colour']} distractor)  | {style}")
+            print(f"  ACT: \"{task_text}\"  ({tdesc} target vs {ddesc} distractor)  | {style}")
         else:
-            print(f"  {mode.upper()}: \"{task_text}\"  (scene has "
-                  f"{scene['target_colour']} + {scene['distractor_colour']})  -> REFUSE")
+            print(f"  {mode.upper()}: \"{task_text}\"  (scene has {tdesc} + {ddesc})  -> REFUSE")
 
     frames = []
     # Physics runs at model timestep (1 ms); a frame is one 1/FPS interval, so
@@ -1483,14 +1524,17 @@ def main():
     # found VLAs largely ignore the instruction semantically while remaining
     # sensitive to phrasing as a distribution shift -- so varying it buys little
     # and risks a mismatch at inference.
-    # A TEMPLATE with a {colour} field, filled per episode with the target block's
-    # colour. With two differently-coloured blocks in the scene the colour word is
-    # informative -- it is what disambiguates which block to pick -- so unlike the
-    # earlier single-object setup, naming it here is grounding, not noise. A literal
-    # string with no {colour} still works (it just formats to itself). Short and
-    # action-verb-first, per the SmolVLA dataset guidance.
+    # A TEMPLATE with {colour} and {shape} fields, filled per episode. With two
+    # differently-coloured objects the colour word is what disambiguates, so naming
+    # it is grounding, not noise (unlike the old single-object setup). {shape} names
+    # the object kind (block/cylinder) as a second, natural cue. To compare grounding
+    # granularity, pass a different template: colour-only "Pick up the {colour}
+    # object and place it", or shape-only "Pick up the {shape} and place it". Any
+    # unused field is simply ignored; a literal string still works. Whether the extra
+    # detail helps or overfits is a POST-training question (fine-tune each and eval),
+    # not measurable from collection -- this default gives the richest supervision.
     ap.add_argument("--task", type=str,
-                    default="Pick up the {colour} block and place it")
+                    default="Pick up the {colour} {shape} and place it")
     ap.add_argument("--samples", type=int, default=50,
                     help="MPPI rollouts per solve. Dominates runtime: a solve is "
                          "~1.8 s at 50, and an episode needs ~140 solves. Drop to "
