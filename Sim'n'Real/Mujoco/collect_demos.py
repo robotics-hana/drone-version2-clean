@@ -501,7 +501,7 @@ class SkyGripController:
 _CAM_NOMINAL = {}
 
 
-def choose_episode(rng):
+def choose_episode(rng, mode=None):
     """Pick the episode kind, its colours and its shapes, per the act/refuse mix.
 
     Returns a dict:
@@ -516,7 +516,11 @@ def choose_episode(rng):
     second thing the instruction can name, but it is not what makes the pick
     unambiguous, so it never conflicts with the colour-based decision.
     """
-    mode = str(rng.choice(EPISODE_MODES, p=EPISODE_MODE_P))
+    # `mode` is normally supplied by the caller's stratified schedule (see
+    # mode_schedule); sampling it here independently per episode is the fallback and
+    # lets small batches drift badly off the intended mix.
+    if mode is None:
+        mode = str(rng.choice(EPISODE_MODES, p=EPISODE_MODE_P))
     non_forbidden = [c for c in NAMED_COLOURS if c != FORBIDDEN_COLOUR]
     shapes = list(NAMED_SHAPES)
     sh = lambda: str(rng.choice(shapes))
@@ -1367,12 +1371,33 @@ def episode_succeeded(model, data, info):
                   f"(both distractors undisturbed)")
 
 
+def mode_schedule(n, rng):
+    """Exactly-proportioned, shuffled list of n episode modes.
+
+    Sampling the mode independently per episode lets the realised mix drift a long
+    way from EPISODE_MODE_P on small batches -- a 10-episode trial came out 3 act /
+    7 refuse against an intended 5/5, which is bad luck rather than a bug but leaves
+    the composition of any given dataset unpredictable. Allocating the counts up
+    front and shuffling gives the intended proportions at every batch size, while
+    keeping the ORDER random so nothing systematic lines up with episode index.
+
+    Largest-remainder allocation, so the counts always sum to exactly n.
+    """
+    exact = [n * p for p in EPISODE_MODE_P]
+    counts = [int(np.floor(e)) for e in exact]
+    for i in np.argsort([-(e - np.floor(e)) for e in exact])[:n - sum(counts)]:
+        counts[int(i)] += 1
+    out = [m for m, c in zip(EPISODE_MODES, counts) for _ in range(c)]
+    rng.shuffle(out)
+    return out
+
+
 def run_episode(model, data, renderer, controller, ik, rng, task_template,
-                viewer=None, verbose=False):
+                viewer=None, verbose=False, mode=None):
     # Episode kind: act (pick the named object) or refuse (safety / ungrounded).
     # choose_episode fixes both objects' colours+shapes and the named colour+shape so
     # that the instruction alone decides act vs refuse -- see its docstring.
-    ep = choose_episode(rng)
+    ep = choose_episode(rng, mode=mode)
     mode, named_colour, named_shape, is_pick = (
         ep["mode"], ep["named_colour"], ep["named_shape"], ep["is_pick"])
     colour_t, shape_t = ep["target"]
@@ -1705,15 +1730,21 @@ def main():
         # makes every episode fail stops instead of looping forever.
         saved = attempts = 0
         max_attempts = args.max_attempts or (args.episodes * 4)
+        # Exactly-proportioned mode plan; a failed attempt returns its mode to the
+        # queue so the FINAL saved mix matches EPISODE_MODE_P regardless of which
+        # kinds happen to fail more often.
+        pending = mode_schedule(args.episodes, rng)
         while saved < args.episodes and attempts < max_attempts:
             attempts += 1
+            want = pending[0]
             frames, info = run_episode(model, data, renderer, controller, ik,
                                        rng, args.task, viewer=viewer,
-                                       verbose=args.verbose)
+                                       verbose=args.verbose, mode=want)
             ok, why = episode_succeeded(model, data, info)
             if not ok:
                 print(f"  attempt {attempts}: DISCARDED -- {why}")
-                continue
+                continue          # `want` stays at the head of the queue, so retried
+            pending.pop(0)
             saved += 1
             if dataset is not None:
                 for f in frames:
