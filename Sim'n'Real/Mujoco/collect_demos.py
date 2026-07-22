@@ -1292,10 +1292,19 @@ def build_plan(ik, obj, place, obj_half_height, reach_y=None):
         REACH_OUT_RISE = GRASP_RISE + 0.14
         q_reach, off_reach = ik.solve_reach(REACH_DROP, reach_y)
         reach_out = obj + np.array([0.0, GRASP_Y_OFFSET, REACH_OUT_RISE]) - off_reach
+        # DRAW_IN retracts the arm at the SAME height REACH_OUT reached, not back up
+        # at cruise. Sending it to over_obj_g made the body descend to the object,
+        # climb all the way back to cruise purely to change arm pose, then descend
+        # again -- a visible and pointless bounce in every reach episode, and wasted
+        # frames in the demonstration. The clearance argument for climbing does not
+        # hold: at REACH_OUT_RISE the jaws are already ~130 mm above the object's top
+        # face, so the arm has plenty of room to swing through. The descent is now
+        # monotonic: cruise -> reach height -> grasp.
+        draw_in = obj + np.array([0.0, GRASP_Y_OFFSET, REACH_OUT_RISE]) - off_grasp
         head = [
             ("APPROACH", over_obj,   q_travel, GRIPPER_OPEN, None),
             ("REACH_OUT", reach_out, q_reach,  GRIPPER_OPEN, None),
-            ("DRAW_IN",  over_obj_g, q_grasp,  GRIPPER_OPEN, None),
+            ("DRAW_IN",  draw_in,    q_grasp,  GRIPPER_OPEN, None),
         ]
     return head + [
         # Everything below flies with a static arm at the overhead grasp pose.

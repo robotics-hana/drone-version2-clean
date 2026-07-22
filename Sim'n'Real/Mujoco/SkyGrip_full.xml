@@ -145,10 +145,14 @@
                  _tobase.py and chosen from rendered candidates. -->
 
             <geom type="mesh" mesh="base_link" rgba="0.7 0.7 0.9 1"/>
-            <geom name="leg_front_left" type="cylinder" size="0.008 0.12" pos="0.108 0.088 -0.08" rgba="0.2 0.2 0.2 1" density="0" mass="0.00"/>
-            <geom name="leg_front_right" type="cylinder" size="0.008 0.12" pos="0.108 -0.088 -0.08" rgba="0.2 0.2 0.2 1" density="0" mass="0.00"/>
-            <geom name="leg_back_left" type="cylinder" size="0.008 0.12" pos="-0.108 0.088 -0.08" rgba="0.2 0.2 0.2 1" density="0" mass="0.00"/>
-            <geom name="leg_back_right" type="cylinder" size="0.008 0.12" pos="-0.108 -0.088 -0.08" rgba="0.2 0.2 0.2 1" density="0" mass="0.00"/>
+            <!-- Legs shortened: they reached 0.200 m below the body, which set the whole
+                 platform's minimum working height and left the gripper barely clearing
+                 the table. Now 0.150 m, still just below the folded-arm gripper so the
+                 airframe rests on its legs rather than its jaws. -->
+            <geom name="leg_front_left" type="cylinder" size="0.008 0.085" pos="0.108 0.088 -0.065" rgba="0.2 0.2 0.2 1" density="0" mass="0.00"/>
+            <geom name="leg_front_right" type="cylinder" size="0.008 0.085" pos="0.108 -0.088 -0.065" rgba="0.2 0.2 0.2 1" density="0" mass="0.00"/>
+            <geom name="leg_back_left" type="cylinder" size="0.008 0.085" pos="-0.108 0.088 -0.065" rgba="0.2 0.2 0.2 1" density="0" mass="0.00"/>
+            <geom name="leg_back_right" type="cylinder" size="0.008 0.085" pos="-0.108 -0.088 -0.065" rgba="0.2 0.2 0.2 1" density="0" mass="0.00"/>
 
             <site name="thrust_point" pos="0 0 0" size="0.02" rgba="0 1 1 0.8" type="sphere"/>
 
@@ -240,7 +244,18 @@
                                       mass="0.010" diaginertia="2.19792e-04 1.86205e-04 1.03052e-04"/>
                             <joint name="right_clamp" pos="0 0 0" axis="0.999848 -0.000154 0.017451" type="slide"
                                    range="0 0.037" actuatorfrcrange="-1.9 1.9" damping="0.5" frictionloss="0.1"/>
-                            <geom pos="0.045072 0.340704 0.033971" type="mesh" mesh="clamp_1"
+                            <!-- Blade lifted so its TIP sits at the pad line rather than
+                                 hanging 38 mm (clamp_1) / 65 mm (clamp_2) below the grip
+                                 point. The grip point is only ~22 mm above the table, so the
+                                 blades used to pass visibly through it. They are decorative
+                                 (contype/conaffinity 0 -- the pads do the gripping), so this
+                                 is a pure appearance fix; giving them collision instead would
+                                 block the descent, since the blade would strike the table
+                                 before the pads reached the object. Offsets are along world-up
+                                 mapped into the clamp frame at the overhead grasp pose.
+                                 Scaling the mesh does NOT help: its origin sits below the
+                                 blade, so shrinking pulls the tip further down. -->
+                            <geom pos="0.045072 0.347106 0.057468" type="mesh" mesh="clamp_1"
                                   contype="0" conaffinity="0" group="1" rgba="0.5 0.5 0.5 1"/>
                             <!-- Collision pad, flush with the VISIBLE blade face.
                                  Placement is ray-measured (mj_ray straight through the
@@ -267,7 +282,7 @@
                                       mass="0.010" diaginertia="2.19792e-04 1.86205e-04 1.03052e-04"/>
                             <joint name="left_clamp" pos="0 0 0" axis="0.999848 -0.000154 0.017451" type="slide"
                                    range="-0.038 0" actuatorfrcrange="-1.9 1.9" damping="0.5" frictionloss="0.1"/>
-                            <geom pos="-0.07989 0.342905 0.031809" type="mesh" mesh="clamp_2"
+                            <geom pos="-0.079890 0.356382 0.081272" type="mesh" mesh="clamp_2"
                                   contype="0" conaffinity="0" group="1" rgba="0.5 0.5 0.5 1"/>
                             <geom name="pad_2" type="box" pos="-0.084082 0.149916 0.183870"
                                   size="0.004 0.010 0.013" quat="0.9827 -0.1853 0 0"
