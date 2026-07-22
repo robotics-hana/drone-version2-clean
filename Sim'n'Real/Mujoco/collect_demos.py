@@ -273,10 +273,19 @@ class SkyGripController:
         self.idx_arm = [self.model.actuator(n).id
                         for n in ("act_joint1", "act_joint2")]
         self.idx_gripper = self.model.actuator("act_gripper").id
-        # Left jaw is driven directly, mirrored. See the actuator comment in
-        # SkyGrip_full.xml: relying on the soft equality constraint to transmit
-        # squeeze left the pads 20.4 mm apart on a 20 mm block (no grip at all).
-        self.idx_gripper_left = self.model.actuator("act_gripper_left").id
+        # OPTIONAL second jaw actuator. Two arrangements are supported:
+        #   both actuated  -- this channel exists and is driven mirrored, which is
+        #                     what fixed an earlier no-grip bug (relying on the soft
+        #                     equality alone left the pads 20.4 mm apart on a 20 mm
+        #                     block, ~0 N, so nothing could be lifted);
+        #   single actuator-- left_clamp is slaved to right_clamp by the <equality>,
+        #                     matching the real mechanical linkage.
+        # Which one is in force is a property of the XML, so look it up rather than
+        # assume; mj_name2id returns -1 when absent instead of raising.
+        self.idx_gripper_left = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, "act_gripper_left")
+        if self.idx_gripper_left < 0:
+            self.idx_gripper_left = None
         self.drone_target = np.array([0.0, 0.0, 1.5])
         self.joint_target = np.zeros(2)
         self.gripper_cmd = GRIPPER_OPEN
@@ -463,7 +472,8 @@ class SkyGripController:
         self._grip_cmd += np.clip(self.gripper_cmd - self._grip_cmd,
                                   -grip_step, grip_step)
         self.data.ctrl[self.idx_gripper] = self._grip_cmd
-        self.data.ctrl[self.idx_gripper_left] = -self._grip_cmd
+        if self.idx_gripper_left is not None:
+            self.data.ctrl[self.idx_gripper_left] = -self._grip_cmd
 
     def gripper_settled(self):
         """True once the slewed gripper command has reached its target.

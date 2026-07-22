@@ -49,9 +49,17 @@ class PDFlightController:
         self.base_id = self.model.body("base_link").id
         self.total_mass = float(self.model.body_subtreemass[self.base_id])
         self.nominal_hover_thrust = self.total_mass * 9.81
-        # Attitude gains are scaled by this, so the commanded torque stays inside
-        # the actuator range instead of saturating.
-        self.inertia = self.model.body_inertia[self.base_id].copy()
+        # Every body rigidly making up the aircraft (base + the whole arm chain).
+        # Needed because the attitude gains must be scaled by the inertia of the
+        # WHOLE aircraft, not just base_link's own -- see _composite_inertia.
+        self._inertia_bodies = []
+        def _collect(bid):
+            self._inertia_bodies.append(bid)
+            for i in range(self.model.nbody):
+                if self.model.body_parentid[i] == bid and i != bid:
+                    _collect(i)
+        _collect(self.base_id)
+        self.inertia = self._composite_inertia()
 
         name2id = lambda n: mujoco.mj_name2id(
             self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, n)
@@ -70,6 +78,39 @@ class PDFlightController:
             self.model, mujoco.mjtObj.mjOBJ_SITE, "thrust_point")
         print("PD flight controller initialised: "
               f"mass {self.total_mass:.3f} kg, hover {self.nominal_hover_thrust:.2f} N")
+
+    def _composite_inertia(self):
+        """Rotational inertia of the WHOLE aircraft about its CoM, in body axes.
+
+        This must include the arm. Using base_link's own inertia -- which is what
+        this did originally -- silently under-gains the attitude loop as soon as the
+        arm carries real mass, because the gains below are expressed as angular
+        ACCELERATIONS and multiplied by this to get torque.
+
+        With the measured 275 g arm hanging ~0.2 m below the body, the arm's
+        parallel-axis term dominates: true Ixx is 0.0119 against base_link's 0.0037,
+        so roll gains came out 3.2x too weak. The symptom was a hard cliff -- hover
+        was millimetre-perfect with a 72 g arm and then sat at 33 deg of tilt and
+        790 mm of error at 275 g, which reads like saturation but is simply a loop
+        that is three times too slack.
+
+        Recomputed per control step: it is a six-body sum, negligible at 20 Hz, and
+        it tracks the arm as it reconfigures (roll inertia moves ~4% between the
+        tucked grasp pose and full forward reach).
+        """
+        m, d = self.model, self.data
+        ids = self._inertia_bodies
+        tot = sum(m.body_mass[i] for i in ids)
+        com = sum(m.body_mass[i] * d.xipos[i] for i in ids) / tot
+        I = np.zeros((3, 3))
+        for i in ids:
+            R = d.ximat[i].reshape(3, 3)
+            I += R @ np.diag(m.body_inertia[i]) @ R.T      # into world axes
+            r = d.xipos[i] - com                            # parallel axis
+            I += m.body_mass[i] * (r @ r * np.eye(3) - np.outer(r, r))
+        # Express in body axes, so it pairs with the body-frame torque command.
+        Rb = d.xmat[self.base_id].reshape(3, 3)
+        return np.diag(Rb.T @ I @ Rb).copy()
 
     # --- API compatible with the MPPI controller -------------------------
     def get_state(self, data=None):
@@ -141,7 +182,8 @@ class PDFlightController:
 
         roll, pitch = state["euler"][0], state["euler"][1]
         omega = state["omega"]
-        Ix, Iy, Iz = self.inertia
+        # Track the arm as it moves rather than using a value frozen at startup.
+        Ix, Iy, Iz = self._composite_inertia()
         # Feed-forward the gravity moment the arm creates about the thrust point.
         # This is computable exactly (mass * g * horizontal CoM offset), so there
         # is no reason to make an integrator discover it: measured at 0.082 N*m

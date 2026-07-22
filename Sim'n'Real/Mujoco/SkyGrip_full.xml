@@ -72,18 +72,13 @@
          tracking error is tiny and never saturates, so precision is unaffected -- the
          forcerange only bites on aggressive/step commands, which is exactly where it
          should. -->
+
     <actuator>
         <position name="act_joint1" joint="Joint_1" ctrlrange="-1.6 1.6" forcerange="-0.6 0.6" kp="998.22" kv="2.731"/>
         <position name="act_joint2" joint="Joint_2" ctrlrange="-1.6 1.6" forcerange="-0.4 0.4" kp="998.22" kv="2.731"/>
         <position name="act_gripper" joint="right_clamp" ctrlrange="0 0.037" forcerange="-3.5 3.5" kp="998.22" kv="2.731"/>
-        <!-- The LEFT jaw is driven directly rather than through the equality
-             constraint. With only right_clamp actuated, closing on an object left
-             the pads 20.4 mm apart on a 20 mm block - the soft equality let
-             contact shove the unactuated jaw back instead of transmitting squeeze,
-             so normal force was ~0 and nothing could be lifted at any object
-             width. Driving both jaws makes the grip symmetric and preloaded.
-             collect_demos mirrors this channel: ctrl = -gripper_cmd. -->
-        <position name="act_gripper_left" joint="left_clamp" ctrlrange="-0.038 0" forcerange="-3.5 3.5" kp="998.22" kv="2.731"/>
+        <!-- act_gripper_left removed — left_clamp is mechanically slaved to right_clamp
+            via the equality constraint below, matching the real linkage. -->
         <motor name="thrust" site="thrust_point" gear="0 0 1 0 0 0" ctrlrange="0 30"/>
         <motor name="roll_torque" site="thrust_point" gear="0 0 0 1 0 0" ctrlrange="-1 1"/>
         <motor name="pitch_torque" site="thrust_point" gear="0 0 0 0 1 0" ctrlrange="-1 1"/>
@@ -99,18 +94,18 @@
         <body name="base_link" pos="0 0 1.5">
             <freejoint name="drone_free_joint"/>
 
-            <!-- Body INCLUDING the battery, from the weighed airframe:
-                   drone + arm, no battery   817 g
-                   arm subtree                72 g   -> body alone 745 g
-                   drone + arm + battery    1179 g   -> battery     362 g
-                   base_link = 745 + 362    = 1107 g, aircraft total 1179 g.
-                 Was 1.0 kg. diaginertia scaled by the same 1.107; that assumes the
-                 battery is distributed like the rest of the body, which is an
-                 approximation -- refine it if the pack's position is known, since a
-                 centrally-mounted pack adds mass with little added inertia. -->
-            <inertial mass="1.107"
+            <!-- Body + battery, WITHOUT the arm. The aircraft weighs 1179 g all-up and
+                 the arm is 250-300 g measured directly, so base_link = 1179 - 275 = 904 g.
+                 Do NOT re-derive the arm from 817 - 386: those two weighings do not
+                 bracket the arm cleanly and give 431 g, which is wrong and unflyable
+                 (0/12 picks, 11 crashes). The direct arm measurement is the one to trust.
+                 An even earlier pass had 1107/72 -- right total, distribution backwards.
+                 diaginertia scaled from the 1.0 kg reference by 0.904; that assumes the
+                 battery is distributed like the rest of the body, an approximation worth
+                 refining if the pack's position is known. -->
+            <inertial mass="0.904"
                       pos="1.928E-06 0.0086666 0.027403"
-                      diaginertia="0.0045276 0.0061774 0.0105144"/>
+                      diaginertia="0.0036974 0.0050446 0.0085863"/>
 
             <!-- Forward/navigation view. Orientation unchanged (faces +y, pitched ~44 deg down),
                  matching the real airframe where the Pi sits at the back facing forward.
@@ -142,7 +137,6 @@
                  left the gripper hanging in empty space with the objects as specks at the
                  bottom edge during the whole approach. Pose derived in _chasecam.py /
                  _tobase.py and chosen from rendered candidates. -->
-            <camera name="overview_cam" pos="-0.002 0.4234 0.2879" xyaxes="-1 0 0  0 -0.7679 0.6406" fovy="65"/>
 
             <geom type="mesh" mesh="base_link" rgba="0.7 0.7 0.9 1"/>
             <geom name="leg_front_left" type="cylinder" size="0.008 0.12" pos="0.108 0.088 -0.08" rgba="0.2 0.2 0.2 1" density="0" mass="0.00"/>
@@ -153,26 +147,35 @@
             <site name="thrust_point" pos="0 0 0" size="0.02" rgba="0 1 1 0.8" type="sphere"/>
 
             <body name="Link_1" pos="0.001 -2.5e-05 -0.038" quat="1 -0.000327565 0 0">
-                <!-- 0.008 kg, per the measured airframe. Was 0.08 (10x too heavy);
-                     diaginertia scaled by the same 0.1 so the tensor stays consistent
-                     with the geometry at the lower density. -->
+                <!-- PROVISIONAL SPLIT of the weighed 431 g arm. The 8 g here previously was
+                     the PRINTED LINK ONLY; the weighed arm is 431 g, the balance being
+                     servos, brackets and wiring. Assumed here: printed link + the Joint_1
+                     (shoulder) servo = 150 g. Confirm against the real build -- where the
+                     servo mass sits sets the arm's centre of mass, which drives the roll
+                     coupling, so this split matters more than the per-link totals.
+                     diaginertia scaled from the 80 g reference by 1.875. -->
                 <inertial pos="-0.0016184 -7.0854E-06 -0.08892"
-                            mass="0.008"
-                            diaginertia="1.7491E-06 2.2905E-06 1.2e-6"/>
+                            mass="0.095"
+                            diaginertia="2.0770E-05 2.7200E-05 1.425e-05"/>
                 <joint name="Joint_1" pos="0 0 0" axis="1 0 0" range="-1.6 1.6" damping="0.372" frictionloss="0.08"/>
                 <geom contype="0" conaffinity="0" type="mesh" mesh="Link_1" rgba="1 0.95 0.9 1"/>
 
                 <body name="connect" pos="-0.003 0 -0.1308" quat="0.7071068 0.7071068 0 0">
-                    <inertial pos="-0.001844 0 -0.069214" quat="0.500405 0.500421 0.499579 -0.499595" mass="0.008" diaginertia="1.551697e-05 1.472678e-05 1.656619e-06"/>
+                    <!-- Provisional: printed link + Joint_2 (elbow) servo = 120 g of the
+                         weighed 431 g arm. diaginertia scaled from the 8 g reference by 15. -->
+                    <inertial pos="-0.001844 0 -0.069214" quat="0.500405 0.500421 0.499579 -0.499595" mass="0.075" diaginertia="1.454716e-04 1.380636e-04 1.553080e-05"/>
                     <joint name="Joint_2" pos="0 0 0" axis="1 0 0" range="-1.6 1.6"  damping="0.235" frictionloss="0.203"/>
                     <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.6 0.6 0.6 1" mesh="connect"/>
                     <geom type="mesh" rgba="0.6 0.6 0.6 1" mesh="connect"/>
 
                     <body name="gripper_assembly" pos="0 0 .03" quat="-0.7071068 0.7071068 0 0">
-                        <!-- 0.036 kg, per the measured airframe. Was 0.10; fullinertia
-                             scaled by the same 0.36. -->
-                        <inertial pos="-0.00058149 -0.04152732 0.01506014" mass="0.036"
-                                  fullinertia="5.02308e-06 8.53577e-06 6.39425e-06 7.7548e-09 -3.92137e-08 -7.25116e-07"/>
+                        <!-- Provisional: housing + gripper servo = 141 g of the weighed 431 g
+                             arm (36 g of that is the printed housing). This is the mass
+                             furthest from the shoulder, so it dominates the arm's CoM and the
+                             gravity moment the flight controller has to trim.
+                             fullinertia scaled from the 100 g reference by 1.41. -->
+                        <inertial pos="-0.00058149 -0.04152732 0.01506014" mass="0.085"
+                                  fullinertia="1.18601e-05 2.01546e-05 1.50975e-05 1.83099e-08 -9.25880e-08 -1.71208e-06"/>
                         <geom type="mesh" pos="-0.007062 0.120627 -0.152066" contype="0" conaffinity="0" group="1" density="0" mesh="link5_1" rgba="0.6 0.6 0.6 1"/>
                         <!-- Housing collision DISABLED, and this is load-bearing for the
                              whole task. MuJoCo collides meshes as their CONVEX HULL, so this
@@ -190,7 +193,7 @@
                         <geom type="mesh" pos="-0.007062 0.120627 -0.152066" mesh="link5_1"
                               contype="0" conaffinity="0" group="1" rgba="0.6 0.6 0.6 0"/>
 
-                        <camera name="wrist_cam" pos="0 -0.06 0.082" xyaxes="-1 0 0 0 -0.574 0.819" fovy="110"/>
+                        <camera name="wrist_cam" pos="0 -0.04 0.082" xyaxes="-1 0 0 0 -0.574 0.819" fovy="110"/>
 
                         <!-- Manipulation close-up. Top-down over the jaws at 10.5 cm.
                              A ray-cast sweep of 1915 mount points around the gripper found NONE
