@@ -55,12 +55,26 @@
          Arm and gripper are POSITION actuators, not torque. This is the action-space
          decision: joint-position targets are what the VLA emits (matching the dissertation's
          joint-space choice), they stay meaningful across action-chunk boundaries, and they
-         let MPPI explore in radians rather than newton-metres. forcerange preserves the
-         torque authority the old motors had (+-6 / +-4 N*m). kp/kv follow mppi.xml; the
-         gains are stiff and may want tuning once there is a real payload on the arm. -->
+         let MPPI explore in radians rather than newton-metres.
+
+         ARM forcerange is bounded by the BODY's attitude authority, not by what the servo
+         could theoretically deliver. This was +-6 / +-4 N*m, inherited from the old torque
+         motors, and it is why commanding Joint_1 flung the whole aircraft: the arm could
+         apply 6 N*m while roll_torque can only resist 1 N*m, so the reaction was
+         literally uncontrollable (1467 rad/s^2 on Ixx=0.0041). Joint_1 rotates about x and
+         so does roll, so it loads the weakest axis. Measured on a 0->0.9 rad step while
+         hovering: +-6/+-4 threw the body 17.4 deg and 83 mm; +-0.6/+-0.4 gives 5.4 deg and
+         46 mm and still holds station.
+         The arm only NEEDS 0.21 N*m to hold itself plus a 10 g payload at worst extension
+         (arm subtree is 0.192 kg), so +-0.6 keeps ~3x static margin while staying well
+         under the 1 N*m the flight controller can trim against.
+         kp stays stiff on purpose: with the setpoint rate-limited (ARM_SLEW_RATE) the
+         tracking error is tiny and never saturates, so precision is unaffected -- the
+         forcerange only bites on aggressive/step commands, which is exactly where it
+         should. -->
     <actuator>
-        <position name="act_joint1" joint="Joint_1" ctrlrange="-1.6 1.6" forcerange="-6 6" kp="998.22" kv="2.731"/>
-        <position name="act_joint2" joint="Joint_2" ctrlrange="-1.6 1.6" forcerange="-4 4" kp="998.22" kv="2.731"/>
+        <position name="act_joint1" joint="Joint_1" ctrlrange="-1.6 1.6" forcerange="-0.6 0.6" kp="998.22" kv="2.731"/>
+        <position name="act_joint2" joint="Joint_2" ctrlrange="-1.6 1.6" forcerange="-0.4 0.4" kp="998.22" kv="2.731"/>
         <position name="act_gripper" joint="right_clamp" ctrlrange="0 0.037" forcerange="-3.5 3.5" kp="998.22" kv="2.731"/>
         <!-- The LEFT jaw is driven directly rather than through the equality
              constraint. With only right_clamp actuated, closing on an object left
@@ -160,7 +174,7 @@
                              If housing collision is ever wanted back, it must be built from
                              primitives that leave the mouth open, NOT from this mesh. -->
                         <geom type="mesh" pos="-0.007062 0.120627 -0.152066" mesh="link5_1"
-                              contype="0" conaffinity="0" group="1" rgba="0.6 0.6 0.6 1"/>
+                              contype="0" conaffinity="0" group="1" rgba="0.6 0.6 0.6 0"/>
 
                         <!-- Manipulation close-up. Top-down over the jaws at 10.5 cm.
                              A ray-cast sweep of 1915 mount points around the gripper found NONE
