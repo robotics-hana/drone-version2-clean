@@ -129,6 +129,12 @@
                  Previous value: pos="0 0.15 0.02" xyaxes="1.95 0.05 0 -0.02 0.98 1" -->
             <camera name="scene_cam" pos="0 -0.07 0.15" xyaxes="-1.95 0.05 0  0.02 -0.98 1" fovy="100"/>
 
+            <!-- Third-person chase view, behind and above the airframe. Not part of the
+                 training observation (CAMERAS maps only camera1/camera2); kept as a
+                 review/rendering viewpoint. Restored after being deleted by accident in
+                 V0.16.0 -- an XML span was replaced by index and took this with it. -->
+            <camera name="overview_cam" pos="-0.002 0.4234 0.2879" xyaxes="-1 0 0  0 -0.7679 0.6406" fovy="65"/>
+
             <!-- Chase view: behind and above the airframe, looking forward and down over
                  the drone at the workspace. Mounted on base_link, NOT on the gripper --
                  a gripper-mounted version swings with the arm and the framing breaks.

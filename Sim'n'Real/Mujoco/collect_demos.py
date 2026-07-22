@@ -1393,7 +1393,7 @@ def mode_schedule(n, rng):
 
 
 def run_episode(model, data, renderer, controller, ik, rng, task_template,
-                viewer=None, verbose=False, mode=None):
+                viewer=None, verbose=False, mode=None, on_frame=None):
     # Episode kind: act (pick the named object) or refuse (safety / ungrounded).
     # choose_episode fixes both objects' colours+shapes and the named colour+shape so
     # that the instruction alone decides act vs refuse -- see its docstring.
@@ -1536,6 +1536,11 @@ def run_episode(model, data, renderer, controller, ik, rng, task_template,
                     renderer.update_scene(data, camera=cam)
                     frame[f"observation.images.{key}"] = renderer.render().copy()
             frames.append(frame)
+            # Optional hook for offline rendering (see render_trials.py): lets a
+            # caller capture its own view per frame without this function knowing
+            # anything about cameras or video.
+            if on_frame is not None:
+                on_frame()
 
             if held >= HOLD_FRAMES:
                 break
