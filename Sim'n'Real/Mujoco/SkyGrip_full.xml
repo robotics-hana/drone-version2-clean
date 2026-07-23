@@ -13,8 +13,8 @@
              it would have broken on the Spark GPU server, not here. -->
         <mesh name="connect" content_type="model/stl" file="connect.stl" scale="0.001 0.001 0.001"/>
         <mesh name="link5_1" content_type="model/stl" file="link5_1.stl" scale="0.0001 0.0001 0.0001"/>
-        <mesh name="clamp_1" content_type="model/stl" file="clamp_1.stl" scale="0.001 0.001 0.001"/>
-        <mesh name="clamp_2" content_type="model/stl" file="clamp_2.stl" scale="0.001 0.001 0.001"/>
+        <mesh name="clamp_1" content_type="model/stl" file="clamp_1.stl" scale="0.0001 0.0001 0.0001"/>
+        <mesh name="clamp_2" content_type="model/stl" file="clamp_2.stl" scale="0.0001 0.0001 0.0001"/>
 
         <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="512"/>
         <texture name="grid" type="2d" builtin="checker" rgb1="0.1 0.1 0.1" rgb2="0.15 0.15 0.15" width="512" height="512" mark="cross" markrgb="0.2 0.2 0.2"/>
@@ -244,36 +244,22 @@
                                       mass="0.010" diaginertia="2.19792e-04 1.86205e-04 1.03052e-04"/>
                             <joint name="right_clamp" pos="0 0 0" axis="0.999848 -0.000154 0.017451" type="slide"
                                    range="0 0.037" actuatorfrcrange="-1.9 1.9" damping="0.5" frictionloss="0.1"/>
-                            <!-- Blade lifted so its TIP sits at the pad line rather than
-                                 hanging 38 mm (clamp_1) / 65 mm (clamp_2) below the grip
-                                 point. The grip point is only ~22 mm above the table, so the
-                                 blades used to pass visibly through it. They are decorative
-                                 (contype/conaffinity 0 -- the pads do the gripping), so this
-                                 is a pure appearance fix; giving them collision instead would
-                                 block the descent, since the blade would strike the table
-                                 before the pads reached the object. Offsets are along world-up
-                                 mapped into the clamp frame at the overhead grasp pose.
-                                 Scaling the mesh does NOT help: its origin sits below the
-                                 blade, so shrinking pulls the tip further down. -->
-                            <geom pos="0.045072 0.347106 0.057468" type="mesh" mesh="clamp_1"
+                            <!-- The new flush-face claw mesh is the VISIBLE gripper, but it does
+                                 NOT do the collision: MuJoCo collides a mesh as its convex hull,
+                                 and the hull of this tilted, downward-tapering blade is a solid
+                                 wedge whose lower point contacts an object first and shoves it out
+                                 -- measured, the object was ejected 50-64 mm and never lifted, at
+                                 every blade position tried. A convex hull cannot present the flat
+                                 vertical face the STL has. So the physics is done by a slim
+                                 invisible plate co-located with the visible face (pad_1), exactly
+                                 as before; the claw provides the appearance. To make the mesh
+                                 itself collide, it would have to be convex-decomposed (CoACD) into
+                                 several pieces and re-imported. -->
+                            <geom pos="0.045072 0.340704 0.033971" type="mesh" mesh="clamp_1"
                                   contype="0" conaffinity="0" group="1" rgba="0.5 0.5 0.5 1"/>
-                            <!-- Collision pad, flush with the VISIBLE blade face.
-                                 Placement is ray-measured (mj_ray straight through the
-                                 grasp centre), not derived from mesh vertex bands -- the
-                                 previous pads were computed from a measurement that had
-                                 the two clamps' sides swapped, so each pad sat on the
-                                 opposite side from its own parent blade. They scissored
-                                 the wrong way and held the block 14 mm INSIDE the
-                                 geometry on screen. -->
-                            <!-- Flat jaw plate. quat compensates the clamp body's 21.4deg
-                                 tilt about world-x (measured at the overhead grasp pose) so the
-                                 gripping FACE is vertical and parallel to the upright block, not
-                                 the tilted V it used to render as. Thin along the closing axis
-                                 (world x), broad in depth (y) and height (z). This IS the visible
-                                 jaw now that the hollow clamp fang is hidden. -->
                             <geom name="pad_1" type="box" pos="0.064589 0.147719 0.185682"
                                   size="0.004 0.010 0.013" quat="0.9827 -0.1853 0 0"
-                                  rgba="0.25 0.25 0.3 1"
+                                  rgba="0.25 0.25 0.3 0"
                                   friction="1.5 0.01 0.001" solref="0.004 1"/>
                         </body>
 
@@ -282,11 +268,11 @@
                                       mass="0.010" diaginertia="2.19792e-04 1.86205e-04 1.03052e-04"/>
                             <joint name="left_clamp" pos="0 0 0" axis="0.999848 -0.000154 0.017451" type="slide"
                                    range="-0.038 0" actuatorfrcrange="-1.9 1.9" damping="0.5" frictionloss="0.1"/>
-                            <geom pos="-0.079890 0.356382 0.081272" type="mesh" mesh="clamp_2"
+                            <geom pos="-0.07989 0.342905 0.031809" type="mesh" mesh="clamp_2"
                                   contype="0" conaffinity="0" group="1" rgba="0.5 0.5 0.5 1"/>
                             <geom name="pad_2" type="box" pos="-0.084082 0.149916 0.183870"
                                   size="0.004 0.010 0.013" quat="0.9827 -0.1853 0 0"
-                                  rgba="0.25 0.25 0.3 1"
+                                  rgba="0.25 0.25 0.3 0"
                                   friction="1.5 0.01 0.001" solref="0.004 1"/>
                         </body>
                     </body>
