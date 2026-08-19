@@ -19,12 +19,22 @@
        gripper holds ~1 N a pad, so 600 g is undeliverable by this airframe.
        Split across the geoms so the derived CoM sits low, like a real bottle. -->
   <asset>
+    <!-- wood grain for the box (review 2026-08-19: "it just needs to
+         look wooden" -- was flat bright blue) -->
+    <texture name="wood_tex" type="2d" file="wood.png"/>
+    <material name="wood_mat" texture="wood_tex" texrepeat="2 2"
+              specular="0.1" shininess="0.1"/>
     <texture name="ycb_mustard_tex" type="2d"
              file="ycb_assets/006_mustard_bottle/google_16k/texture_map.png"/>
     <material name="ycb_mustard_mat" texture="ycb_mustard_tex" specular="0.2" shininess="0.3"/>
     <mesh name="ycb_mustard" file="ycb_assets/006_mustard_bottle/google_16k/textured.obj"/>
   </asset>
 
+  <!-- condim 6 on the object geoms (2026-08-19): MuJoCo's default
+       condim 3 has NO rolling friction, so a knocked-over bottle rolled
+       FOREVER on the flat mat (measured: its heading drifted all episode
+       and every recovery pass aimed at a stale pose). The rolling
+       coefficients below only act at condim >= 6. -->
   <worldbody>
     <!-- On the mat, base resting on the flat blue_mat surface (z = 0.01). The
          mesh is re-centred by pos: the YCB mesh origin is its own centroid, so
@@ -32,18 +42,27 @@
     <body name="mustard_bottle" pos="0.0 0.6 0.011">
       <freejoint name="mustard_free_joint"/>
       <geom type="mesh" mesh="ycb_mustard" material="ycb_mustard_mat"
-            pos="0.0153 0.0235 0.0032" contype="0" conaffinity="0" group="1" density="0"/>
+            pos="0.0145 0.0220 0.0032" contype="0" conaffinity="0" group="1" density="0"/>
       <!-- body: the fat lower part, 0..130 mm -->
       <geom name="mustard_body" type="box" pos="0 0 0.065" size="0.0485 0.0335 0.065"
-            mass="0.024" rgba="0.8 0.75 0.2 0" friction="0.8 0.01 0.001"/>
+            mass="0.024" rgba="0.8 0.75 0.2 0" condim="6"
+            friction="0.8 0.01 0.008"/>
       <!-- shoulder+neck: 130..175 mm -->
       <geom name="mustard_neck" type="cylinder" pos="0 0 0.1525" size="0.0225 0.0225"
-            mass="0.004" rgba="0.8 0.75 0.2 0" friction="0.8 0.01 0.001"/>
+            mass="0.004" rgba="0.8 0.75 0.2 0" condim="6"
+            friction="0.8 0.01 0.008"/>
       <!-- cap: 175..191 mm. THE GRASP TARGET -- 23 mm across, jaws open to 32.
            High friction and soft solref, same reasoning as the old target pads. -->
       <geom name="mustard_cap" type="cylinder" pos="0 0 0.183" size="0.0115 0.008"
             mass="0.002" rgba="0.8 0.75 0.2 0"
-            friction="1.5 0.01 0.001" solref="0.004 1"/>
+            condim="6" friction="1.5 0.01 0.008" solref="0.004 1"/>
+      <!-- Cap-centre tracking site (data collection only, 2026-08-19):
+           the collector's grasp goal for the FALLEN-bottle recovery --
+           MuJoCo's FK gives its live world pose whatever the bottle's
+           orientation. Group 4 + alpha 0: never rendered, cannot leak
+           into a training frame. -->
+      <site name="mustard_cap_site" pos="0 0 0.183" size="0.005"
+            group="4" rgba="1 0 0 0"/>
     </body>
 
     <!-- The place target: an open-top bin, sized to the DRONE, not the bottle.
@@ -56,18 +75,36 @@
          just above the rim) stays in, low enough that the hanging bottle clears
          the rim with the body at ~0.55 m -- inside the working envelope.
          Static: no freejoint, so it cannot be knocked over; it is the goal, not
-         a manipuland. Bright blue, distinct from the mat's duller blue. -->
+         a manipuland. WOODEN (review 2026-08-19; was bright blue) -- warm wood tones,
+         high-contrast against the blue mat. -->
     <body name="bin" pos="1.4 1.6 0">
       <geom name="bin_floor" type="box" pos="0 0 0.010" size="0.230 0.230 0.010"
-            rgba="0.10 0.25 0.85 1"/>
+            material="wood_mat" rgba="0.8 0.8 0.8 1"/>
       <geom name="bin_wall_xlo" type="box" pos="-0.220 0 0.085" size="0.010 0.230 0.075"
-            rgba="0.10 0.25 0.85 1"/>
+            material="wood_mat"/>
       <geom name="bin_wall_xhi" type="box" pos="0.220 0 0.085" size="0.010 0.230 0.075"
-            rgba="0.10 0.25 0.85 1"/>
+            material="wood_mat"/>
       <geom name="bin_wall_ylo" type="box" pos="0 -0.220 0.085" size="0.230 0.010 0.075"
-            rgba="0.10 0.25 0.85 1"/>
+            material="wood_mat"/>
       <geom name="bin_wall_yhi" type="box" pos="0 0.220 0.085" size="0.230 0.010 0.075"
-            rgba="0.10 0.25 0.85 1"/>
+            material="wood_mat"/>
+    </body>
+
+    <!-- DISTRACTOR box (review 2026-08-19: "add 2 bins so the model
+         doesn't overfit to one"): same shell, its own tint, repositioned
+         per episode by the collector. The prompt's target stays unique
+         ("the wooden box" = the wood-textured one). -->
+    <body name="bin2" pos="-1.0 2.2 0">
+      <geom name="bin2_floor" type="box" pos="0 0 0.010" size="0.230 0.230 0.010"
+            rgba="0.55 0.55 0.6 1"/>
+      <geom name="bin2_wall_xlo" type="box" pos="-0.220 0 0.085" size="0.010 0.230 0.075"
+            rgba="0.6 0.6 0.65 1"/>
+      <geom name="bin2_wall_xhi" type="box" pos="0.220 0 0.085" size="0.010 0.230 0.075"
+            rgba="0.6 0.6 0.65 1"/>
+      <geom name="bin2_wall_ylo" type="box" pos="0 -0.220 0.085" size="0.230 0.010 0.075"
+            rgba="0.6 0.6 0.65 1"/>
+      <geom name="bin2_wall_yhi" type="box" pos="0 0.220 0.085" size="0.230 0.010 0.075"
+            rgba="0.6 0.6 0.65 1"/>
     </body>
 
     <!-- 100 g pick weight (AirVLA recreation, doc D5/D9/D11). Purpose-built
@@ -81,7 +118,8 @@
     <body name="pick_weight" pos="-0.6 0.6 0">
       <freejoint name="pick_weight_joint"/>
       <geom name="weight_base" type="cylinder" pos="0 0 0.018" size="0.020 0.018"
-            mass="0.088" rgba="0.25 0.26 0.30 1" friction="0.8 0.01 0.001"/>
+            mass="0.088" rgba="0.25 0.26 0.30 1" condim="6"
+            friction="0.8 0.01 0.008"/>
       <!-- Stem friction 2.5: the hardware spec says 100 g is carriable at
            0.2-0.5 N pinch, which requires mu ~2+ (rubberized fingers on
            metal). At mu 1.5 the sim grip had only 1.5x static margin and

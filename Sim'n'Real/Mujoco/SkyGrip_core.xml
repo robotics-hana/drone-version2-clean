@@ -258,7 +258,12 @@
                  to wrist_cam, not this stream.
                  History: pos="0 -0.07 0.15" fovy=100 aimed +y-and-down (framed the gripper);
                  then pos="0 0.15 0.15" aimed +y (framed the Pi board). -->
-            <camera name="scene_cam" pos="0 -0.11500 0.03" xyaxes="-1.95 -0.05 0  0.02 -0.98 1.8" fovy="130"/>
+            <!-- Raised nose mount (user direction 2026-08-19: "a bit higher
+                 and the propellers not in view"): moved ahead of the prop
+                 discs' front edge (y -0.187) so the 130-deg view clears them,
+                 and up to z 0.055. Orientation and fovy unchanged (user
+                 hand-tuned). Was pos="0 -0.11500 0.03". -->
+            <camera name="scene_cam" pos="0 -0.20 0.055" xyaxes="-1.95 -0.05 0  0.02 -0.98 1.8" fovy="130"/>
           
             <!-- overview_cam used to be mounted HERE, on base_link, as a chase view.
                  Moved to the worldbody as a fixed tripod -- see there. The paper's third
@@ -274,15 +279,30 @@
                  bottom edge during the whole approach. Pose derived in _chasecam.py /
                  _tobase.py and chosen from rendered candidates. -->
 
-            <geom type="mesh" mesh="base_link" rgba="0.7 0.7 0.9 1"/>
+            <geom type="mesh" mesh="base_link" rgba="0.08 0.08 0.09 1"/>
+            <!-- Real-drone colours (review 2026-08-19): black plastic body,
+                 BLUE propellers -- visual-only discs riding just above the
+                 mesh's own rotor discs. -->
+            <geom name="prop_fl" type="cylinder" size="0.082 0.002"
+                  pos="0.13 0.105 0.043" rgba="0.15 0.35 0.95 1"
+                  contype="0" conaffinity="0" density="0" mass="0.00"/>
+            <geom name="prop_fr" type="cylinder" size="0.082 0.002"
+                  pos="0.13 -0.105 0.043" rgba="0.15 0.35 0.95 1"
+                  contype="0" conaffinity="0" density="0" mass="0.00"/>
+            <geom name="prop_bl" type="cylinder" size="0.082 0.002"
+                  pos="-0.13 0.105 0.043" rgba="0.15 0.35 0.95 1"
+                  contype="0" conaffinity="0" density="0" mass="0.00"/>
+            <geom name="prop_br" type="cylinder" size="0.082 0.002"
+                  pos="-0.13 -0.105 0.043" rgba="0.15 0.35 0.95 1"
+                  contype="0" conaffinity="0" density="0" mass="0.00"/>
             <!-- Legs shortened: they reached 0.200 m below the body, which set the whole
                  platform's minimum working height and left the gripper barely clearing
                  the table. Now 0.150 m, still just below the folded-arm gripper so the
                  airframe rests on its legs rather than its jaws. -->
-            <geom name="leg_front_left" type="cylinder" size="0.008 0.085" pos="0.108 0.088 -0.065" rgba="0.2 0.2 0.2 1" density="0" mass="0.00"/>
-            <geom name="leg_front_right" type="cylinder" size="0.008 0.085" pos="0.108 -0.088 -0.065" rgba="0.2 0.2 0.2 1" density="0" mass="0.00"/>
-            <geom name="leg_back_left" type="cylinder" size="0.008 0.085" pos="-0.108 0.088 -0.065" rgba="0.2 0.2 0.2 1" density="0" mass="0.00"/>
-            <geom name="leg_back_right" type="cylinder" size="0.008 0.085" pos="-0.108 -0.088 -0.065" rgba="0.2 0.2 0.2 1" density="0" mass="0.00"/>
+            <geom name="leg_front_left" type="cylinder" size="0.008 0.085" pos="0.108 0.088 -0.065" rgba="0.08 0.08 0.09 1" density="0" mass="0.00"/>
+            <geom name="leg_front_right" type="cylinder" size="0.008 0.085" pos="0.108 -0.088 -0.065" rgba="0.08 0.08 0.09 1" density="0" mass="0.00"/>
+            <geom name="leg_back_left" type="cylinder" size="0.008 0.085" pos="-0.108 0.088 -0.065" rgba="0.08 0.08 0.09 1" density="0" mass="0.00"/>
+            <geom name="leg_back_right" type="cylinder" size="0.008 0.085" pos="-0.108 -0.088 -0.065" rgba="0.08 0.08 0.09 1" density="0" mass="0.00"/>
 
             <site name="thrust_point" pos="0 0 0" size="0.02" rgba="0 1 1 0.8" type="sphere"/>
 
@@ -318,7 +338,7 @@
                      If the arm is ever made lighter again, re-check this before blaming the
                      controller. -->
                 <joint name="Joint_1" pos="0 0 0" axis="1 0 0" range="-1.6 1.6" armature="1e-4" damping="0.372" frictionloss="0.08"/>
-                <geom contype="0" conaffinity="0" type="mesh" mesh="Link_1" rgba="1 0.95 0.9 1"/>
+                <geom contype="0" conaffinity="0" type="mesh" mesh="Link_1" rgba="0.08 0.08 0.09 1"/>
 
                 <body name="connect" pos="-0.003 0 -0.1308" quat="0.7071068 0.7071068 0 0">
                     <!-- connectf weighed 5 g. Was 0.075, which was the OLD bracket lumped
@@ -345,8 +365,8 @@
                          Applied here rather than baked into connectf.stl because that file
                          is the one new part that arrived in its true CAD frame, and it is
                          worth keeping it byte-identical to what came off GitHub. -->
-                    <geom type="mesh" quat="0 0 0 1" contype="0" conaffinity="0" group="1" density="0" rgba="0.6 0.6 0.6 1" mesh="connectf"/>
-                    <geom type="mesh" quat="0 0 0 1" rgba="0.6 0.6 0.6 1" mesh="connectf"/>
+                    <geom type="mesh" quat="0 0 0 1" contype="0" conaffinity="0" group="1" density="0" rgba="0.08 0.08 0.09 1" mesh="connectf"/>
+                    <geom type="mesh" quat="0 0 0 1" rgba="0.08 0.08 0.09 1" mesh="connectf"/>
 
                     <!-- SLOTTED, not stacked. The base has a solid rectangular spigot
                          22.60 x 12.42 mm on its mount face; connectf's servo tower has a
@@ -402,7 +422,7 @@
                              orientation changes, even though the part itself never does. -->
                         <inertial pos="0 -0.01615 0" mass="0.024"
                                   diaginertia="4.76570e-06 7.34937e-06 6.75683e-06"/>
-                        <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" mesh="gripper_base" rgba="0.6 0.6 0.6 1"/>
+                        <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" mesh="gripper_base" rgba="0.08 0.08 0.09 1"/>
                         <!-- Body collision DISABLED, and this is load-bearing for the whole
                              task. MuJoCo collides a mesh as its CONVEX HULL, so a gripper body
                              that in reality is open underneath -- the paddles hang through it --
@@ -530,7 +550,7 @@
                                  make the mesh itself collide it would have to be convex-
                                  decomposed (CoACD) into several pieces and re-imported. -->
                             <geom type="mesh" mesh="right_clamp"
-                                  contype="0" conaffinity="0" group="1" rgba="0.5 0.5 0.5 1"/>
+                                  contype="0" conaffinity="0" group="1" rgba="0.1 0.1 0.11 1"/>
                             <!-- Flush with the gripping face: the box spans x = 0..0.002, so its
                                  inner surface is the face itself and the pad grips exactly where
                                  the render shows the paddle. Sized to the 20 mm of paddle that
@@ -549,7 +569,7 @@
                             <joint name="left_clamp" pos="0 0 0" axis="1 0 0" type="slide"
                                    range="-0.016 0" actuatorfrcrange="-1.9 1.9" damping="0.5" frictionloss="0.1"/>
                             <geom type="mesh" mesh="left_clamp"
-                                  contype="0" conaffinity="0" group="1" rgba="0.5 0.5 0.5 1"/>
+                                  contype="0" conaffinity="0" group="1" rgba="0.1 0.1 0.11 1"/>
                             <geom name="pad_2" type="box" pos="-0.001 -0.0233 0"
                                   size="0.001 0.009 0.010"
                                   rgba="0.25 0.25 0.3 0"

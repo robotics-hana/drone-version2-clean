@@ -425,6 +425,254 @@ cannot hold full-FT memory — recorded as a deviation if taken** (risk R1).
     the forward pose, which requires re-validating the close physics
     (D14 rule).
 
+- **D18 (bin approach: "drove over and past the box", 2026-08-19, from
+  Hana)**: three stacked causes, each measured and fixed —
+  1. *payload lead*: at the forward carry pose the object leads the body
+     by the arm's reach, so a body-aimed goal flies the payload past the
+     centre → transport goal pre-compensated by the live-measured hang;
+  2. *arrival glide*: the loaded lateral PD is soft, and carried cruise
+     momentum glided the body ~0.6 m past an abruptly-stopped setpoint →
+     two-leg approach: carry-speed to a waypoint 0.35 m short, **brake
+     until ground speed < 3 cm/s**, then creep the final leg at 0.05 m/s
+     (SP_STEP_FINAL);
+  3. *static loaded lead*: the payload's pitch moment on the forward arm
+     is unmodelled by the platform's arm-CoM feed-forward, so the body
+     PARKS ~0.28 m ahead of its setpoint at 100 g (~0.08 m at 30 g) —
+     the dominant term → the final-leg goal is shortened by the
+     **live-measured lead** (body-vs-setpoint offset sampled at the
+     brake hover).
+  Result: pre-release overshoot 345 mm → **41 mm** (weight), 0 mm
+  (bottle); both payloads released centred. The release itself remains
+  payload-referenced (D14). Committed as V0.39.0 (local 5c00f16, cluster
+  fbd194a); review videos >99 MB are gitignored per GitHub's limit.
+
+- **D19 (grasp chain without the pre-grip shuffle + sequence reorder,
+  2026-08-19, from Hana)**: review asked for (a) sequence = grab → hover
+  up → extend arm → turn → approach → drop, (b) a snappier drop, (c) no
+  "reorientation thing" before the grip (the forward-back nudging that
+  knocked the mustard). Removing the at-depth nudges initially collapsed
+  bottle yield to ~25%; four measured iterations rebuilt it *without*
+  reintroducing the shuffle:
+  1. the loaded FK/droop **z-bias (~5 mm low)** — previously absorbed by
+     the at-depth nudges — put the pads at the cap's tapered bottom edge
+     where the close levers the bottle over; now corrected in the
+     pre-descent all-axis pass, +4 cm above the object where the open
+     pads are clear of everything;
+  2. a creep-speed descent was tried and reverted: 5 s of loaded y-drift
+     produced bimodal +11 mm landings (cap pressed into the mouth's back
+     wall); the descent runs at carry speed (0.5 s, no drift time);
+  3. the old gate → pre-narrow → pause → close order left ~4 s of hover
+     drift between the alignment check and the weld capture; reordered
+     to **pre-narrow → gate → weld+close back-to-back**;
+  4. the alignment gate is now **anisotropic**: tight on the closing
+     axis x (graze mechanism; lands sub-mm), tolerant along the mouth
+     depth y (±6.5 mm just seats the object deeper/shallower).
+  Verified: bottle 4/4, weight 2/2, zero pre-grip nudging in any of
+  them. Drop timing tightened (final creep 0.08 m/s, shorter settles,
+  0.6 s fall wait).
+
+- **D20 (tucked cruise + extend-at-the-box, drop latency, scene tidy,
+  2026-08-19, from Hana)**:
+  - *Arm extends only at the box* (user proposal, endorsed after
+    analysis): the cruise flies with the arm at the grasp pose — the
+    payload pitch-moment lead (~0.28 m at 100 g) that the extended arm
+    imposed on the whole transport largely disappears — and the ~10 s
+    arm swing overlaps the approach flight (body-aimed first leg stops
+    0.45 m short; the brake waits for stillness AND arm arrival; hang
+    and lead are both measured fresh at the brake; the creep leg aims
+    the payload dead-centre). Trade-off accepted in review: the object
+    is not visible in the forward camera during the cruise (the box is,
+    dead ahead); it rises into frame with the arm at the drop.
+  - *Drop latency*: measured 18–35 s above-box-to-release on weight
+    episodes. Root cause: the post-creep settles measured body-vs-goal,
+    but with lead compensation the body parks `lead` away from the goal
+    BY DESIGN, so those settles always burned their full timeouts.
+    Replaced with sp-arrival + stillness waits; the payload-residual
+    check is the real arrival criterion. Now ~5 s typical (occasional
+    ~20 s when a correction round fires).
+  - *Scene*: the race gate is parked 3 m underground during
+    pick-and-place episodes (visible only in nav); the mustard bottle is
+    **60 g (half-full)** — the empty 30 g bottle kept getting knocked
+    over; doubling the mass doubled tip resistance (5/5 grasp yield on
+    verification) and keeps a sag regime distinct from the 100 g weight.
+
+- **D21 (fallen-bottle recovery grasp, 2026-08-19, from Hana)**: "when
+  the mustard falls, reorientate the gripper [and drone] to the new
+  position of the cap and pick it up." Implemented as live-pose grasp
+  targeting throughout:
+  - `live_target()` computes the aim from the object's CURRENT pose; for
+    a fallen bottle (axis z < 0.7) it returns the lying cap centre
+    (+6 mm outward along the axis so the jaw mouth clears the shoulder)
+    and a yaw that puts the closing axis perpendicular to the bottle —
+    the drone and gripper reorient to wherever the object actually is.
+  - The whole grasp is a two-pass loop: any missed close reopens,
+    ascends clear, and re-aims at the live pose (a knocked bottle gets
+    chased once). The close itself is **gated on the verified pre-close
+    pose** — a blind close on a missed lying cap was measured rolling
+    the bottle up to a metre.
+  - Corrective slots now alternate **fallen-bottle recovery** (bottle
+    spawns knocked over, settled to rest before the episode starts) and
+    nav-corrective — the paper's corrective-demo concept applied to
+    manipulation.
+  - Gate axes were rotated into the **gripper frame** (after a
+    reorienting yaw, world-x gating let 6.5 mm of closing-axis error
+    through the 2 mm gate).
+  - Known residual: ~40% of fallen attempts graze the free-rolling
+    cylinder during the descent (2–4 mm per-seed drift vs 4.5 mm
+    clearance) and self-discard; banked data therefore contains only
+    clean recoveries, at ~1.7 collection attempts per corrective slot.
+
+- **D22 (flight stability at the box, 2026-08-19, from Hana)**: "the
+  flight looks unstable … go to the side or edge, stay at hover, then
+  extend arm"; "the arm and drone are overshooting by the box." Two
+  interacting causes: (1) extending the arm **mid-flight** shifts the
+  CoM while translating and the attitude loop visibly chases it;
+  (2) even extending at hover, the unmodelled arm+payload moment drifts
+  the body ~0.3 m forward *during* the extension — done at the bin edge,
+  that parked the drone over the box and forced a visible back-up.
+  Final sequence: cruise tucked → hover **0.75 m short** of the bin
+  (drift happens in open air) → extend the arm at dead hover →
+  re-stabilise → measure hang + lead → one monotonic forward creep to
+  the drop point. Verified: **0 mm overshoot on both objects**, worst
+  carry tilt ~7° (normal flight lean), drops centred.
+
+- **D23 (cap tracking site + aperture-confirmed pickup, 2026-08-19,
+  from Hana)**: two refinements to the fallen-bottle recovery.
+  - **`mustard_cap_site`** (objects_lab.xml): an invisible group-4 site
+    at the cap centre — MuJoCo's FK provides the exact live cap pose in
+    any orientation, and the recovery aims at it (offset 6 mm outward
+    along the bottle axis so the jaw's inner edge clears the fatter
+    neck). Data-collection scaffolding only; alpha-0 + group 4 means it
+    cannot appear in a training frame.
+  - **Aperture-confirmed pickup**: for the fallen grasp, "when the
+    clamp no longer shuts, we have the mustard" — close on any
+    plausible pose; if the clamp physically stops at cap width
+    (~11 mm), the cap is between the pads → weld at the seated pose and
+    lift; a full shut means a miss → reopen and re-aim at the live
+    site. The upright grasps keep the validated pre-close-gated
+    protocol (D14). Verified: fallen 3/5 (aperture reads 11.2 mm on
+    every success, misses self-identify at full-shut and self-discard),
+    upright bottle 4/4, weight 2/2. The mustard's random fall
+    directions are covered by the perpendicular-yaw reorientation
+    computed from the live site pose.
+
+- **D24 (anti-cheat weld guards + the honest knock rate, 2026-08-19,
+  from Hana: "episode 4 the mustard fell and the gripper still picked
+  it up as if it was upright?????")**:
+  - The weld could catch a bottle **mid-tip** at a transiently-aligned
+    instant and carry it frozen at a tilt — diagnostics looked nominal
+    (pre-close 3 mm, aperture 11.2) because they measure jaw-vs-target
+    geometry, not the object's state. Guards added: the upright-path
+    weld also requires the object **at rest and standing** (R22 > 0.95)
+    at the weld instant, plus a post-close **aperture sanity range**
+    per object (weight 5–12 mm, bottle 8–14.5 mm) — outside it, the
+    weld is released and the pass retries.
+  - Banning cheaty welds exposed the true upright-bottle knock rate:
+    ~50% of approaches disturb the bottle (all earlier "5/5" runs were
+    partly cheat-inflated). Root mechanism: the tight settles **time
+    out under loaded trim** (their False return accumulated into `ok`
+    but gated nothing), so descents launched tens of mm off target and
+    swept the open jaws through cap height. Descents are now
+    **hard-gated on live jaw alignment** (<10 mm to descend, abort
+    upward at >25 mm mid-descent), grasp passes retry up to 3× with an
+    at-rest wait before re-aiming, and episodes bank only clean grasps.
+    Honest yields: upright bottle ~50% per attempt (acceptance loop
+    absorbs it, ~2 attempts/episode), weight 100%, fallen recovery
+    ~60–100%. Efficiency-only cost; flagged for a dedicated tuning
+    session if Phase C collection time matters.
+  - Scene/UX in the same round: **wooden box** (procedural grain
+    texture wood.png; prompt updated to "put it in the wooden box"),
+    and **stationary-hover bookends** (1 s at episode start and end) —
+    clean rest-state boundaries for chunked-action training, matching
+    real deployment.
+
+- **D25 (domain variety + real-drone colours, 2026-08-19, from Hana)**:
+  anti-overfit randomisation across every episode —
+  - **Start positions widened for all tasks**: manip x ±0.5 / y 0.9–1.6
+    / z 0.55–0.95; nav lateral ±0.35 around the gate, y −1.9..−1.2,
+    z 0.60–1.00.
+  - **Target box moves and re-tints per episode** (position x 1.1–1.7,
+    y 1.2–2.0; wood-tone tint over the grain texture), and a **second
+    distractor box** (bin2, its own random grey-ish tint, random far
+    placement) is always in scene — the prompt's referent stays unique
+    ("the wooden box" = the grain-textured one). All manip navigation,
+    turn, approach and success logic now uses the per-episode bin pose.
+  - **Very-top cap pinch**: AIM_Z = cap top − 4 mm (was −7 mm; the deep
+    pinch was a ratchet-era fix the weld obsoletes) — "the rest of the
+    bottle is too wide."
+  - **Real-drone colours**: black-plastic body, arm, gripper and legs;
+    **blue propeller discs** (visual-only geoms over the mesh rotors).
+    Verified by render and by full-pipeline runs (successes land in
+    their per-episode randomized bins; yields at the honest D24 rates).
+
+- **D26 (release aesthetics + final variety + clean banking,
+  2026-08-19, from Hana)**:
+  - *"Looks like the drone is throwing the object"* — correct diagnosis
+    by review: it is the **unload pop**, the counterpart of the D5
+    pickup sag (the PD's payload thrust trim releases the instant the
+    weld opens and the drone jumps upward as the object falls), plus
+    ~0.4 m of drop height. The expert now **descends and releases with
+    the payload ~10 cm above the rim** (verified release altitudes
+    0.32 m weight / 0.48 m bottle, everything landing upright); the
+    honest unload pop itself is kept — naive-platform behaviour the
+    guidance experiment needs.
+  - *Forward camera*: scene_cam XML is byte-identical to the user's
+    hand-fix — the apparent change was the recoloured body and new blue
+    prop discs entering its wide 130° view; the discs were shrunk
+    (r 0.095 → 0.082) and raised out of the view edge.
+  - *More variety*: task-object spawns widened (x ±0.6, y 0.2–1.0) and
+    the parked distractor object jitters ±0.25 m per episode (drone
+    start + box position already randomize per D25).
+  - *Clean banking* (episode 8: an 1,825-frame triple-retry marathon
+    with a gate-failed 6.6 mm-off pinch banked because it eventually
+    placed): episodes now bank only if the final grasp **passed the
+    alignment gate** and the episode is **≤1,100 frames** — marginal
+    cocked pinches and marathon slogs self-discard.
+
+- **D27 (grasp dwell + scene_cam nose mount + release height,
+  2026-08-19, from Hana)**:
+  - **0.3 s grasp-confirmation dwell** between close and lift-off — as
+    on the real platform, the pinch is confirmed before committing.
+  - **Release height raised to rim + 22 cm** (was rim + 10 cm): the
+    unload wobble happens directly over the box, and the extra margin
+    keeps the drone clear of the walls while it restabilises — still
+    far below the carry-height release that read as "throwing".
+  - **scene_cam raised to a nose mount** (user direction: "a bit higher
+    and the propellers not in view"): pos moved from (0, −0.115, 0.03)
+    — which sat between the front rotors, letting them intrude into the
+    130° view — to (0, −0.20, 0.055), ahead of the prop discs' front
+    edge. Orientation and fovy remain the user's hand-tuned values.
+    Render-verified clean at hover and at 8° cruise tilt (only the
+    physical rotor shadows remain in frame). Also verified this round:
+    camera2 ≡ scene_cam mapping byte-identical on both machines.
+
+- **D28 (fallen-recovery honesty chain, 2026-08-19, from Hana: ep15
+  "grasping air ... should rotate and look down and pinch from
+  above")**: four stacked findings —
+  1. *Tilted-settle routing*: a bottle propped at an angle (axis z
+     0.7–0.95) fell into the UPRIGHT approach; any non-upright bottle
+     (axis z < 0.95) now takes the reoriented overhead grasp.
+  2. *Air-welds*: the fallen aperture check was **circular** — the
+     close commands cap width (11.2 mm), so an air-close also stops at
+     11.2 and "confirms" — and the 15 mm plausibility ball let the weld
+     carry the bottle floating beside the jaws. Now: anisotropic
+     gripper-frame plausibility (6 mm across the closing axis, 15 mm
+     along the cap where deep/shallow seats are harmless) plus a
+     **seated-verify** (live cap site within 13 mm of the jaws after
+     the close) before any weld; not-seated closes reopen and retry.
+  3. *See-through geoms audit* (user request): collision-vs-visual
+     overlay rendered on a lying bottle; vertex-computed alignment
+     showed the visual mesh only 0.8–1.5 mm off the collision axis —
+     corrected to the exact computed offset (0.0145, 0.0220, 0.0032).
+  4. *The bottle rolled forever*: MuJoCo's default condim 3 has **no
+     rolling friction**, so a knocked-over cylinder never stops on the
+     flat mat — every recovery pass aimed at a stale pose (traced: the
+     bottle's heading drifted continuously all episode). Object geoms
+     now use **condim 6** with rolling friction 0.008, which the
+     already-present coefficients needed to act at all.
+  Result: only genuine seated recoveries can bank (fallen ~40% per
+  attempt, self-discarding; upright bottle and weight unaffected).
+
 ## 9. Limitations (running)
 
 - **L1 — no teleoperation**: all demos are scripted experts in sim. Expert

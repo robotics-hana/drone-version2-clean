@@ -55,20 +55,31 @@ YAW_STEP = 0.04               # rad/tick at 10 Hz = 0.4 rad/s turn rate
                               # the bottle on its cap pinch and rotational slip
                               # sheds it mid-transport (measured: every carry
                               # dropped along the mat->bin path)
-SP_STEP_FINAL = 0.005         # creep for the last approach leg: the
+SP_STEP_FINAL = 0.008         # creep for the last approach leg: the
                               # loaded PD glides ~0.3 m past an
                               # abruptly-stopped setpoint (measured);
                               # arriving at 0.05 m/s kills the glide
 GRIP_STEP = 0.15              # max grip-fraction change per tick (~0.7 s stroke)
 
-BOTTLE_MASS = 0.030           # native bottle mass. The 200 g sag-regime
+BOTTLE_MASS = 0.060           # HALF-FULL bottle (review 2026-08-19: the
+                              # empty 30 g bottle kept getting knocked
+                              # over -- doubling the mass doubles tip
+                              # resistance and knock inertia, still well
+                              # under the 100 g hardware ceiling, and
+                              # keeps a sag regime distinct from the
+                              # 100 g weight). Was 0.030. The 200 g sag-regime
                               # payload (D5) moves to a purpose-built
                               # calibration-weight object -- cap-grasping a
                               # tall bottle at >=100 g is a tipping-lever
                               # problem (filmed; see doc D9). Review sample
                               # and light-variation episodes use 30 g.
 CAP_TOP = 0.191               # bottle on the physics floor (D8a)
-AIM_Z = CAP_TOP - 0.007       # deeper cap pinch (was -4 mm): the shallow
+AIM_Z = CAP_TOP - 0.004       # pinch at the VERY TOP of the cap (review
+                              # 2026-08-19: "the rest of the bottle is too
+                              # wide"). The weld carries the load, so the
+                              # -7 mm deep pinch of the ratchet era
+                              # (history below) is no longer needed:
+                              # (old note) the shallow
                               # grip's ~12 mm of pad overlap let the round
                               # cap RATCHET down out of the pinch under
                               # carry oscillations (filmed: clean mid-carry
@@ -83,7 +94,7 @@ BIN_XY = np.array([1.4, 1.6])
 # the object set is everything the hardware can actually handle -- the
 # 100 g calibration weight and the empty (30 g) mustard bottle, the only
 # graspable-and-stable survivor of prepare_objects.py's 22-YCB screen.
-PROMPT_MANIP = "pick up the {obj} and put it in the blue bin"
+PROMPT_MANIP = "pick up the {obj} and put it in the wooden box"
 PROMPT_NAV = "fly through the gate and hover over the {obj}"
 WEIGHT_AIM_Z = 0.057          # stem top (0.062) - 5 mm, floor-resting weight
 # The paper's third task (compositional "fly through the gate and put the
@@ -234,16 +245,43 @@ class Runner:
             # shoves the bottle (measured: -9.9 mm pre-close, object
             # knocked 0.14 m). The bottle pre-narrows to 27 mm and gates
             # at 2 mm so the pads can never meet the cap off-centre.
+            # gate is ANISOTROPIC: gate_x guards the CLOSING axis (a pad
+            # meeting the object off-centre is the graze/knock mechanism);
+            # gate_y is the mouth-depth axis, where several mm just seat
+            # the object deeper or shallower in the jaws -- measured
+            # landings scatter +-6 mm in y while x stays sub-mm.
             "weight": dict(body=self.wbody, adr=self.wadr,
                            aim_z=WEIGHT_AIM_Z, close=0.45,
-                           narrow=0.75, gate_xy=0.0045,
+                           narrow=0.75, gate_x=0.0045, gate_y=0.0065,
+                           ap_lo=5.0, ap_hi=12.0, stage=0.04,
                            park=(-0.75, 1.25)),
             "mustard bottle": dict(body=self.bot, adr=self.badr,
                                    aim_z=AIM_Z, close=0.70,
-                                   narrow=0.84, gate_xy=0.0020,
+                                   narrow=0.89, gate_x=0.0020,
+                                   gate_y=0.0065,
+                                   # stage 0.065: the descent to the
+                                   # correction stage overshoots ~28 mm
+                                   # below its setpoint under load, and
+                                   # at +0.04 that swept the WRIST
+                                   # HOUSING through cap height and
+                                   # tipped the bottle on approach
+                                   # (traced: jaws 56 mm away, housing
+                                   # over the cap). The tall bottle
+                                   # stages higher; the weight's 62 mm
+                                   # stem was never reachable.
+                                   ap_lo=8.0, ap_hi=14.5, stage=0.04,
                                    park=(-0.55, 1.05)),
         }
         self.cur = self.objs["weight"]
+        self.bin_id = m.body("bin").id
+        self.bin2_id = m.body("bin2").id
+        self.bin_geoms = [m.geom(n).id for n in
+                          ("bin_floor", "bin_wall_xlo", "bin_wall_xhi",
+                           "bin_wall_ylo", "bin_wall_yhi")]
+        self.bin2_geoms = [m.geom(n).id for n in
+                           ("bin2_floor", "bin2_wall_xlo", "bin2_wall_xhi",
+                            "bin2_wall_ylo", "bin2_wall_yhi")]
+        self.bin_xy = np.array(BIN_XY)
 
     # -- low-level helpers ---------------------------------------------------
     def jaws(self):
@@ -331,14 +369,40 @@ class Runner:
         # object parks in-scene as background clutter
         self.cur = self.objs[obj]
         for key, o in self.objs.items():
-            xy = task_xy if key == obj else o["park"]
+            xy = (task_xy if key == obj
+                  else np.asarray(o["park"])
+                  + self.rng.uniform(-0.25, 0.25, 2))
             d.qpos[o["adr"]:o["adr"] + 2] = xy
             d.qpos[o["adr"] + 2] = 0.0
             d.qpos[o["adr"] + 3:o["adr"] + 7] = [1, 0, 0, 0]
         d.eq_active[self.weld] = 0
         m.eq_obj2id[self.weld] = self.cur["body"]   # weld follows the task
+        # Anti-overfit scene variety (review 2026-08-19): the target box
+        # moves and changes wood tone per episode, and a second
+        # differently-coloured distractor box moves independently.
+        self.bin_xy = np.array([self.rng.uniform(1.1, 1.7),
+                                self.rng.uniform(1.2, 2.0)])
+        m.body_pos[self.bin_id][0:2] = self.bin_xy
+        m.body_pos[self.bin2_id][0:2] = [self.rng.uniform(-1.3, -0.7),
+                                         self.rng.uniform(1.8, 2.7)]
+        r0 = self.rng.uniform(0.5, 1.0)
+        tint = [r0, r0 * self.rng.uniform(0.6, 0.85),
+                r0 * self.rng.uniform(0.35, 0.6), 1.0]
+        for g in self.bin_geoms:
+            m.geom_rgba[g] = tint
+        g0 = self.rng.uniform(0.3, 0.9)
+        tint2 = [g0 * self.rng.uniform(0.7, 1.3),
+                 g0 * self.rng.uniform(0.7, 1.3),
+                 g0 * self.rng.uniform(0.7, 1.3), 1.0]
+        for g in self.bin2_geoms:
+            m.geom_rgba[g] = np.clip(tint2, 0.05, 1.0)
         if gate_xy is not None:
             m.body_pos[self.gate][0:2] = gate_xy
+            m.body_pos[self.gate][2] = 0.0
+        else:
+            # No gate in pick-and-place episodes (review 2026-08-19):
+            # park it 3 m underground; nav episodes restore it.
+            m.body_pos[self.gate][2] = -3.0
         d.qpos[0:3] = drone_xyz
         d.qpos[3:7] = [np.cos(yaw / 2), 0, 0, np.sin(yaw / 2)]
         d.qpos[7:9] = self.expert.q_travel
@@ -348,125 +412,302 @@ class Runner:
         self.ctrl.mppi.target_yaw = float(yaw)
         self.expert.reset(drone_xyz, yaw=yaw)
 
+    def object_settled(self):
+        """True when the task object is at rest -- and, for the bottle,
+        actually STANDING. Guards the upright-path weld: the weld once
+        caught a bottle MID-TIP at a transiently-aligned instant and
+        carried it frozen at a tilt, 'picked up as if it was upright'
+        (review, episode 4). A tipping bottle must read as a miss so the
+        retry loop reorients and runs the proper fallen recovery."""
+        vadr = self.model.jnt_dofadr[
+            self.model.body_jntadr[self.cur["body"]]]
+        still = float(np.linalg.norm(
+            self.data.qvel[vadr:vadr + 6])) < 0.10
+        if self.cur is self.objs["mustard bottle"]:
+            adr = self.cur["adr"]
+            q = self.data.qpos[adr + 3:adr + 7]
+            R = np.zeros(9)
+            mujoco.mju_quat2Mat(R, q)
+            return still and R.reshape(3, 3)[2, 2] > 0.95
+        return still
+
+    def live_target(self, fallen_ok=True):
+        """Grasp aim from the object's LIVE pose (review 2026-08-19:
+        "reorientate the gripper [and drone] to the new position of the
+        cap"). For a FALLEN bottle the aim is the lying cap and the
+        returned yaw puts the closing axis (body x) perpendicular to the
+        bottle's long axis; for anything upright, the usual top-down aim
+        at the object's current -- not spawn -- position."""
+        adr = self.cur["adr"]
+        pos = self.data.qpos[adr:adr + 3]
+        if self.cur is self.objs["mustard bottle"]:
+            q = self.data.qpos[adr + 3:adr + 7]
+            R = np.zeros(9)
+            mujoco.mju_quat2Mat(R, q)
+            R = R.reshape(3, 3)
+            axis = R @ np.array([0.0, 0.0, 1.0])
+            if fallen_ok and axis[2] < 0.95:  # lying OR propped at an
+                # angle (review ep15: a tilted-settle fell into the
+                # upright approach and grasped air beside the cap)
+                # cap-centre TRACKING SITE (objects_lab.xml): MuJoCo FK
+                # gives the exact live cap pose; overhead grasp aims at
+                # it, offset 6 mm outward along the axis so the jaw's
+                # inner edge clears the fatter neck (r 22.5 vs cap 11.5)
+                sid = mujoco.mj_name2id(self.model,
+                                        mujoco.mjtObj.mjOBJ_SITE,
+                                        "mustard_cap_site")
+                cap = self.data.site_xpos[sid]
+                a = axis[0:2] / max(1e-6, np.linalg.norm(axis[0:2]))
+                yaw = float(np.arctan2(-a[0], a[1]))  # body x _|_ axis
+                return (np.array([cap[0] + 0.006 * a[0],
+                                  cap[1] + 0.006 * a[1],
+                                  max(cap[2], 0.016)]),
+                        yaw)
+        return np.array([pos[0], pos[1], self.cur["aim_z"]]), None
+
     # -- the three programs --------------------------------------------------
-    def manip_episode(self, obj="weight"):
+    def manip_episode(self, obj="weight", fallen_start=False):
         rng = self.rng
-        bxy = np.array([rng.uniform(-0.30, 0.30), rng.uniform(0.35, 0.85)])
-        start = np.array([rng.uniform(-0.3, 0.3), rng.uniform(1.1, 1.4),
-                          rng.uniform(0.6, 0.8)])
+        # object spawn varies widely too (review 2026-08-19)
+        bxy = np.array([rng.uniform(-0.60, 0.60), rng.uniform(0.20, 1.00)])
+        # WIDE start variation (review 2026-08-19: "the start position of
+        # the drone varies ... for all tasks")
+        start = np.array([rng.uniform(-0.5, 0.5), rng.uniform(0.9, 1.6),
+                          rng.uniform(0.55, 0.95)])
         self.reset_scene(bxy, start, obj=obj)
         ex, frames = self.expert, []
         task = PROMPT_MANIP.format(obj=obj)
-        aim = np.array([bxy[0], bxy[1], self.cur["aim_z"]])
+        if fallen_start:
+            # Corrective flavour: the bottle starts KNOCKED OVER and the
+            # demo shows the recovery grasp -- the paper's corrective-demo
+            # concept applied to manipulation.
+            adr = self.cur["adr"]
+            phi = float(rng.uniform(0, 2 * np.pi))
+            c45, s45 = np.cos(np.pi / 4), np.sin(np.pi / 4)
+            self.data.qpos[adr + 2] = 0.045
+            self.data.qpos[adr + 3:adr + 7] = [c45, s45 * np.cos(phi),
+                                               s45 * np.sin(phi), 0.0]
+            mujoco.mj_forward(self.model, self.data)
+            # wait until the tipped bottle has actually come to REST --
+            # a dropped cylinder bounces and rolls (measured: up to
+            # ~0.9 m), and a grasp aimed at a mid-roll snapshot chases
+            # a phantom
+            vadr = self.model.jnt_dofadr[
+                self.model.body_jntadr[self.cur["body"]]]
+            self.run_until(frames, task,
+                           lambda: float(np.linalg.norm(
+                               self.data.qvel[vadr:vadr + 6])) < 0.01,
+                           timeout_s=5.0)
         ok = True
+        self.run_until(frames, task, lambda: False, timeout_s=1.0)  # hover in
 
-        # travel above the object, arm folded to the camera-down travel pose
-        over = aim - ex.off_travel + np.array([0, 0, 0.30])
-        ex.set_goal(xyz=over, arm=ex.q_travel)
-        ok &= self.settle_near(frames, task)
-        # Swing to the grasp pose AT ALTITUDE, then descend VERTICALLY
-        # (review 2026-08-19: the travel->grasp swing is a 37 deg arc on
-        # the mirrored branches, and swinging while descending diagonally
-        # swept the pads through cap height and knocked the bottle over --
-        # the weight is too short to be hit, which is why only bottle
-        # attempts were being disturbed).
-        at = aim - ex.off_grasp
-        ex.set_goal(xyz=np.array([at[0], at[1], at[2] + 0.30]),
-                    arm=ex.q_grasp)
-        ok &= self.settle_near(frames, task, tol=0.03)
-        ex.set_goal(xyz=at + np.array([0, 0, 0.04]))
-        ok &= self.settle_near(frames, task)
-        # settled jaw-residual correction, up to twice (D8d) -- measure only
-        # AFTER a full settle; correcting on transients diverges (measured)
-        for _ in range(2):
-            resid = self.jaws() - (aim + np.array([0, 0, 0.04]))
-            if np.linalg.norm(resid[0:2]) < 0.003:
-                break
-            ex.set_goal(xyz=ex.goal - np.array([resid[0], resid[1], 0.0]))
+        welded, gate_ok, grasp_try = False, False, 0
+        pre_close = np.zeros(3)
+        first_pass = True
+        vadr = self.model.jnt_dofadr[
+            self.model.body_jntadr[self.cur["body"]]]
+        for grasp_try in range(3):
+            if grasp_try > 0:
+                # wait for the object to be AT REST before re-aiming: a
+                # knocked bottle keeps rolling, and an aim captured
+                # mid-roll misses by ~20 cm once it stops (measured)
+                self.run_until(frames, task,
+                               lambda: float(np.linalg.norm(
+                                   self.data.qvel[vadr:vadr + 6])) < 0.03,
+                               timeout_s=5.0)
+            # aim (and, for a fallen bottle, yaw) from the LIVE pose
+            aim, yaw_g = self.live_target()
+            if yaw_g is not None:
+                ex.set_goal(yaw=yaw_g)
+            if first_pass:
+                # travel above the object, arm at the camera-down pose
+                over = aim - ex.off_travel + np.array([0, 0, 0.30])
+                ex.set_goal(xyz=over, arm=ex.q_travel)
+                ok &= self.settle_near(frames, task)
+                first_pass = False
+            # Swing to the grasp pose AT ALTITUDE, then descend VERTICALLY
+            # (D17: swinging while descending swept the pads through cap
+            # height). For a fallen target, finish the reorienting yaw
+            # turn up here too.
+            at = aim - ex.off_grasp
+            ex.set_goal(xyz=np.array([at[0], at[1], at[2] + 0.30]),
+                        arm=ex.q_grasp)
+            ok &= self.settle_near(frames, task, tol=0.03)
+            if yaw_g is not None:
+                self.run_until(frames, task,
+                               lambda: abs(ex.yaw - yaw_g) < 0.02,
+                               timeout_s=8.0)
+            ex.set_goal(xyz=at + np.array([0, 0, self.cur["stage"]]))
             ok &= self.settle_near(frames, task)
-        corr = ex.goal - (at + np.array([0, 0, 0.04]))   # keep for descent
-        ex.set_goal(xyz=at + corr)
-        ok &= self.settle_near(frames, task, tol=0.015)
-        # At-depth settled correction with OPEN jaws. Open pads at cap
-        # height verifiably do not disturb the bottle (measured); this pass
-        # brings the residual under ~1.5 mm so the pre-narrowed pads clear.
-        for _ in range(3):
-            resid = self.jaws() - aim
-            # correct ALL THREE axes: platform changes (e.g. arm servo
-            # strength) shift the vertical FK bias by several mm, and a
-            # +4 mm-high pinch on the cap drops the bottle at lift
-            if np.linalg.norm(resid[0:2]) < 0.0015 and abs(resid[2]) < 0.002:
-                break
-            ex.set_goal(xyz=ex.goal - resid)
-            self.settle_near(frames, task, tol=0.012)
-        # Gate on measured alignment, then pre-narrow, then close.
-        # Pre-narrowing is load-bearing for the weight: measured repeatedly,
-        # a full-open (32 mm) close ghosts through the 16 mm stem while a
-        # pre-narrowed (24 mm) close seats at ~7.5 mm aperture.
-        gate_r = self.cur["gate_xy"]
-        aligned = lambda: (np.linalg.norm((self.jaws() - aim)[0:2]) < gate_r
-                           and (self.jaws() - aim)[2] > -0.006)
-        gate_ok = self.run_until(frames, task, aligned, timeout_s=3.0,
-                                 min_hold=1)
-        narrow = self.cur["narrow"]
-        ex.set_goal(grip=narrow)
-        self.run_until(frames, task, lambda: abs(ex.grip - narrow) < 0.01,
-                       timeout_s=1.5)
-        self.run_until(frames, task, lambda: False, timeout_s=0.8)
-        pre_close = self.jaws() - aim
-        # Weld at the CLEAN pre-close moment: gate on measured geometric
-        # alignment (jaws on the stem axis) BEFORE commanding the close --
-        # the ghost-close's deep pad penetration (L7 contact regime) shoves
-        # the airframe several mm during the seat, so a post-seat gate
-        # measures solver artifacts, not the grasp. The real gripper grips
-        # whenever this pre-close geometry holds.
-        welded = bool(np.linalg.norm(pre_close) < 0.008)
-        # Weld protocol -- FOURTH design, first three measured and failed:
-        #  - no weld during seat: the free weight's stem ghosts through
-        #    the pads, jaws close to 0.0 mm THROUGH it;
-        #  - fixed pre-close datum, kept: the seat shove displaces the
-        #    airframe below weld-neutral, the weld-vs-floor fight pins the
-        #    drone low while the PD integrator winds up (~24 s stall),
-        #    then slingshots it (+0.86 m peak, 0.26 m sag) -- the reviewed
-        #    "falls down then gets back up" artifact;
-        #  - continuous 0.2 s datum re-capture: the pads RATCHET through
-        #    the stem window by window (ap 0.0, drone never lifts).
-        # Final: fixed datum through close+seat (rigid -> pads seat at
-        # 7.6 mm), ONE post-seat re-capture (clean geometry), then zero
-        # the PD position integrator. The wind-up it discards was injected
-        # by the seat shove, itself a sim-only contact artifact (L7): the
-        # real 0.5 N pinch cannot shove the airframe. Removing it removes
-        # the slingshot without touching platform dynamics.
-        if welded:
-            self.weld_grasp(True)
-        i_pre = self.ctrl.mppi._i_pos.copy()    # legitimate pre-close trim
-        # Close to the STEM WIDTH (grip 0.45 = 7.2 mm/side), not to 0.0:
-        # commanding a full close drives each pad 8 mm INTO the welded-
-        # rigid stem, and that ghost-penetration shove is what destabilised
-        # every earlier build (squat + integrator fight at the backward
-        # pose; outright CAPSIZE at the forward pose -- traced: thrust
-        # projection collapsed to 0.9 N with the airframe on its side).
-        # Closing to the surface seats the pads with near-zero commanded
-        # intrusion; the weld, gated on the measured pre-close alignment,
-        # carries the load exactly as the real 0.5 N pinch does (L7).
-        close = self.cur["close"]     # object-width close (stem/cap)
-        ex.set_goal(grip=close)
-        self.run_until(frames, task, lambda: abs(ex.grip - close) < 0.01,
-                       timeout_s=2.0)
-        # NO seat dwell. Traced at the forward pose: any D5 sag while the
-        # welded weight is still floor-supported stretches the weld, and
-        # the constraint force on the gripper's long forward lever
-        # CAPSIZES the airframe (thrust projection 0.9 N, drone on its
-        # side). The weld freezes the pads-on-stem pose rigidly, so a
-        # settling dwell adds nothing -- re-capture the datum at the
-        # settled post-close pose, restore the pre-close integrator trim,
-        # and climb immediately; the weight is airborne within ~0.5 s and
-        # the transfer sag is absorbed at the stage-1 dwell 12 cm up.
-        if welded:
-            self.weld_grasp(True)               # datum re-capture
-            self.ctrl.mppi._i_pos[:] = i_pre
+            # ALL-AXIS correction +4 cm above the object (D19): open pads
+            # clear of everything; kills the loaded FK/droop z-bias that
+            # otherwise levers the bottle over at the cap's bottom edge.
+            # Tracks the LIVE target so a rolled bottle is followed.
+            for _ in range(3):
+                resid = self.jaws() - (aim + np.array([0, 0, self.cur["stage"]]))
+                if (np.linalg.norm(resid[0:2]) < 0.0015
+                        and abs(resid[2]) < 0.003):
+                    break
+                ex.set_goal(xyz=ex.goal - resid)
+                ok &= self.settle_near(frames, task)
+            corr = ex.goal - (at + np.array([0, 0, self.cur["stage"]]))
+            # Descend at NORMAL speed (D19: creep descents accumulate
+            # loaded y-drift, measured +11 mm bimodal landings).
+            # HARD-GATE the descent on LIVE jaw alignment: the tight
+            # settles can time out under the loaded trim (their False
+            # return was accumulated into `ok` but never gated anything),
+            # and descents then launched from poses tens of mm off,
+            # sweeping the open jaws through cap height -- the actual
+            # knock mechanism, reshuffled by timing noise across builds.
+            aligned_xy = self.run_until(
+                frames, task,
+                lambda: float(np.linalg.norm(
+                    (self.jaws() - aim)[0:2])) < 0.010,
+                timeout_s=8.0)
+            if not aligned_xy:
+                continue          # never descend misaligned; retry pass
+            ex.set_goal(xyz=at + corr)
+            descend_bad = False
+            for _ in range(int(6.0 * FPS)):
+                self.step(frames, task)
+                exy = float(np.linalg.norm((self.jaws() - aim)[0:2]))
+                if exy > 0.025:
+                    descend_bad = True     # drifting toward a sweep:
+                    break                  # abort upward immediately
+                if (abs(float((self.jaws() - aim)[2])) < 0.005
+                        and exy < 0.010):
+                    break
+            if descend_bad:
+                ex.set_goal(xyz=at + corr + np.array([0, 0, 0.20]))
+                self.settle_near(frames, task, tol=0.06, timeout_s=6.0)
+                continue
+            # Close as soon as the object sits within the gate tolerance;
+            # correct only if actually outside it (D19: no pre-grip
+            # shuffle -- the dance was the knock mechanism).
+            # gate axes live in the GRIPPER frame: after a reorienting
+            # yaw (fallen-bottle grasp) the closing axis is no longer
+            # world-x, and testing world axes let up to 6.5 mm of
+            # closing-axis error through the 2 mm gate (measured: the
+            # pre-narrow then clips the lying cap and rolls the bottle)
+            def gframe(rvec):
+                cy, sy = np.cos(ex.yaw), np.sin(ex.yaw)
+                return np.array([cy * rvec[0] + sy * rvec[1],
+                                 -sy * rvec[0] + cy * rvec[1], rvec[2]])
+            for _ in range(3):
+                resid = self.jaws() - aim
+                g = gframe(resid)
+                if (abs(g[0]) < self.cur["gate_x"]
+                        and abs(g[1]) < self.cur["gate_y"]
+                        and abs(g[2]) < 0.004):
+                    break
+                ex.set_goal(xyz=ex.goal - resid)
+                self.settle_near(frames, task, tol=0.010)
+            # pre-narrow -> gate -> weld+close BACK-TO-BACK (D19: the old
+            # gate->narrow->pause order left ~4 s of hover drift between
+            # the alignment check and the weld capture)
+            narrow = self.cur["narrow"]
+            ex.set_goal(grip=narrow)
+            self.run_until(frames, task,
+                           lambda: abs(ex.grip - narrow) < 0.01,
+                           timeout_s=0.8, min_hold=1)
+            gx, gy = self.cur["gate_x"], self.cur["gate_y"]
+            aligned = lambda: (abs(gframe(self.jaws() - aim)[0]) < gx
+                               and abs(gframe(self.jaws() - aim)[1]) < gy
+                               and (self.jaws() - aim)[2] > -0.006)
+            gate_ok = self.run_until(frames, task, aligned, timeout_s=2.0,
+                                     min_hold=1)
+            pre_close = self.jaws() - aim
+            close = self.cur["close"]     # object-width close (stem/cap)
+            if yaw_g is not None:
+                # FALLEN grasp: APERTURE-CONFIRMED pickup (review
+                # 2026-08-19: "when the MuJoCo clamp no longer shuts we
+                # know we have picked up the dropped mustard"). Close on
+                # any plausible pose; if the clamp physically STOPS at
+                # cap width, the cap is between the pads -- weld at the
+                # seated pose and lift. A full shut means a miss: reopen
+                # and retry from the live pose.
+                welded = False
+                # ANISOTROPIC plausibility in the gripper frame (same
+                # lesson as the alignment gate): the lying-cap landing
+                # error lives mostly ALONG the cap axis, where a deeper
+                # or shallower seat is harmless -- the ep15 air-welds
+                # were CROSS-axis offsets (bottle beside the jaws)
+                gpc = gframe(pre_close)
+                if (abs(gpc[0]) < 0.006 and abs(gpc[1]) < 0.015
+                        and abs(gpc[2]) < 0.010):
+                    i_pre = self.ctrl.mppi._i_pos.copy()
+                    ex.set_goal(grip=close)
+                    self.run_until(frames, task,
+                                   lambda: abs(ex.grip - close) < 0.01,
+                                   timeout_s=2.0)
+                    self.run_until(frames, task, lambda: False,
+                                   timeout_s=0.5)
+                    # the cap must PHYSICALLY be between the jaws before
+                    # welding: the aperture alone is circular here (the
+                    # close commands cap width, so an air-close also
+                    # stops at 11.2 mm) -- an air-weld carried the bottle
+                    # floating beside the jaws (review, ep15). Verify
+                    # against the live cap site.
+                    cap_now, _ = self.live_target()
+                    # 13 mm: the close CENTRES the cap a few mm (the
+                    # pinch working), so a 10 mm check refused honest
+                    # grasps; ep15's air-welds sat at 15+ mm
+                    seated = (float(np.linalg.norm(
+                        self.jaws() - cap_now)) < 0.013
+                        and float(self.data.qpos[self.gadr]) > 0.008)
+                    if seated:
+                        welded = True
+                        self.weld_grasp(True)   # datum = seated pose
+                        self.ctrl.mppi._i_pos[:] = i_pre
+                        break
+                    ex.set_goal(grip=1.0)       # not seated: reopen
+                    self.run_until(frames, task,
+                                   lambda: ex.grip > 0.99,
+                                   timeout_s=1.5, min_hold=1)
+            else:
+                # UPRIGHT grasp: validated pre-close-gated weld protocol
+                # (D12/D14) -- close only on a verified pose (a blind
+                # close on a missed pose shoves the object).
+                welded = bool(np.linalg.norm(pre_close) < 0.008
+                              and self.object_settled())
+                if welded:
+                    self.weld_grasp(True)
+                    i_pre = self.ctrl.mppi._i_pos.copy()
+                    ex.set_goal(grip=close)
+                    self.run_until(frames, task,
+                                   lambda: abs(ex.grip - close) < 0.01,
+                                   timeout_s=2.0)
+                    # post-close aperture sanity: the clamp must have
+                    # stopped at the object's width -- anything outside
+                    # the seated range is a cheaty weld (air, mid-tip,
+                    # neck), so release it and retry
+                    ap_now = float(self.data.qpos[self.gadr]) * 1000
+                    if self.cur["ap_lo"] < ap_now < self.cur["ap_hi"]:
+                        self.weld_grasp(True)       # datum re-capture
+                        self.ctrl.mppi._i_pos[:] = i_pre
+                        break
+                    self.weld_grasp(False)
+                    welded = False
+            # Missed or knocked: REORIENT drone and gripper to the
+            # target's live pose and try once more (review 2026-08-19:
+            # "when the mustard falls, reorientate the gripper to the new
+            # position of the cap and pick it up") -- reopen, ascend
+            # clear; the next pass re-aims from wherever the object is.
+            ex.set_goal(grip=1.0)
+            self.run_until(frames, task, lambda: ex.grip > 0.99,
+                           timeout_s=1.5, min_hold=1)
+            ex.set_goal(xyz=np.array([float(self.data.qpos[0]),
+                                      float(self.data.qpos[1]),
+                                      float(aim[2]) + 0.45]))
+            self.settle_near(frames, task, tol=0.06, timeout_s=8.0)
         ap = float(self.data.qpos[self.gadr])
-        self._diag = {"ap_close_mm": round(ap * 1000, 1), "welded": welded}
+        self._diag = {"ap_close_mm": round(ap * 1000, 1),
+                      "welded": welded, "retried": grasp_try > 0}
+        if welded:
+            # grasp-confirmation dwell (review 2026-08-19): hold ~0.3 s
+            # after the close before lifting, as on the real platform
+            # where the pinch must be confirmed before committing
+            self.run_until(frames, task, lambda: False, timeout_s=0.3)
         # lift; on a failed grasp, RE-GRASP once (the validated 90->96.7%
         # mechanism from the pedestal pipelines): reopen, re-correct against
         # the bottle's LIVE position, close again.
@@ -487,21 +728,6 @@ class Runner:
         self.run_until(frames, task,
                        lambda: float(self.data.qpos[self.cur["adr"] + 2]) > 0.04,
                        timeout_s=4.0)
-        # Extend the arm to the forward carry pose and WAIT for it to
-        # arrive before climbing: the swing to full forward reach takes
-        # ~10 s at the platform's safety-limited arm slew, and climbing
-        # during it leaves the object dangling in the forward camera's
-        # under-body blind spot with no arm in frame ("object floating in
-        # space", review -- measured on the bottle episodes, whose long
-        # body is what makes the armless frames so visible). Waiting at
-        # 12 cm keeps the object just off the floor, where the D5 sag is
-        # also absorbed, and the low sweep is over open mat.
-        ex.set_goal(arm=ex.q_carry)
-        self.run_until(frames, task,
-                       lambda: float(np.linalg.norm(
-                           self.data.qpos[7:9] - ex.q_carry)) < 0.06,
-                       timeout_s=14.0)
-        self.run_until(frames, task, lambda: False, timeout_s=1.0)
         # Climb to hover altitude and STABILISE before turning (review
         # 2026-08-19: no turning straight off the pickup). The at-hover
         # check is altitude-threshold + near-zero vertical speed, not a
@@ -516,64 +742,55 @@ class Runner:
         # nose is the body -y axis: at yaw 0 it points along world -y, so
         # facing a world direction (tx, ty) needs yaw = atan2(tx, -ty)
         here = self.data.qpos[0:2]
-        yaw_des = float(np.arctan2(BIN_XY[0] - here[0],
-                                   -(BIN_XY[1] - here[1])))
+        yaw_des = float(np.arctan2(self.bin_xy[0] - here[0],
+                                   -(self.bin_xy[1] - here[1])))
         ex.set_goal(yaw=yaw_des)
         self.run_until(frames, task,
                        lambda: abs(ex.yaw - yaw_des) < 0.02, timeout_s=8.0)
 
         held = float(self.data.qpos[self.cur["adr"] + 2]) > 0.15
-        if not held:
-            b_now = self.data.qpos[self.cur["adr"]:self.cur["adr"] + 3]
-            upright = abs(float(b_now[2])) < 0.01
-            if upright:
-                aim = np.array([float(b_now[0]), float(b_now[1]), WEIGHT_AIM_Z])
-                ex.set_goal(grip=1.0)
-                self.run_until(frames, task, lambda: ex.grip > 0.99,
-                               timeout_s=1.5)
-                ex.set_goal(xyz=aim - ex.off_grasp + np.array([0, 0, 0.04]))
-                self.settle_near(frames, task, tol=0.015)
-                for _ in range(2):
-                    resid = self.jaws() - (aim + np.array([0, 0, 0.04]))
-                    if np.linalg.norm(resid[0:2]) < 0.0015:
-                        break
-                    ex.set_goal(xyz=ex.goal - np.array([resid[0], resid[1], 0]))
-                    self.settle_near(frames, task, tol=0.012)
-                ex.set_goal(xyz=ex.goal - np.array([0, 0, 0.04]))
-                self.settle_near(frames, task, tol=0.012)
-                self.run_until(frames, task, aligned, timeout_s=1.5, min_hold=1)
-                ex.set_goal(grip=close)
-                self.run_until(frames, task,
-                               lambda: abs(ex.grip - close) < 0.01,
-                               timeout_s=2.0)
-                if float(np.linalg.norm(self.jaws() - aim)) < 0.008:
-                    self.weld_grasp(True)
-                ex.set_goal(xyz=ex.goal + np.array([0, 0, 0.45]))
-                ok &= self.settle_near(frames, task, tol=0.05)
-                held = float(self.data.qpos[self.cur["adr"] + 2]) > 0.15
-        # Bin approach in TWO legs, payload-aimed (review: "drove over
-        # and past the box then back" -- two separate causes, both fixed
-        # here). (1) The forward carry pose makes the object lead the
-        # body by the arm's reach, so a body-aimed goal flies the payload
-        # past the centre: pre-compensate with the measured hang.
-        # (2) The loaded PD glides ~0.3 m past an abruptly-stopped
-        # setpoint on momentum: stop 0.35 m short at carry speed, then
-        # creep the final leg at 0.05 m/s and arrive glide-free.
-        hang = (self.data.qpos[self.cur["adr"]:self.cur["adr"] + 2]
-                - self.data.qpos[0:2])
-        goal_xy = np.array([BIN_XY[0] - hang[0], BIN_XY[1] - hang[1]])
-        dirn = goal_xy - self.data.qpos[0:2]
+        # Bin approach: cruise with the arm TUCKED, extend it EN ROUTE
+        # (review 2026-08-19, "only reach out the arm when at the box"):
+        # the tucked cruise removes most of the payload pitch-moment lead
+        # that made weight drops take 18-35 s, and the ~10 s arm swing
+        # overlaps the ~10 s approach flight, so it costs no time. The
+        # first leg is body-aimed and stops 0.45 m short (0.2 m of coming
+        # arm reach + 0.25 m of brake margin); at the brake -- with the
+        # arm arrived -- the payload hang and the residual loaded lead are
+        # BOTH measured fresh, and the creep leg aims the payload dead at
+        # the bin centre.
+        dirn = self.bin_xy - self.data.qpos[0:2]
         dirn = dirn / max(1e-6, np.linalg.norm(dirn))
-        ex.set_goal(xyz=np.array([*(goal_xy - 0.35 * dirn), 0.75]))
+        # Fly to the bin EDGE with the arm still tucked -- extending the
+        # arm mid-flight shifts the CoM while translating and the
+        # attitude loop visibly chases it (review 2026-08-19: "the flight
+        # looks unstable ... go to the side or edge, stay at hover, then
+        # extend arm to avoid jerkiness").
+        # 0.75 m short, not 0.45: extending the arm shifts the CoM and
+        # the body drifts forward ~0.3 m while it happens ("overshooting
+        # by the box", review) -- from 0.75 m out the drift stays in open
+        # air and the final leg is one monotonic forward creep.
+        ex.set_goal(xyz=np.array([*(self.bin_xy - 0.75 * dirn), 0.75]))
         self.settle_near(frames, task, tol=0.20, timeout_s=25.0)
-        # BRAKE at the waypoint before creeping in: the settle above can
-        # pass while still moving at cruise speed, and the loaded lateral
-        # PD is soft enough that carried momentum glides the body ~0.6 m
-        # past the bin (traced). Hold until ground speed is truly low.
         self.run_until(frames, task,
                        lambda: float(np.linalg.norm(
                            self.data.qvel[0:2])) < 0.03,
                        timeout_s=8.0)
+        # dead hover at the edge: NOW extend the arm, stationary, and let
+        # the platform re-trim before measuring anything
+        ex.set_goal(arm=ex.q_carry)
+        self.run_until(frames, task,
+                       lambda: float(np.linalg.norm(
+                           self.data.qpos[7:9] - ex.q_carry)) < 0.06,
+                       timeout_s=14.0)
+        self.run_until(frames, task,
+                       lambda: float(np.linalg.norm(
+                           self.data.qvel[0:2])) < 0.03,
+                       timeout_s=6.0)
+        hang = (self.data.qpos[self.cur["adr"]:self.cur["adr"] + 2]
+                - self.data.qpos[0:2])
+        lead = self.data.qpos[0:2] - ex.sp[0:2]
+        goal_xy = self.bin_xy - hang - lead
         ex.slow = True
         ex.set_goal(xyz=np.array([goal_xy[0], goal_xy[1], 0.75]))
         # Transport budget sized to the distance at carry speed (1.3 m at
@@ -588,31 +805,66 @@ class Runner:
         # A pilot aims the hanging payload: coarse-arrive, then correct
         # the goal by the weight's measured residual over the bin centre
         # (the same settled-residual discipline as the jaw corrections).
-        self.settle_near(frames, task, tol=0.12, timeout_s=15.0)
+        # Wait for SP-arrival + stillness, NOT body-vs-goal proximity:
+        # with lead compensation the body parks `lead` away from the goal
+        # BY DESIGN (~0.28 m at 100 g), so a body-position settle can
+        # never pass and burned its full timeout on every weight episode
+        # (measured 18-35 s drop latency; the payload-residual loop below
+        # is the real arrival criterion).
+        self.run_until(frames, task,
+                       lambda: (float(np.linalg.norm(ex.sp - ex.goal))
+                                < 0.01
+                                and float(np.linalg.norm(
+                                    self.data.qvel[0:2])) < 0.04),
+                       timeout_s=16.0)
         arrived_bin = False
         for _ in range(3):
             w_xy = self.data.qpos[self.cur["adr"]:self.cur["adr"] + 2]
-            resid = np.array([w_xy[0] - BIN_XY[0],
-                              w_xy[1] - BIN_XY[1], 0.0])
+            resid = np.array([w_xy[0] - self.bin_xy[0],
+                              w_xy[1] - self.bin_xy[1], 0.0])
             if np.linalg.norm(resid[:2]) < 0.08:
                 arrived_bin = True
                 break
             ex.set_goal(xyz=ex.goal - resid)
-            self.settle_near(frames, task, tol=0.18, timeout_s=8.0)
+            self.run_until(frames, task,
+                           lambda: (float(np.linalg.norm(ex.sp - ex.goal))
+                                    < 0.01
+                                    and float(np.linalg.norm(
+                                        self.data.qvel[0:2])) < 0.04),
+                           timeout_s=6.0)
         if arrived_bin:
+            # Release LOW: dropping from carry height reads as THROWING,
+            # and the unload pop (the PD's payload trim releasing -- the
+            # counterpart of the D5 pickup sag) amplifies it. Descend so
+            # the payload hangs ~10 cm above the rim, then let go.
+            hang_z = float(self.data.qpos[2]
+                           - self.data.qpos[self.cur["adr"] + 2])
+            # payload releases ~22 cm above the rim (review 2026-08-19:
+            # was 10 cm, raised so the unload wobble can't clip the box
+            # walls while the drone restabilises; still far below the
+            # carry-height release that read as throwing)
+            ex.set_goal(xyz=np.array([float(ex.goal[0]), float(ex.goal[1]),
+                                      0.16 + 0.22 + hang_z]))
+            self.run_until(frames, task,
+                           lambda: (float(np.linalg.norm(
+                                        ex.sp - ex.goal)) < 0.01
+                                    and abs(float(
+                                        self.data.qvel[2])) < 0.05),
+                           timeout_s=8.0)
             self.weld_grasp(False)
             ex.set_goal(grip=1.0)
             self.run_until(frames, task, lambda: ex.grip > 0.99,
-                           timeout_s=2.0)
-            self.run_until(frames, task, lambda: False, timeout_s=1.0)  # fall
+                           timeout_s=2.0, min_hold=1)
+            self.run_until(frames, task, lambda: False, timeout_s=0.6)  # fall
         ex.slow = False
-        ex.set_goal(xyz=np.array([BIN_XY[0], BIN_XY[1] - 0.5, 0.9]),
+        ex.set_goal(xyz=np.array([self.bin_xy[0], self.bin_xy[1] - 0.5, 0.9]),
                     arm=ex.q_travel)
         self.settle_near(frames, task, tol=0.08, timeout_s=6.0)
+        self.run_until(frames, task, lambda: False, timeout_s=1.0)  # hover out
 
         b = self.data.qpos[self.cur["adr"]:self.cur["adr"] + 3]
-        placed = (abs(b[0] - BIN_XY[0]) < 0.21 and
-                  abs(b[1] - BIN_XY[1]) < 0.21 and b[2] < 0.20)
+        placed = (abs(b[0] - self.bin_xy[0]) < 0.21 and
+                  abs(b[1] - self.bin_xy[1]) < 0.21 and b[2] < 0.20)
         # Success = PLACED: an object cannot arrive at rest inside the bin
         # without having been picked and carried there. The mid-episode
         # `held` sample is diagnostic only -- it was measured misreading a
@@ -631,9 +883,10 @@ class Runner:
         gate_xy = np.array(GATE_LEFT if rng.random() < 0.5 else GATE_RIGHT)
         bxy = np.array([rng.uniform(-0.30, 0.30), rng.uniform(0.35, 0.85)])
         jit = 0.25 if corrective else 0.10
+        jit = max(jit, 0.35)   # wide lateral start variation (review)
         start = np.array([gate_xy[0] + rng.uniform(-jit, jit),
-                          rng.uniform(-1.7, -1.4),
-                          rng.uniform(0.65, 0.95) + (0.15 if corrective else 0)])
+                          rng.uniform(-1.9, -1.2),
+                          rng.uniform(0.60, 1.00) + (0.15 if corrective else 0)])
         # Spawn facing the direction of flight (+y): the gate and the
         # hover target sit in the scene camera the whole run, as in the
         # paper. The PD yaw error is wrap-aware, so holding pi is safe.
@@ -720,11 +973,23 @@ def main():
         attempts += 1
         if kind == "manip":
             frames, info = r.manip_episode(obj=obj)
+        elif kind == "corrective" and saved % 2 == 0:
+            # corrective slots alternate: fallen-bottle recovery / nav
+            frames, info = r.manip_episode(obj="mustard bottle",
+                                           fallen_start=True)
         else:
             frames, info = r.nav_episode(
                 corrective=(kind == "corrective"), obj=obj)
-        if not info["success"]:
-            print(f"  attempt {attempts} [{kind}] DISCARDED: {info}", flush=True)
+        # bank only CLEAN episodes (review 2026-08-19, episode 8: a
+        # 1825-frame triple-retry marathon with a gate-failed marginal
+        # pinch banked because it eventually placed): the final grasp
+        # must have passed the alignment gate, and marathon episodes
+        # (>1100 frames ~ 110 s) self-discard.
+        clean = (info["success"] and info.get("gate", True)
+                 and len(frames) <= 1100)
+        if not clean:
+            print(f"  attempt {attempts} [{kind}] DISCARDED "
+                  f"({len(frames)} fr): {info}", flush=True)
             continue
         for f in frames:
             dataset.add_frame(f)
