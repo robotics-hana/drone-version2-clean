@@ -104,8 +104,10 @@ import mujoco
 import mujoco.viewer   # must be module level: importing it inside main() would
                        # rebind `mujoco` as a local and shadow this import
 
-from lerobot.datasets.lerobot_dataset import LeRobotDataset
-
+# LeRobot is imported lazily, inside main(), because it is only needed to WRITE a
+# dataset. At module level it made --no-save impossible on any machine without the
+# full dataset stack installed, which is exactly the machine you want for a quick
+# smoke run or a physics check after touching the model.
 from create_force_general import PureMPPIController, MPPIParams
 from pd_flight import PDFlightController
 
@@ -122,6 +124,7 @@ IMG_H, IMG_W = 480, 640
 CAMERAS = {
     "camera1": "wrist_cam",    # manipulation close-up, top-down over the jaws
     "camera2": "scene_cam",    # forward/navigation view from the nose
+    "camera3": "overview_cam", # body-mounted overview of the workspace
 }
 
 # EXTEND exists because the arm and the body must never move at the same time.
@@ -146,24 +149,30 @@ STATE_NAMES = (
 )
 ACTION_NAMES = ["drone_x", "drone_y", "drone_z", "joint1", "joint2", "gripper"]
 
-# Gripper aperture, in metres of clamp travel. LOWER ctrl = MORE CLOSED.
+# Gripper aperture, in metres of ONE paddle's travel. LOWER ctrl = MORE CLOSED.
 #
-# This was previously coded the other way round (OPEN=0.025, CLOSED=0.037) and it
-# was wrong. Ray-casting straight through the grasp centre and rendering the jaws
-# at a sweep of commands both show the blades TOGETHER at 0.000 and WIDEST at
-# 0.037. The earlier "confirmation" from the slide-joint signs had the two clamps'
-# sides swapped.
-# Measured gap between the visible jaw faces (linear, 2 mm per 0.001 of command):
-#     0.000 -> 15.7 mm   (closed; squeezes a 20 mm block by 4.3 mm)
-#     0.005 -> 25.7 mm
-#     0.013 -> 41.7 mm   (open; clears a 20 mm block by ~11 mm a side)
-#     0.037 -> 89.7 mm   (fully open)
-# Collision is done by the clamp MESHES themselves, so what is rendered is what
-# grips. The invisible pad boxes that used to do this were removed: they had been
-# placed on the wrong sides of their own parent blades, so they scissored the
-# opposite way to the visible jaws and held the block 14 mm INSIDE the geometry
-# on screen -- the block appeared to be cut into the gripper.
-GRIPPER_OPEN = 0.013
+# Rewritten for the Pololu Micro Gripper Kit (V0.19.0). The paddles are driven by
+# opposing racks off one pinion, so they move symmetrically and the gap is exactly
+# twice the command -- no table needed, and no mesh-derived fudge:
+#     gap_mm = 2000 * ctrl        0.000 -> 0 mm (shut)   0.016 -> 32 mm (fully open)
+# 32 mm is the kit's quoted range of motion and is the actuator's ctrlrange in the
+# XML, so 0.016 IS fully open; asking for more is silently clamped.
+#
+# OPEN is the full 32 mm rather than a partial aperture. MAX_PRESENTED_WIDTH is
+# 24 mm, so full open leaves 4 mm a side and anything less gets tight fast -- the
+# old 0.013 carried over from the previous gripper and gives only 26 mm, i.e. 1 mm
+# a side on the widest sampled object.
+# The old gripper's numbers, for reference, because they look similar and are not:
+# it shut to a 15.7 mm gap (never touching a narrow block) and opened to 41.7 mm.
+# This one shuts to ZERO, so a closed command on a 20 mm object is a 20 mm
+# interference that simply stalls the servo against its force limit -- which is
+# what a real gripper does, and is where the grip force comes from.
+#
+# Collision is done by the invisible pad_1/pad_2 boxes, NOT by the paddle meshes:
+# MuJoCo collides a mesh as its convex hull, and the hull of a tapering blade is a
+# wedge that shoves the object out rather than gripping it. The pads sit flush on
+# the visible gripping faces, so what is rendered is still what grips.
+GRIPPER_OPEN = 0.016
 GRIPPER_CLOSED = 0.000
 
 # Phase advance. Two tolerances, because the phases have different needs:
@@ -183,6 +192,21 @@ GRIPPER_CLOSED = 0.000
 # cannot converge so one bad episode does not stall a 50-episode run.
 ARRIVE_TOL_TRANSIT = 0.05
 ARRIVE_TOL_PRECISE = 0.012
+# Close-gate (2026-08-16): GRASP does not BEGIN closing until the live jaw-to-
+# aim-point error in the CLOSING PLANE (xy) is inside this. Measured failures
+# closed at 11-12 mm lateral -- exactly the ARRIVE_TOL_PRECISE boundary, where a
+# jaw lands on the block's edge and shoves it out. xy only, NOT 3d: successful
+# grasps run +-15 mm of vertical error (the pads are tall), so a 3d gate would
+# starve good closes. A close that never aligns times out with the jaws OPEN,
+# lifts empty, and the re-grasp retry below handles it.
+CLOSE_GATE_TOL = 0.009
+# Re-grasp (2026-08-16): after LIFT and after TRANSPORT, if the target has not
+# risen at least this much, re-run DESCEND/GRASP/LIFT with every waypoint
+# translated by the object's measured displacement (and aimed 5 mm deeper --
+# still inside the verified 8-20 mm grip band). Only fires in episodes that
+# would otherwise FAIL, so successful episodes are bit-identical to before.
+REGRASP_RETRIES = 2
+REGRASP_LIFT_MIN = 0.04
 # Setting down is a coarser job than picking up: the jaws only have to get
 # the block near the surface before opening, and holding out for grasp
 # precision costs the block (see the tol choice in the phase loop).
@@ -930,7 +954,13 @@ OBJ_DEPTH_RANGE = (0.010, 0.013)
 # 44-56 mm keeps 24-36 mm of leg clearance while staying well under the height
 # that topples.
 OBJ_HALF_HEIGHT_RANGE = (0.022, 0.028)
-MAX_PRESENTED_WIDTH = 0.024      # pads close to 16.7 mm; this is the squeeze limit
+# Widest the object may PRESENT to the jaws (side * (|cos yaw| + |sin yaw|)).
+# Now an APPROACH-clearance limit, not a squeeze limit: the jaws open to 32 mm, so
+# 24 mm leaves 4 mm a side to descend around the object. (On the old gripper this
+# was a squeeze limit, because those jaws shut to 15.7 mm and could not close on
+# anything narrower. These shut to zero, so squeezing is no longer the binding
+# constraint -- fitting AROUND the object on the way down is.)
+MAX_PRESENTED_WIDTH = 0.024
 
 
 def _max_safe_yaw(side):
@@ -1209,12 +1239,14 @@ def build_plan(ik, obj, place, obj_half_height, reach_y=None):
     # logs showed (object z unchanged at 0.540). Grip verified over an 8-20 mm
     # band below the top face, so 15 mm sits in the middle of the window.
     # Derived from the half-height so it stays correct if the block is resized.
-    # 10 mm below the top face. The clear column above grasp_site is only about
-    # 12.6 mm tall before the housing intrudes, so letting the object protrude
-    # 15 mm above the site left no margin and the housing clipped it on the way
-    # down. 10 mm keeps the protrusion inside the clearance while still putting
-    # the 24 mm pads on the upper part of the block.
-    GRASP_RISE = obj_half_height - 0.010
+    # 13 mm below the top face. The clear column above grasp_site -- from the jaw
+    # midpoint up to the underside of the gripper body -- is exactly 10.0 mm on
+    # this gripper, so the object may protrude at most that far before the body
+    # itself fouls it on the way down. The old value of 0.010 sat exactly ON that
+    # limit, i.e. the top face grazing the body with zero margin; 0.013 keeps 3 mm
+    # of clearance while still putting the 18 mm pads over the upper part of the
+    # block. Re-measure this if the paddles or their protrusion ever change.
+    GRASP_RISE = obj_half_height - 0.013
 
     # Reaching poses hang shallower than the straight-down pose (the arm trades
     # depth for forward extension), so ask for a slightly smaller drop when
@@ -1471,7 +1503,19 @@ def run_episode(model, data, renderer, controller, ik, rng, task_template,
     # (40 substeps) or timestep=1/30000 if you ever need them to agree exactly.
     substeps = max(1, round((1.0 / FPS) / model.opt.timestep))
 
-    for phase, drone_xyz, joints, grip, servo_to in plan:
+    # Close-gate + re-grasp state (see CLOSE_GATE_TOL / REGRASP_RETRIES).
+    oadr_t = model.jnt_qposadr[model.body_jntadr[model.body("target_object").id]]
+    regrasp_left = REGRASP_RETRIES if is_pick else 0
+    # Jaw-to-aim residual measured while the gate is holding the close off. Only
+    # updated BEFORE the close starts: that is the systematic body->jaw offset a
+    # retry can correct; once closing, jaw-vs-object distance measures the push,
+    # which the retry already handles by re-aiming at the live object.
+    last_jaw_residual = np.zeros(3)
+    plan = list(plan)
+    pi = 0
+    while pi < len(plan):
+        phase, drone_xyz, joints, grip, servo_to = plan[pi]
+        close_started = False
         controller.set_targets(drone_xyz, joints, grip, servo_to=servo_to, ik=ik)
 
         # Phases advance on ARRIVAL, not on a timer. A fixed 1 s per phase cuts
@@ -1489,6 +1533,29 @@ def run_episode(model, data, renderer, controller, ik, rng, task_template,
                 mujoco.mj_step(model, data)
             if viewer is not None:
                 viewer.sync()
+
+            # Close-gate (CLOSE_GATE_TOL): hold the close off until the jaws
+            # are around the LIVE object in the closing plane. The residual is
+            # only sampled pre-close -- see the last_jaw_residual note above.
+            if phase == "GRASP" and is_pick:
+                jaws_now = grasp_site_pos(model, data)
+                op_now = data.qpos[oadr_t:oadr_t + 3]
+                aim_now = op_now + np.array(
+                    [0.0, GRASP_Y_OFFSET, info["obj_half_height"] - 0.013])
+                if not close_started:
+                    last_jaw_residual = aim_now - jaws_now
+                    # z is judged against the COMMANDED aim (servo_to): a retry
+                    # deliberately aims high over an edge-leaning block, and
+                    # gating z on the live object would starve that close.
+                    # Jaws more than 8 mm ABOVE aim close on the very top of
+                    # the block and drop it later -- so high closes wait, time
+                    # out open, and the retry corrects by the residual instead.
+                    last_jaw_residual[2] = servo_to[2] - jaws_now[2]
+                    if (np.linalg.norm(last_jaw_residual[0:2]) < CLOSE_GATE_TOL
+                            and last_jaw_residual[2] > -0.008):
+                        close_started = True
+                controller.gripper_cmd = (GRIPPER_CLOSED if close_started
+                                          else GRIPPER_OPEN)
 
             # On precise phases, judge arrival by where the JAWS are, not where
             # the body is. The body setpoint is being actively shifted by the
@@ -1523,6 +1590,9 @@ def run_episode(model, data, renderer, controller, ik, rng, task_template,
             # or LIFT starts before the block is held (see gripper_settled).
             if phase in ("GRASP", "RELEASE"):
                 arrived = arrived and controller.gripper_settled()
+                # A gated GRASP has not happened until the close actually began.
+                if phase == "GRASP" and is_pick:
+                    arrived = arrived and close_started
             # HOLD is the refusal dwell: never "arrive", so it records its full
             # budget of the drone holding station at the safe hover.
             if phase == "HOLD":
@@ -1570,6 +1640,46 @@ def run_episode(model, data, renderer, controller, ik, rng, task_template,
                   f"jaws z={gs[2]:.3f} | obj {np.round(op, 3)} "
                   f"jaw-obj dxy={dxy*1000:.0f}mm dz={(gs[2]-op[2])*1000:+.0f}mm | "
                   f"roll/pitch={np.degrees(_rp(data)):.0f}/{np.degrees(_rp(data,1)):.0f} deg")
+
+        pi += 1
+        # Re-grasp retry (REGRASP_RETRIES): the pick is verified after LIFT and
+        # again after TRANSPORT -- a marginal grip can survive the lift and let
+        # go in transit. Retry waypoints are TRANSLATED by the object's measured
+        # displacement (no IK re-solve), the body waypoint additionally shifted
+        # by the pre-close jaw residual (the systematic body->jaw offset), and
+        # aimed 5 mm deeper -- still inside the verified 8-20 mm grip band.
+        # Objects knocked to the FLOOR are not chased: the legs strike the
+        # pedestal below ~0.24 m body height (see the no-table note above).
+        if (phase in ("LIFT", "TRANSPORT") and is_pick and regrasp_left > 0
+                and data.qpos[oadr_t + 2] - info["obj_start"][2] < REGRASP_LIFT_MIN
+                # -0.06: a dropped block leaning half-off the pedestal edge sits
+                # ~30 mm below surface level and IS re-graspable; a true floor
+                # drop is ~0.5 m down and is not.
+                and data.qpos[oadr_t + 2] > info["surface_z"] - 0.06):
+            regrasp_left -= 1
+            delta = data.qpos[oadr_t:oadr_t + 3] - info["obj_start"]
+            # Chasing an edge-leaning block all the way down puts the BODY within
+            # the crash margin of the surface. Clamp the downward shift: grip up
+            # to 15 mm higher on the block instead -- the pads are tall enough.
+            delta[2] = np.clip(delta[2], -0.015, 0.05)
+            corr = np.clip(last_jaw_residual, -0.03, 0.03)
+            deeper = np.array([0.0, 0.0, -0.005])
+            d_t = next(t for t in plan if t[0] == "DESCEND")
+            g_t = next(t for t in plan if t[0] == "GRASP")
+            l_t = next(t for t in plan if t[0] == "LIFT")
+            retry = [("DESCEND", d_t[1] + delta + corr + deeper, d_t[2],
+                      GRIPPER_OPEN, d_t[4] + delta + deeper),
+                     ("GRASP", g_t[1] + delta + corr + deeper, g_t[2],
+                      GRIPPER_CLOSED, g_t[4] + delta + deeper),
+                     ("LIFT", l_t[1] + delta, l_t[2], GRIPPER_CLOSED, None)]
+            if phase == "TRANSPORT":
+                retry.append(next(t for t in plan if t[0] == "TRANSPORT"))
+            plan = plan[:pi] + retry + plan[pi:]
+            if verbose:
+                print(f"    RE-GRASP after {phase}: object not aloft, retrying "
+                      f"(obj moved {np.linalg.norm(delta[0:2])*1000:.0f}mm, corr "
+                      f"{np.round(corr[0:2]*1000).astype(int)}mm, "
+                      f"{regrasp_left} left)")
 
     return frames, info
 
@@ -1724,6 +1834,7 @@ def main():
 
     dataset = None
     if not args.no_save:
+        from lerobot.datasets.lerobot_dataset import LeRobotDataset
         dataset = LeRobotDataset.create(
             repo_id=args.out_repo_id, fps=FPS, features=features,
             robot_type="skygrip", rgb_encoder=pick_rgb_encoder(),

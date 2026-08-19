@@ -59,5 +59,5 @@ def render(open_cmd, site_z, path, cam_pos, cam_xy):
 if __name__ == "__main__":
     for label, z in (("centre", 0.540), ("low", 0.500)):
         for ang, az, el in (("front", 90, 0), ("side", 0, 0)):
-            render(0.037, z, f"jaw_{label}_{ang}_open.png", az, el)
+            render(0.016, z, f"jaw_{label}_{ang}_open.png", az, el)
             render(0.000, z, f"jaw_{label}_{ang}_shut.png", az, el)

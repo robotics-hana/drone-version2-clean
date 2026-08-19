@@ -1,0 +1,254 @@
+diff --git a/Sim'n'Real/Mujoco/SkyGrip_full.xml b/Sim'n'Real/Mujoco/SkyGrip_full.xml
+index 110fea3..dc97a14 100644
+--- a/Sim'n'Real/Mujoco/SkyGrip_full.xml
++++ b/Sim'n'Real/Mujoco/SkyGrip_full.xml
+@@ -132,6 +132,14 @@
+     <worldbody>
+         <geom name="ground" type="plane" size="20 20 0.1" material="grid_mat"/>
+ 
++        <!-- camera3: FIXED EXTERNAL tripod view (world frame). Supersedes spec
++             section 0's exclusion BY USER DECISION (2026-08-14): the A/B training
++             experiment needs one SmolVLA run on camera1+camera2 and one on all
++             three, to measure what the god's-eye view buys. Same viewpoint as the
++             verified pilot framing: eye ~(1.26, -0.91, 1.20) looking at the
++             workspace centre (0, 0.35, 0.55). -->
++        <camera name="external_cam" pos="1.263 -0.913 1.200" xyaxes="1 1 0  -0.82 0.82 3.18" fovy="45"/>
++
+         <light name="sunlight" directional="true" pos="0 0 4" dir="0 0 -1" castshadow="true" diffuse="0.8 0.8 0.8"/>
+         <light name="ambient_fill" directional="false" pos="0 0 5" castshadow="false" diffuse="0.3 0.3 0.3" ambient="0.2 0.2 0.2"/>
+ 
+diff --git a/Sim'n'Real/Mujoco/collect_demos.py b/Sim'n'Real/Mujoco/collect_demos.py
+index 9baa71c..a2778f8 100644
+--- a/Sim'n'Real/Mujoco/collect_demos.py
++++ b/Sim'n'Real/Mujoco/collect_demos.py
+@@ -145,7 +145,8 @@ import mujoco
+ import mujoco.viewer   # must be module level: importing it inside main() would
+                        # rebind `mujoco` as a local and shadow this import
+ 
+-from lerobot.datasets.lerobot_dataset import LeRobotDataset
++# lerobot imported lazily inside the dataset-writing paths only, so the
++# pilot/no-save paths run on machines without the dataset stack.
+ 
+ from create_force_general import PureMPPIController, MPPIParams
+ from pd_flight import PDFlightController
+@@ -163,6 +164,13 @@ IMG_H, IMG_W = 480, 640
+ CAMERAS = {
+     "camera1": "wrist_cam",    # manipulation close-up, top-down over the jaws
+     "camera2": "scene_cam",    # forward/navigation view from the nose
++    # camera3 ADDED 2026-08-14, superseding V4_SPEC section 0 by user decision:
++    # the fixed external view IS a policy observation for the 3-camera arm of
++    # the SmolVLA A/B (train once on camera1+2, once on all three, compare).
++    # smolvla_base's input_features already name camera1/camera2/camera3, so
++    # this is the one extra key the checkpoint accepts. Render-only: consumes
++    # no rng, so same-seed collections stay episode-identical with 2-cam runs.
++    "camera3": "external_cam",  # fixed world-frame tripod (see SkyGrip_full.xml)
+ }
+ 
+ # EXTEND exists because the arm and the body must never move at the same time.
+@@ -2288,6 +2296,31 @@ def run_episode(model, data, renderer, controller, ik, rng, task_template,
+     for phase, drone_xyz, joints, grip, servo_to in plan:
+         controller.set_targets(drone_xyz, joints, grip, servo_to=servo_to, ik=ik)
+         phase_start = len(frames)
++        # PHASE-ADAPTIVE GRASP EXECUTOR (V4_SPEC section 11, gate-4 remedy #2;
++        # first pilot 2026-08-14). Root cause it addresses, measured on the
++        # seed-777 pilot: descent knock slides the object 60-90 mm sideways,
++        # and with SERVO_GAIN=0 nothing re-centres the jaws, so the scheduled
++        # close fires 36-56 mm from the displaced object and grips air (both
++        # act failures; jaw@close for passes was 10-30 mm). Under the flag the
++        # GRASP phase (expert-only, ground truth is legitimate here -- the
++        # trained policy still sees only pixels):
++        #   * tracks the object's LIVE position, keeping the plan's body-to-
++        #     object offset (knock compensation the servo trim was meant to
++        #     provide);
++        #   * delays the close until the jaw-object horizontal distance is
++        #     inside adaptive_close_mm, with a frame cap so a runaway object
++        #     cannot hang the phase.
++        # None (the default) is bit-identical to the shipped path.
++        adaptive_grasp = bool(timing and timing.get("adaptive_close_mm")
++                              and phase == "GRASP" and servo_to is not None)
++        if adaptive_grasp:
++            controller.gripper_cmd = GRIPPER_OPEN       # postpone the close
++            _ad_adr = model.jnt_qposadr[
++                model.body_jntadr[model.body("target_object").id]]
++            _ad_off = np.asarray(drone_xyz[:2]) - np.asarray(servo_to[:2])
++            _ad_gate = float(timing["adaptive_close_mm"]) / 1000.0
++            _ad_force = 60                              # 2 s cap on the wait
++            _ad_closed = False
+         # v4 ramped descent (V4_SPEC section 6): instead of stepping the body
+         # setpoint straight to the grasp height (descent time then = PD settle,
+         # 24-26 frames on v3), command a CONSTANT-RATE z ramp over descend_frames
+@@ -2326,6 +2359,16 @@ def run_episode(model, data, renderer, controller, ik, rng, task_template,
+                 controller.drone_target = np.array(
+                     [drone_xyz[0], drone_xyz[1],
+                      ramp_z0 + a_r * (drone_xyz[2] - ramp_z0)])
++            if adaptive_grasp:
++                _obj = data.qpos[_ad_adr:_ad_adr + 3]
++                controller.drone_target = np.array(
++                    [_obj[0] + _ad_off[0], _obj[1] + _ad_off[1], drone_xyz[2]])
++                if not _ad_closed:
++                    _gs = grasp_site_pos(model, data)
++                    if (np.linalg.norm(_gs[0:2] - _obj[0:2]) <= _ad_gate
++                            or f_i >= _ad_force):
++                        controller.gripper_cmd = GRIPPER_CLOSED
++                        _ad_closed = True
+             for _ in range(substeps):
+                 controller.step()
+                 mujoco.mj_step(model, data)
+@@ -2365,6 +2408,12 @@ def run_episode(model, data, renderer, controller, ik, rng, task_template,
+             # or LIFT starts before the block is held (see gripper_settled).
+             if phase in ("GRASP", "RELEASE"):
+                 arrived = arrived and controller.gripper_settled()
++                if adaptive_grasp:
++                    # positional arrival was judged against the PLAN's grasp
++                    # point; the executor now follows the live object, so the
++                    # phase is done when the close has been issued and the jaws
++                    # have finished slewing shut.
++                    arrived = _ad_closed and controller.gripper_settled()
+             # HOLD is the refusal dwell: never "arrive", so it records its full
+             # budget of the drone holding station at the safe hover.
+             # HOLD and INSPECT both run their FULL budget rather than exiting on
+@@ -2680,6 +2729,7 @@ def main():
+ 
+     dataset = None
+     if not args.no_save:
++        from lerobot.datasets.lerobot_dataset import LeRobotDataset
+         dataset = LeRobotDataset.create(
+             repo_id=args.out_repo_id, fps=FPS, features=features,
+             robot_type="skygrip", rgb_encoder=pick_rgb_encoder(),
+diff --git a/Sim'n'Real/Mujoco/collect_v4.py b/Sim'n'Real/Mujoco/collect_v4.py
+index 6b4c835..aa94117 100644
+--- a/Sim'n'Real/Mujoco/collect_v4.py
++++ b/Sim'n'Real/Mujoco/collect_v4.py
+@@ -310,7 +310,7 @@ def spawn_v4(model, data, v4, scene, seg_renderer):
+ 
+ def run_episode_v4(model, data, renderer, controller, ik, rng, mode, sector,
+                    split="train", seg_renderer=None, verbose=False,
+-                   ep_v4=None):
++                   ep_v4=None, extra_frame_hook=None, adaptive_close_mm=None):
+     """Full v4 episode: draw -> randomise -> reposition -> tag -> spawn ->
+     run_episode with the v4 hooks. Returns (frames, info, v4, sidecar) or
+     (None, reason, v4, None) when the FOV gate exhausts its spawn pool.
+@@ -351,6 +351,11 @@ def run_episode_v4(model, data, renderer, controller, ik, rng, mode, sector,
+         ta = adrs["target"]
+         sidecar["target_xy"].append([round(float(data_.qpos[ta]), 4),
+                                      round(float(data_.qpos[ta + 1]), 4)])
++        # Spec section 0's off-policy channel rides the same hook, so its frames
++        # stay in lockstep with the recorded observation frames. Render-only:
++        # consumes no rng, writes no state, purity untouched.
++        if extra_frame_hook is not None:
++            extra_frame_hook(model_, data_)
+ 
+     timing = {"inspect_frames": v4["dwell_frames"],
+               "descend_frames": v4["descend_frames"],
+@@ -358,6 +363,8 @@ def run_episode_v4(model, data, renderer, controller, ik, rng, mode, sector,
+               # normal jaw-position arrival (load-bearing with the servo
+               # disabled -- see run_episode) or at ramp end + this cap.
+               "descend_settle": 12}
++    if adaptive_close_mm:
++        timing["adaptive_close_mm"] = float(adaptive_close_mm)
+     frames, info = C.run_episode(
+         model, data, renderer, controller, ik, rng, TASK_TEMPLATE,
+         verbose=verbose, mode=mode, split=split, seg_renderer=seg_renderer,
+@@ -815,6 +822,26 @@ def main():
+     ap.add_argument("--split", default="train")
+     ap.add_argument("--render", type=int, default=0,
+                     help="save scene-cam mp4 for the first N episodes")
++    ap.add_argument("--render_fixed", action="store_true",
++                    help="also write the spec section-0 OFF-POLICY fixed scene "
++                         "camera mp4 per episode (epNN_scene_fixed.mp4) -- the "
++                         "external world-frame view, never in the obs dict")
++    ap.add_argument("--grip_slew", type=float, default=None,
++                    help="override GRIPPER_SLEW_RATE for the expert (default keeps "
++                         "the shipped 0.008 = 1.6 s close). v4 grasps are all "
++                         "OVERHEAD, where the closing impulse is harmless (reaction "
++                         "is vertical, below the CoM -- the slow slew exists to "
++                         "protect forward-reach grasps, which v4 does not fly). "
++                         "0.02 = 0.64 s close, shrinking the window in which a "
++                         "knocked object can escape the closing jaws.")
++    ap.add_argument("--adaptive_close", type=float, default=None,
++                    help="gate-4 remedy #2: adaptive GRASP executor -- track the "
++                         "live object and close when jaw-object dxy <= this many "
++                         "mm (try 18). Default None = shipped scheduled close.")
++    ap.add_argument("--cams", choices=["2", "3"], default="3",
++                    help="observation camera set: 3 = camera1+2+3 (current map); "
++                         "2 = drop camera3, reproducing the pre-camera3 rng "
++                         "stream (same-seed scene draws match 2-cam runs).")
+     ap.add_argument("--out", default="v4_pilot.json")
+     ap.add_argument("--outdir", default="v4_pilot")
+     ap.add_argument("--samples", type=int, default=50)
+@@ -836,13 +863,23 @@ def main():
+         collect(args)
+         return
+ 
++    if args.cams == "2":
++        # BEFORE anything else in the pilot: the camera-jitter rng draws loop
++        # over CAMERAS, so the 2-camera map must be in force from episode 0 for
++        # same-seed scene draws to match historical 2-camera runs. (First
++        # placement of this pop landed in collect() instead of here and the
++        # "2-cam" run silently reproduced the 3-cam stream.)
++        C.CAMERAS.pop("camera3", None)
+     controller = C.SkyGripController(C.MODEL_PATH, C.MPPIParams(args.samples, 16),
+                                      flight="pd")
+     model, data = controller.model, controller.data
++    if args.grip_slew:
++        controller.GRIPPER_SLEW_RATE = float(args.grip_slew)
+     ik = C.ArmIK(model)
+     renderer = mujoco.Renderer(model, height=C.IMG_H, width=C.IMG_W)
+     seg = mujoco.Renderer(model, height=C.IMG_H, width=C.IMG_W)
+     seg.enable_segmentation_rendering()
++    fixed_renderer = mujoco.Renderer(model, height=C.IMG_H, width=C.IMG_W)
+ 
+     rng = np.random.default_rng(args.seed)
+     modes = C.mode_schedule(args.episodes, rng)
+@@ -858,9 +895,27 @@ def main():
+     outdir.mkdir(parents=True, exist_ok=True)
+     records = []
+     for i in range(args.episodes):
++        # Off-policy fixed scene camera [spec section 0]. The spec mandates this
++        # render ("to disk every episode ... never in the observation dict") and
++        # the shipped v4 collection never implemented it -- the pilot gains it
++        # here. A FREE camera, not an XML camera: the branch's overview_cam is a
++        # chase cam mounted on the airframe, and section 0 explicitly wants a
++        # world-frame viewpoint. Framing: whole pedestal workspace + hover.
++        fixed_frames = []
++        if args.render_fixed:
++            _fc = mujoco.MjvCamera()
++            _fc.lookat[:] = [0.0, 0.35, 0.55]
++            _fc.azimuth, _fc.elevation, _fc.distance = 135, -20, 1.9
++            _fopt = mujoco.MjvOption()
++            mujoco.mjv_defaultOption(_fopt)
++            def _grab_fixed(model_, data_):
++                fixed_renderer.update_scene(data_, _fc, _fopt)
++                fixed_frames.append(fixed_renderer.render().copy())
+         res = run_episode_v4(model, data, renderer, controller, ik, rng,
+                              modes[i], sectors[i], split=args.split,
+-                             seg_renderer=seg, verbose=args.verbose)
++                             seg_renderer=seg, verbose=args.verbose,
++                             extra_frame_hook=_grab_fixed if args.render_fixed else None,
++                             adaptive_close_mm=args.adaptive_close)
+         frames, info, v4, sidecar = res
+         if frames is None:
+             print(f"ep{i:02d} [{modes[i]:<17s}] sector {sectors[i]} DISCARDED: {info}",
+@@ -891,11 +946,19 @@ def main():
+         if i < args.render:
+             try:
+                 import imageio.v2 as imageio
+-                mp4 = outdir / f"ep{i:02d}_{modes[i]}_s{sectors[i]}.mp4"
+-                imageio.mimwrite(mp4, [f["observation.images.camera2"]
+-                                       for f in frames], fps=C.FPS)
++                for key in C.CAMERAS:
++                    mp4 = outdir / f"ep{i:02d}_{modes[i]}_s{sectors[i]}_{key}.mp4"
++                    imageio.mimwrite(mp4, [f[f"observation.images.{key}"]
++                                           for f in frames], fps=C.FPS)
+             except Exception as e:      # rendering is best-effort in the pilot
+                 print(f"  [render failed: {e}]")
++        if args.render_fixed and fixed_frames:
++            try:
++                import imageio.v2 as imageio
++                imageio.mimwrite(outdir / f"ep{i:02d}_scene_fixed.mp4",
++                                 fixed_frames, fps=C.FPS)
++            except Exception as e:
++                print(f"  [fixed render failed: {e}]")
+         # sidecar per episode
+         (outdir / f"ep{i:02d}_sidecar.json").write_text(json.dumps(
+             {k: v for k, v in sidecar.items() if k != "target_xy"}))

@@ -53,7 +53,7 @@ def measure(samples, horizon, w_pos, sigma_thrust, sigma_torque, torque_clip,
         c.apply_control(u)
         data.ctrl[a("act_joint1")] = q[0]
         data.ctrl[a("act_joint2")] = q[1]
-        data.ctrl[a("act_gripper")] = 0.025
+        data.ctrl[a("act_gripper")] = 0.016   # fully open (was 0.025, off the new scale)
         mujoco.mj_step(model, data)
         if data.time > settle:
             errs.append(np.linalg.norm(data.qpos[0:3] - target))

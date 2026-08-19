@@ -1,0 +1,94 @@
+<mujocoinclude>
+  <!-- The mat task's objects: a YCB mustard bottle to pick and a bin to drop it in.
+
+       WHY THIS BOTTLE. prepare_objects.py measured 22 YCB candidates against the
+       real gripper (32 mm jaw, ~10 mm of clear column above the grasp point) and
+       arm_reach_study.py screened the survivors for standing stably: the mustard
+       bottle is the ONLY object that is both graspable and stable upright
+       (tip angle 22 deg; everything else graspable topples). Grasped at the cap,
+       the body flies at ~0.38 m with ~0.23 m of leg clearance -- more margin than
+       the pedestal setup, not less.
+
+       COLLISION is primitives, not the mesh, for the usual convex-hull reason:
+       the hull of a bottle fills in the neck, so the pads would meet a phantom
+       cone ~28 mm wide instead of the real 23 mm cap. The three primitives are
+       sized from mesh cross-sections (body 97x67 mm, neck 44 mm, cap 23 mm) so
+       the jaws close on the true cap diameter. Mesh is visual-only.
+
+       MASS 30 g -- an empty bottle, deliberately not a full one (~600 g): the
+       gripper holds ~1 N a pad, so 600 g is undeliverable by this airframe.
+       Split across the geoms so the derived CoM sits low, like a real bottle. -->
+  <asset>
+    <texture name="ycb_mustard_tex" type="2d"
+             file="ycb_assets/006_mustard_bottle/google_16k/texture_map.png"/>
+    <material name="ycb_mustard_mat" texture="ycb_mustard_tex" specular="0.2" shininess="0.3"/>
+    <mesh name="ycb_mustard" file="ycb_assets/006_mustard_bottle/google_16k/textured.obj"/>
+  </asset>
+
+  <worldbody>
+    <!-- On the mat, base resting on the flat blue_mat surface (z = 0.01). The
+         mesh is re-centred by pos: the YCB mesh origin is its own centroid, so
+         the visual geom carries the offset that puts the mesh base at body z=0. -->
+    <body name="mustard_bottle" pos="0.0 0.6 0.011">
+      <freejoint name="mustard_free_joint"/>
+      <geom type="mesh" mesh="ycb_mustard" material="ycb_mustard_mat"
+            pos="0.0153 0.0235 0.0032" contype="0" conaffinity="0" group="1" density="0"/>
+      <!-- body: the fat lower part, 0..130 mm -->
+      <geom name="mustard_body" type="box" pos="0 0 0.065" size="0.0485 0.0335 0.065"
+            mass="0.024" rgba="0.8 0.75 0.2 0" friction="0.8 0.01 0.001"/>
+      <!-- shoulder+neck: 130..175 mm -->
+      <geom name="mustard_neck" type="cylinder" pos="0 0 0.1525" size="0.0225 0.0225"
+            mass="0.004" rgba="0.8 0.75 0.2 0" friction="0.8 0.01 0.001"/>
+      <!-- cap: 175..191 mm. THE GRASP TARGET -- 23 mm across, jaws open to 32.
+           High friction and soft solref, same reasoning as the old target pads. -->
+      <geom name="mustard_cap" type="cylinder" pos="0 0 0.183" size="0.0115 0.008"
+            mass="0.002" rgba="0.8 0.75 0.2 0"
+            friction="1.5 0.01 0.001" solref="0.004 1"/>
+    </body>
+
+    <!-- The place target: an open-top bin, sized to the DRONE, not the bottle.
+         The airframe spans 0.387 x 0.347 m rotor-tip to rotor-tip, so a 0.42 m
+         square interior is "as big or slightly bigger than the drone": the drop
+         succeeds if the release happens anywhere under the body's footprint,
+         which is the loose, paper-like place tolerance (their bin drop) rather
+         than the old 60 mm precision place.
+         Walls 0.15 m: tall enough that the released bottle (0.19 m, dropped from
+         just above the rim) stays in, low enough that the hanging bottle clears
+         the rim with the body at ~0.55 m -- inside the working envelope.
+         Static: no freejoint, so it cannot be knocked over; it is the goal, not
+         a manipuland. Bright blue, distinct from the mat's duller blue. -->
+    <body name="bin" pos="1.4 1.6 0">
+      <geom name="bin_floor" type="box" pos="0 0 0.010" size="0.230 0.230 0.010"
+            rgba="0.10 0.25 0.85 1"/>
+      <geom name="bin_wall_xlo" type="box" pos="-0.220 0 0.085" size="0.010 0.230 0.075"
+            rgba="0.10 0.25 0.85 1"/>
+      <geom name="bin_wall_xhi" type="box" pos="0.220 0 0.085" size="0.010 0.230 0.075"
+            rgba="0.10 0.25 0.85 1"/>
+      <geom name="bin_wall_ylo" type="box" pos="0 -0.220 0.085" size="0.230 0.010 0.075"
+            rgba="0.10 0.25 0.85 1"/>
+      <geom name="bin_wall_yhi" type="box" pos="0 0.220 0.085" size="0.230 0.010 0.075"
+            rgba="0.10 0.25 0.85 1"/>
+    </body>
+
+    <!-- 100 g pick weight (AirVLA recreation, doc D5/D9/D11). Purpose-built
+         for THIS gripper at the real hardware specs (0.2-0.5 N pinch, 100 g
+         max object): a fat low-CoM base (40 mm dia -- too wide to bulldoze,
+         tip-resistant) under a 16 mm grip stem long enough (26 mm) that the
+         pads engage fully while the stem top protrudes only 8 mm above the
+         grasp site (10 mm housing column). Grip the stem at stem_top - 8 mm
+         => site z = 0.054 on a floor-resting weight. Density ~2 g/cc =
+         an aluminium-shelled weight; visually dark steel. -->
+    <body name="pick_weight" pos="-0.6 0.6 0">
+      <freejoint name="pick_weight_joint"/>
+      <geom name="weight_base" type="cylinder" pos="0 0 0.018" size="0.020 0.018"
+            mass="0.088" rgba="0.25 0.26 0.30 1" friction="0.8 0.01 0.001"/>
+      <!-- Stem friction 2.5: the hardware spec says 100 g is carriable at
+           0.2-0.5 N pinch, which requires mu ~2+ (rubberized fingers on
+           metal). At mu 1.5 the sim grip had only 1.5x static margin and
+           measured slipping during the lift. -->
+      <geom name="weight_stem" type="cylinder" pos="0 0 0.049" size="0.008 0.013"
+            mass="0.012" rgba="0.35 0.36 0.40 1"
+            friction="2.5 0.01 0.001" solref="0.004 1"/>
+    </body>
+  </worldbody>
+</mujocoinclude>

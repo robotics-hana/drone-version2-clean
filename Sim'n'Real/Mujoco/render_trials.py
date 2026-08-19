@@ -16,6 +16,14 @@ ap.add_argument("--episodes", type=int, default=6)
 ap.add_argument("--out", type=str, default="../../Reports/pick_trials.mp4")
 ap.add_argument("--seed", type=int, default=7)
 ap.add_argument("--reach_fraction", type=float, default=0.5)
+# Camera. The default 1.5 m frames the whole task, which is what you want for
+# reading the behaviour -- but it renders the gripper about 20 px across, so it is
+# useless for checking the hardware. Drop to ~0.45 m and track the jaws instead of
+# the body to inspect the grasp itself.
+ap.add_argument("--distance", type=float, default=1.5,
+                help="chase-camera distance, m (try 0.45 to inspect the gripper)")
+ap.add_argument("--track", choices=["body", "jaws"], default="body",
+                help="what the camera follows; 'jaws' keeps the grasp centred")
 args = ap.parse_args()
 
 C.EPISODE_MODE_P = [1.0, 0.0, 0.0]                 # picks only
@@ -30,7 +38,7 @@ rend = mujoco.Renderer(model, height=480, width=640)
 rng = np.random.default_rng(args.seed)
 
 cam = mujoco.MjvCamera()
-cam.distance, cam.azimuth, cam.elevation = 1.5, 105, -18
+cam.distance, cam.azimuth, cam.elevation = args.distance, 105, -18
 
 writer = imageio.get_writer(args.out, fps=C.FPS, codec="libx264",
                             quality=8, macro_block_size=1)
@@ -40,8 +48,10 @@ try:
         attempts += 1
         frames = []
         def grab():
-            # follow the drone so it never leaves frame as the table height varies
-            cam.lookat[:] = data.qpos[0:3]
+            # follow the drone so it never leaves frame as the table height varies,
+            # or the jaws when the point is to watch the grasp
+            cam.lookat[:] = (C.grasp_site_pos(model, data) if args.track == "jaws"
+                             else data.qpos[0:3])
             rend.update_scene(data, camera=cam)
             frames.append(rend.render().copy())
         with contextlib.redirect_stdout(io.StringIO()):

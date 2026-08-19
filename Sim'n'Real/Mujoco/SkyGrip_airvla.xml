@@ -1,0 +1,28 @@
+<mujoco model="SkyGrip_airvla">
+    <!-- AirVLA-recreation scene: the validated airframe flown in the scanned
+         lab, with the mustard-bottle + blue-bin manipulation task and the
+         race gate for the navigation task. See Reports/AIRVLA_RECREATION.md
+         for the experiment design this scene serves. -->
+    <!-- 2x-supersampled 256 px logging renders at 512: enlarge the
+         offscreen framebuffer beyond MuJoCo's 640x480 default. -->
+    <visual>
+        <global offwidth="1024" offheight="1024"/>
+    </visual>
+    <include file="SkyGrip_core.xml"/>
+    <include file="lab.xml"/>
+    <include file="objects_lab.xml"/>
+    <include file="gate_lab.xml"/>
+    <include file="mocap_markers.xml"/>
+
+    <!-- Grasp weld (doc L7): the real gripper demonstrably carries 100 g at
+         its 0.2-0.5 N pinch; MuJoCo's contact solver cannot reproduce that
+         with 3-gram fingertips (measured: seated grips ratchet out under
+         carry micro-oscillation at every friction/compliance setting tried).
+         The collector activates this weld ONLY when the pads are measured
+         seated on the stem, and releases it when the gripper opens --
+         encoding the hardware-measured capability, not a new one. -->
+    <equality>
+        <weld name="grasp_weld" body1="gripper_assembly" body2="pick_weight"
+              active="false" torquescale="1"/>
+    </equality>
+</mujoco>

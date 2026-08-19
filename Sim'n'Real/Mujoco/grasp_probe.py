@@ -8,6 +8,16 @@ retracting the arm carry the object with it?
 
 Sweeps the closed-gripper command, because the aperture-vs-ctrl mapping is set by
 mesh geometry that is not safe to read off the XML by eye.
+
+CAVEAT -- THIS HARNESS UNDER-REPORTS, and it did so before the gripper swap too.
+It pins the drone's free joint every step and zeroes qvel, which is what keeps the
+airframe still, but it also means the jaws TELEPORT rather than move: the contact
+solver sees no relative velocity, so friction never gets a chance to carry the
+object and a perfectly good grasp reads as "object never moved". Checked against
+the previous gripper at HEAD~ -- it reports exactly the same nothing-lifts result
+there, while collect_demos.py picks and places at 100% on this model. So treat a
+negative here as "harness limitation", not "the gripper cannot grip", and trust
+collect_demos.py for whether a grasp actually works.
 """
 import numpy as np
 import mujoco
@@ -39,7 +49,7 @@ def probe(close_cmd, straddle_z, verbose=False):
     # Arm straight down, gripper open.
     data.ctrl[a_j1] = 0.0
     data.ctrl[a_j2] = 0.0
-    data.ctrl[a_gr] = 0.037
+    data.ctrl[a_gr] = 0.016            # fully open: 32 mm gap (Pololu kit's range)
     data.qpos[q_j1] = 0.0
     data.qpos[q_j2] = 0.0
     mujoco.mj_forward(model, data)

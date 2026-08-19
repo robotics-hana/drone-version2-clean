@@ -55,7 +55,7 @@ def run(seconds, samples, horizon, move_arm, verbose, slew=0.05):
         c.arm_cmd = q_cmd
         data.ctrl[a("act_joint1")] = q_cmd[0]
         data.ctrl[a("act_joint2")] = q_cmd[1]
-        data.ctrl[a("act_gripper")] = 0.025
+        data.ctrl[a("act_gripper")] = 0.016   # fully open (was 0.025, off the new scale)
         mujoco.mj_step(model, data)
 
         q = data.qpos[3:7]

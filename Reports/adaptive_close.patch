@@ -1,0 +1,121 @@
+diff --git a/Sim'n'Real/Mujoco/collect_demos.py b/Sim'n'Real/Mujoco/collect_demos.py
+index f79f657..3b86e05 100644
+--- a/Sim'n'Real/Mujoco/collect_demos.py
++++ b/Sim'n'Real/Mujoco/collect_demos.py
+@@ -2300,6 +2300,31 @@ def run_episode(model, data, renderer, controller, ik, rng, task_template,
+     for phase, drone_xyz, joints, grip, servo_to in plan:
+         controller.set_targets(drone_xyz, joints, grip, servo_to=servo_to, ik=ik)
+         phase_start = len(frames)
++        # PHASE-ADAPTIVE GRASP EXECUTOR (V4_SPEC section 11, gate-4 remedy #2).
++        # Measured on the seed-777 pilots: descent knock slides the object
++        # 60-90 mm; with SERVO_GAIN=0 nothing re-centres, so the scheduled close
++        # fires 36-56 mm from the displaced object and grips air. Under the flag
++        # the GRASP phase (expert-only; the policy still trains on pixels):
++        #   * tracks the object's LIVE position with the plan's body-to-object
++        #     offset (the knock compensation SERVO_GAIN=0 disabled);
++        #   * delays the close until jaw-object dxy <= adaptive_close_mm, with a
++        #     60-frame cap. Pair with a faster GRIPPER_SLEW_RATE (0.02): the
++        #     four-cell ablation showed proximity-at-COMMAND is not enough --
++        #     the object escapes during a 1.6 s slew.
++        # CAVEAT (review 2026-08-14): this makes the expert a frame-rate oracle.
++        # Whether the demonstrations stay LEARNABLE by a pixels-only student is
++        # unmeasured -- run the student-success A/B before adopting.
++        # None (default) is bit-identical to the shipped path.
++        adaptive_grasp = bool(timing and timing.get("adaptive_close_mm")
++                              and phase == "GRASP" and servo_to is not None)
++        if adaptive_grasp:
++            controller.gripper_cmd = GRIPPER_OPEN       # postpone the close
++            _ad_adr = model.jnt_qposadr[
++                model.body_jntadr[model.body("target_object").id]]
++            _ad_off = np.asarray(drone_xyz[:2]) - np.asarray(servo_to[:2])
++            _ad_gate = float(timing["adaptive_close_mm"]) / 1000.0
++            _ad_force = 60                              # 2 s cap on the wait
++            _ad_closed = False
+         # v4 ramped descent (V4_SPEC section 6): instead of stepping the body
+         # setpoint straight to the grasp height (descent time then = PD settle,
+         # 24-26 frames on v3), command a CONSTANT-RATE z ramp over descend_frames
+@@ -2338,6 +2363,16 @@ def run_episode(model, data, renderer, controller, ik, rng, task_template,
+                 controller.drone_target = np.array(
+                     [drone_xyz[0], drone_xyz[1],
+                      ramp_z0 + a_r * (drone_xyz[2] - ramp_z0)])
++            if adaptive_grasp:
++                _obj = data.qpos[_ad_adr:_ad_adr + 3]
++                controller.drone_target = np.array(
++                    [_obj[0] + _ad_off[0], _obj[1] + _ad_off[1], drone_xyz[2]])
++                if not _ad_closed:
++                    _gs = grasp_site_pos(model, data)
++                    if (np.linalg.norm(_gs[0:2] - _obj[0:2]) <= _ad_gate
++                            or f_i >= _ad_force):
++                        controller.gripper_cmd = GRIPPER_CLOSED
++                        _ad_closed = True
+             for _ in range(substeps):
+                 controller.step()
+                 mujoco.mj_step(model, data)
+@@ -2377,6 +2412,11 @@ def run_episode(model, data, renderer, controller, ik, rng, task_template,
+             # or LIFT starts before the block is held (see gripper_settled).
+             if phase in ("GRASP", "RELEASE"):
+                 arrived = arrived and controller.gripper_settled()
++                if adaptive_grasp:
++                    # positional arrival was judged against the PLAN's grasp
++                    # point; the executor follows the live object, so done =
++                    # close issued + jaws finished slewing shut.
++                    arrived = _ad_closed and controller.gripper_settled()
+             # HOLD is the refusal dwell: never "arrive", so it records its full
+             # budget of the drone holding station at the safe hover.
+             # HOLD and INSPECT both run their FULL budget rather than exiting on
+diff --git a/Sim'n'Real/Mujoco/collect_v4.py b/Sim'n'Real/Mujoco/collect_v4.py
+index de824fb..3d9ef14 100644
+--- a/Sim'n'Real/Mujoco/collect_v4.py
++++ b/Sim'n'Real/Mujoco/collect_v4.py
+@@ -310,7 +310,7 @@ def spawn_v4(model, data, v4, scene, seg_renderer):
+ 
+ def run_episode_v4(model, data, renderer, controller, ik, rng, mode, sector,
+                    split="train", seg_renderer=None, verbose=False,
+-                   ep_v4=None, extra_frame_hook=None):
++                   ep_v4=None, extra_frame_hook=None, adaptive_close_mm=None):
+     """Full v4 episode: draw -> randomise -> reposition -> tag -> spawn ->
+     run_episode with the v4 hooks. Returns (frames, info, v4, sidecar) or
+     (None, reason, v4, None) when the FOV gate exhausts its spawn pool.
+@@ -363,6 +363,8 @@ def run_episode_v4(model, data, renderer, controller, ik, rng, mode, sector,
+               # normal jaw-position arrival (load-bearing with the servo
+               # disabled -- see run_episode) or at ramp end + this cap.
+               "descend_settle": 12}
++    if adaptive_close_mm:
++        timing["adaptive_close_mm"] = float(adaptive_close_mm)
+     frames, info = C.run_episode(
+         model, data, renderer, controller, ik, rng, TASK_TEMPLATE,
+         verbose=verbose, mode=mode, split=split, seg_renderer=seg_renderer,
+@@ -824,6 +826,14 @@ def main():
+                     help="also write the spec section-0 OFF-POLICY fixed scene "
+                          "camera mp4 per episode (epNN_scene_fixed.mp4) -- the "
+                          "external world-frame view, never in the obs dict")
++    ap.add_argument("--adaptive_close", type=float, default=None,
++                    help="gate-4 remedy #2: adaptive GRASP executor -- track the "
++                         "live object, close when jaw-object dxy <= this many mm "
++                         "(18 in the pilots). Default None = shipped close.")
++    ap.add_argument("--grip_slew", type=float, default=None,
++                    help="expert GRIPPER_SLEW_RATE override (0.02 = 0.64 s close; "
++                         "shipped 0.008 = 1.6 s, sized for forward-reach grasps "
++                         "v4 never flies). Pilots: required for the win.")
+     ap.add_argument("--cams", choices=["2", "3"], default="3",
+                     help="observation camera set: 3 = camera1+2+3 (current map); "
+                          "2 = drop camera3, reproducing the pre-camera3 rng "
+@@ -859,6 +869,8 @@ def main():
+     controller = C.SkyGripController(C.MODEL_PATH, C.MPPIParams(args.samples, 16),
+                                      flight="pd")
+     model, data = controller.model, controller.data
++    if args.grip_slew:
++        controller.GRIPPER_SLEW_RATE = float(args.grip_slew)
+     ik = C.ArmIK(model)
+     renderer = mujoco.Renderer(model, height=C.IMG_H, width=C.IMG_W)
+     seg = mujoco.Renderer(model, height=C.IMG_H, width=C.IMG_W)
+@@ -898,7 +910,8 @@ def main():
+         res = run_episode_v4(model, data, renderer, controller, ik, rng,
+                              modes[i], sectors[i], split=args.split,
+                              seg_renderer=seg, verbose=args.verbose,
+-                             extra_frame_hook=_grab_fixed if args.render_fixed else None)
++                             extra_frame_hook=_grab_fixed if args.render_fixed else None,
++                             adaptive_close_mm=args.adaptive_close)
+         frames, info, v4, sidecar = res
+         if frames is None:
+             print(f"ep{i:02d} [{modes[i]:<17s}] sector {sectors[i]} DISCARDED: {info}",

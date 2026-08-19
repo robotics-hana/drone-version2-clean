@@ -2,16 +2,31 @@
 
 Domain randomisation is only useful if every sampled object is still graspable --
 randomising into configurations the hardware cannot pick up would teach the
-policy from failed demonstrations. The pads close to a 16.7 mm gap, so a square
-post of side s presented at yaw t spans s*(|cos t| + |sin t|): a 20 mm post at
-45 deg presents 28.3 mm, which is 11.6 mm of interference and ejects the object.
-This maps the safe (size, yaw) envelope so randomise_episode can sample inside it.
+policy from failed demonstrations. A square post of side s presented at yaw t
+spans s*(|cos t| + |sin t|), so a 20 mm post at 45 deg presents 28.3 mm. On the
+Pololu gripper the jaws open to 32 mm, so that fits with only ~1.8 mm a side --
+which is the limit this maps out, so randomise_episode can sample inside it.
+
+NOTE ON THE COMMAND CONVENTION, which this script previously had backwards: the
+gripper is SHUT at ctrl 0.000 and fully OPEN at 0.016 (gap_mm = 2000 * ctrl).
+It used to approach at 0.025 and "close" at 0.037 -- both above the current
+ctrlrange, so both now clamp to fully open and nothing would ever be gripped.
+
+CAVEAT -- THIS HARNESS UNDER-REPORTS, and it did so before the gripper swap too.
+It pins the drone's free joint every step and zeroes qvel, which is what keeps the
+airframe still, but it also means the jaws TELEPORT rather than move: the contact
+solver sees no relative velocity, so friction never gets a chance to carry the
+object and a perfectly good grasp reads as "object never moved". Checked against
+the previous gripper at HEAD~ -- it reports exactly the same nothing-lifts result
+there, while collect_demos.py picks and places at 100% on this model. So treat a
+negative here as "harness limitation", not "the gripper cannot grip", and trust
+collect_demos.py for whether a grasp actually works.
 """
 import numpy as np
 import mujoco
 
 MODEL = "SkyGrip_full.xml"
-CLOSED_GAP = 0.0167
+CLOSED_GAP = 0.0      # the paddles meet; see the note above
 
 
 def grips(half_w, yaw, half_h=0.030, drop=0.015):
@@ -31,8 +46,8 @@ def grips(half_w, yaw, half_h=0.030, drop=0.015):
 
     d.ctrl[aid("act_joint1")] = 0.0
     d.ctrl[aid("act_joint2")] = 0.0
-    d.ctrl[aid("act_gripper")] = 0.025
-    d.qpos[9], d.qpos[10] = 0.025, -0.025
+    d.ctrl[aid("act_gripper")] = 0.016          # approach fully OPEN
+    d.qpos[9], d.qpos[10] = 0.016, -0.016
     d.qpos[0:3] = [0, 0.35, 1.0]
     d.qpos[3:7] = [1, 0, 0, 0]
     mujoco.mj_forward(m, d)
@@ -50,7 +65,7 @@ def grips(half_w, yaw, half_h=0.030, drop=0.015):
     z0 = d.qpos[qa + 2]
     if z0 < 0.45:
         return "X", 0.0                      # knocked before closing
-    d.ctrl[aid("act_gripper")] = 0.037
+    d.ctrl[aid("act_gripper")] = 0.000          # and SHUT to grip
     step(700)
 
     # Lift by RETRACTING THE ARM, not by translating the pinned body. Teleporting
@@ -77,7 +92,7 @@ if __name__ == "__main__":
     sides = [0.016, 0.018, 0.020, 0.022, 0.024]
     yaws = [0, 10, 20, 30, 45]
     print("held after a 0.14 m lift:  # full, + partial, . untouched, x knocked")
-    print("presented width = side*(|cos|+|sin|); pads close to 16.7 mm")
+    print("presented width = side*(|cos|+|sin|); jaws open to 32 mm, shut to 0")
     print()
     print("side(mm) " + " ".join(f"{y:>6}d" for y in yaws))
     for s in sides:

@@ -39,8 +39,10 @@ def measure(j1, j2, seconds=14.0, settle=5.0):
         if d.time - last >= c.CTRL_DT:
             u = c.mppi_step(c.get_state()); last = d.time
         c.apply_control(u)
-        d.ctrl[act("act_gripper")] = 0.013
-        d.ctrl[act("act_gripper_left")] = -0.013
+        # Single actuator: left_clamp is slaved to right_clamp by the <equality>
+        # in the XML, matching the real rack-and-pinion linkage. The old
+        # act_gripper_left channel is gone, and asking for it by name raises.
+        d.ctrl[act("act_gripper")] = 0.016
         mujoco.mj_step(m, d)
         if d.time > settle:
             errs.append(np.linalg.norm(d.qpos[0:3] - target))

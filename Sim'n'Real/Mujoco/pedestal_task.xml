@@ -1,0 +1,100 @@
+<mujocoinclude>
+  <!-- The PEDESTAL task scene: work surface + target + two distractors, exactly as
+       they lived in SkyGrip_full.xml before the core/task split. collect_demos.py
+       repositions and resizes all of these per episode by name. -->
+  <worldbody>
+        <!-- Pedestal. The arm reaches at most 0.271 m below the body while the legs
+             hang 0.200 m down, so picking off the floor would mean hovering at ~0.29 m
+             with 9 cm of leg clearance at the j2 joint limit -- no margin against a
+             0.10 m controller tolerance. Raising the work surface puts the grasp in
+             the middle of the arm's envelope instead of at its edge.
+             Long in x, narrow in y (0.40 x 0.10). The drone grasps from directly
+             overhead -- straight down is the arm's comfortable direction, reaching
+             0.254 m with j2 only at 0.8, whereas forward reach plus depth together
+             pushes j2 to its 1.6 limit. Hovering overhead is only safe because the
+             legs sit at y = +-0.088 and so straddle a 0.05 half-width surface; a
+             wide table would foul them. The x extent gives pick and place two
+             distinct spots on the same surface.
+             Static -- collect_demos.py repositions it by writing model.body_pos. -->
+        <body name="pedestal" pos="0 0.35 0.25">
+            <!-- Friction lowered to match the target object. Contact friction is
+                 the element-wise max of the pair, so the block can only slide
+                 freely on this surface if BOTH are low -- see target_object. -->
+            <!-- Enlarged from 0.20 x 0.05 to 0.32 x 0.09 half-extents (0.64 x 0.18 m
+                 surface) so three objects fit with real separation and the place point
+                 has somewhere to go. collect_demos rewrites geom_size[2] per episode for
+                 the working-height randomisation, so only x/y are fixed here. -->
+            <geom type="box" size="0.32 0.09 0.25" rgba="0.45 0.42 0.38 1"
+                  friction="0.3 0.005 0.0001"/>
+        </body>
+
+        <!-- Pick target: a 20 x 20 x 80 mm upright post.
+             Both dimensions are dictated by the gripper geometry, measured from
+             the meshes rather than from body origins:
+
+               WIDTH. The true inner-face gap between the jaws is 30.7 mm at full
+               aperture (0.037) and closes to overlap. Note this is NOT the
+               origin-to-origin distance, which reads 87.2 mm -- the same trap as
+               using the gripper_assembly body origin for the end effector. 20 mm
+               leaves ~5 mm either side on approach.
+
+               HEIGHT. Fingertips reach 49.2 mm BELOW the jaw midpoint while the
+               housing obstructs from ~0 mm ABOVE it, so the object must sit
+               entirely below the midpoint and be gripped over the 49 mm beneath.
+               At 80 mm tall, grasped 5 mm above its top face, the fingertips
+               still clear the surface by ~36 mm.
+
+             A 40 mm cube (the original) was unpickable on both counts: too wide
+             for the jaws, and shorter than the fingers, so any midpoint clearing
+             the surface sat above the cube entirely.
+             collect_demos.py randomises this per episode; the pose here is only
+             the reset default. On +y, the side the arm reaches toward at positive
+             Joint_1 and the side scene_cam faces. -->
+        <body name="target_object" pos="0 0.35 0.54">
+            <freejoint name="target_free_joint"/>
+            <!-- No explicit <inertial>: collect_demos randomises geom_size per
+                 episode, and a hardcoded diaginertia would silently describe the
+                 wrong shape. Letting MuJoCo derive it from the geom keeps mass
+                 properties consistent with whatever size was sampled.
+
+                 mass 10 g (was 50 g). Light on purpose: the jaws inevitably nudge
+                 the block as they close, and a light block is both easier to hold
+                 (weight 0.098 N against ~5 N of measured grip) and carries less
+                 momentum when shifted, so it settles instead of toppling.
+
+                 friction 0.3 (was 1.0), and the PEDESTAL is lowered to match.
+                 MuJoCo takes the element-wise MAXIMUM of the two geoms' friction,
+                 so lowering only this one would have changed nothing while the
+                 pedestal stayed at 1.0. Low friction against the table lets a
+                 nudged block SLIDE rather than catch an edge and tip. The pads
+                 are 1.5, and max(1.5, 0.3) = 1.5, so the grip itself is
+                 unaffected -- slippery on the table, grippy in the jaws. -->
+            <geom type="box" size="0.010 0.010 0.040" rgba="0.85 0.2 0.2 1"
+                  mass="0.010" friction="0.3 0.005 0.0001"/>
+        </body>
+
+        <!-- Distractor: a second block, identical in kind to target_object but a
+             DIFFERENT colour, used for language grounding. The episode's task names
+             a colour ("pick up the red block"); with two differently-coloured
+             blocks present the instruction is now informative -- the policy has to
+             key on colour to pick the right one, and success requires leaving this
+             one untouched. collect_demos randomises its size/pose/colour per
+             episode; the pose here is only the reset default, parked to one side. -->
+        <body name="distractor_object" pos="-0.12 0.35 0.54">
+            <freejoint name="distractor_free_joint"/>
+            <geom type="box" size="0.010 0.010 0.040" rgba="0.2 0.35 0.85 1"
+                  mass="0.010" friction="0.3 0.005 0.0001"/>
+        </body>
+
+        <!-- Second distractor. Three objects on the surface makes the colour/shape
+             grounding a genuine 1-of-3 choice rather than 1-of-2, and success still
+             requires leaving BOTH unnamed objects untouched. Same size/mass/friction
+             family as the others; collect_demos randomises pose, size, shape and
+             colour per episode. -->
+        <body name="distractor_object_2" pos="0.12 0.35 0.54">
+            <freejoint name="distractor2_free_joint"/>
+            <geom type="box" size="0.010 0.010 0.040" rgba="0.85 0.7 0.2 1"
+                  mass="0.010" friction="0.3 0.005 0.0001"/>
+        </body>
+  </worldbody>
+</mujocoinclude>
