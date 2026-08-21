@@ -1,0 +1,16 @@
+{
+  "cloud_file": "03_08_2026.ply",
+  "floor_z": -1.4,
+  "mat_top_z": -1.3585194405631038,
+  "mat_centre_xy": [
+    0.5697130739160523,
+    0.5303170709953654
+  ],
+  "mat_long_axis_deg": 141.93307688044627,
+  "fitted_dims_m": [
+    6.895863887357258,
+    4.791890011117568
+  ],
+  "real_mats": "3 strips of 6.00 x 1.52 x 0.04 m (4th excluded)",
+  "sim_mapping": "sim z=0 (object rest plane) == real mat TOP"
+}

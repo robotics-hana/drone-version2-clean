@@ -281,19 +281,20 @@
 
             <geom type="mesh" mesh="base_link" rgba="0.08 0.08 0.09 1"/>
             <!-- Real-drone colours (review 2026-08-19): black plastic body,
-                 BLUE propellers -- visual-only discs riding just above the
-                 mesh's own rotor discs. -->
-            <geom name="prop_fl" type="cylinder" size="0.082 0.002"
-                  pos="0.13 0.105 0.043" rgba="0.15 0.35 0.95 1"
+                 BLUE propellers -- visual-only discs aligned to the mesh's own
+                 rotor discs, photogrammetrically measured at (+-0.105, +-0.085,
+                 z 0.030), r 0.060 (2026-08-20). -->
+            <geom name="prop_fl" type="cylinder" size="0.060 0.002"
+                  pos="0.105 0.085 0.033" rgba="0.15 0.35 0.95 1"
                   contype="0" conaffinity="0" density="0" mass="0.00"/>
-            <geom name="prop_fr" type="cylinder" size="0.082 0.002"
-                  pos="0.13 -0.105 0.043" rgba="0.15 0.35 0.95 1"
+            <geom name="prop_fr" type="cylinder" size="0.060 0.002"
+                  pos="0.105 -0.085 0.033" rgba="0.15 0.35 0.95 1"
                   contype="0" conaffinity="0" density="0" mass="0.00"/>
-            <geom name="prop_bl" type="cylinder" size="0.082 0.002"
-                  pos="-0.13 0.105 0.043" rgba="0.15 0.35 0.95 1"
+            <geom name="prop_bl" type="cylinder" size="0.060 0.002"
+                  pos="-0.105 0.085 0.033" rgba="0.15 0.35 0.95 1"
                   contype="0" conaffinity="0" density="0" mass="0.00"/>
-            <geom name="prop_br" type="cylinder" size="0.082 0.002"
-                  pos="-0.13 -0.105 0.043" rgba="0.15 0.35 0.95 1"
+            <geom name="prop_br" type="cylinder" size="0.060 0.002"
+                  pos="-0.105 -0.085 0.033" rgba="0.15 0.35 0.95 1"
                   contype="0" conaffinity="0" density="0" mass="0.00"/>
             <!-- Legs shortened: they reached 0.200 m below the body, which set the whole
                  platform's minimum working height and left the gripper barely clearing

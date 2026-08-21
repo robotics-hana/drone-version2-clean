@@ -673,6 +673,84 @@ cannot hold full-FT memory — recorded as a deviation if taken** (risk R1).
   Result: only genuine seated recoveries can bank (fallen ~40% per
   attempt, self-discarding; upright bottle and weight unaffected).
 
+- **D29 (side grasp promoted, 2026-08-19/20, user proposal)**: "rotate
+  Joint_2 ~90° so the gripper is perpendicular to the floor and use yaw
+  to align" — prototyped head-to-head per agreement (one grasp type in
+  the dataset; the prototype decides which).
+  - Pose Q_SIDE = (−0.747, −0.587): jaw mouth forward-horizontal
+    (~14° tilt), jaws 0.106 m ahead and 0.065 m below the body — cap
+    grasp at a flyable altitude. Approach: standoff 0.14 m behind the
+    cap along the reverse mouth axis, then a creep entry at constant
+    thrust sliding the open mouth over the cap; live-gated on the
+    closing axis only.
+  - Probe result: **8/8 seated+lifted** (ap 12.0 mm every time,
+    closing-axis alignment ≤2 mm) vs the overhead grasp's honest
+    ~50–60% — the horizontal entry bypasses the entire descent-knock
+    family (D24/D28). Two probe lessons: endpoint-distance gating
+    falsely aborts an angled entry path (gate the closing axis only),
+    and strict at-rest checks are unreachable with the cap inside the
+    mouth (pad-contact solver jitter) — the in-mouth gate is
+    upright-only (R22 > 0.95), which still catches the mid-tip cheat.
+  - **Promoted to THE upright-bottle grasp** in the collector (weight
+    keeps its 100% overhead stem grasp; fallen recovery unchanged).
+    Also this round: distractor box tint constrained light-and-cool
+    (dark random tints were hard to tell from a dark-wood target).
+
+- **D30 (the PLUSH PENGUIN replaces the mustard bottle, 2026-08-20,
+  from Hana)**: "I don't like the grasp method of the mustard bottle …
+  add objects similar to the paper." The second task object is now the
+  paper's own manipuland — a **plush penguin** (Penguin Grasp), built
+  hardware-graspable the way the weight was: fat plush body on a
+  ballasted flat base (stable, low CoM, cannot tip or roll thanks to
+  condim-6 rolling friction), **22 mm head** as the pinch target with a
+  clear column above it, 45 g, black body / white belly / orange beak.
+  Prompt: "pick up the plush penguin and put it in the wooden box" —
+  the paper's task, verbatim in spirit.
+  - The whole bottle-era special machinery retires with the bottle
+    (side grasp routing, fallen-overhead recovery, tilt guards, cap
+    site aiming): the penguin takes the weight-family overhead grasp
+    that has run at 100% all session. The mustard bottle remains in the
+    scene as parked background clutter only. The manip-corrective slot
+    becomes an **edge-of-workspace recovery spawn** (the penguin spawns
+    far outside the nominal region; the demo shows coverage recovery).
+  - Also this round: the blue propellers were **photogrammetrically
+    aligned** onto the body mesh's rotor circles (measured (±0.105,
+    ±0.085) from a calibrated top-down render; discs r 0.060 at
+    z 0.033, raised to clear z-fighting).
+  - Verified: **penguin 4/4** (seat ~11.0 mm on the head, all placed
+    centred in randomized boxes), weight 2/2, edge-corrective clean.
+  - YCB alternatives were measured and rejected first: the wood-block
+    asset is a scattered multi-block mesh; the duplo is 32.5 mm — at
+    the jaw limit and orientation-fragile; everything else fails the
+    32 mm jaw or floor-clearance constraints (consistent with the
+    original 22-object screen).
+
+- **D31 (raised 40 mm mat + rotations + registration, 2026-08-20, from
+  Hana)**:
+  - **Real-lab registration**: user supplied a Polycam point cloud
+    (`03_08_2026.ply`, 1.01 M pts, metric) — blue-mat segmentation
+    confirms the scan shows the mat top at exactly **+40 mm** over the
+    floor, matching the user's spec (3 gym-mat strips of
+    6.00 × 1.52 × 0.04 m; a 4th excluded for now). First-pass transform
+    saved to `lab_registration.json`. The Gaussian-splat export (for
+    paper-style photoreal rendering) is still pending from Polycam —
+    the uploaded file is the point-cloud export (position+RGB only).
+  - **Raised working surface**: a physical 40 mm blue slab (`mat_riser`)
+    now carries everything task-related — objects, both boxes, the
+    gate — matching reality; grasp aims became **object-relative**
+    (aim_z above the object origin), so the validated grasp geometry
+    transferred unchanged. Sim floor now maps 1:1 to the real floor.
+    Verified: penguin 3/3, weight 2/2, nav gate-crossing clean.
+  - **Rotation variety** (previous round): every object spawns at a
+    random heading; both boxes spawn at random yaw; the placed check
+    evaluates the object inside the rotated box frame. Verified 4/4
+    across box yaws 3°…−142°; close-up demo delivered
+    (`Reports/penguin_rotated_demo.mp4`).
+  - Blue props photogrammetrically aligned to the body's rotor circles
+    (D30 note applies); forward-camera view shift that prompted "you
+    moved the mat down" was the nose-mount raise — the mat itself had
+    never moved, but it WAS 40 mm lower than reality until this fix.
+
 ## 9. Limitations (running)
 
 - **L1 — no teleoperation**: all demos are scripted experts in sim. Expert
@@ -691,6 +769,19 @@ cannot hold full-FT memory — recorded as a deviation if taken** (risk R1).
 - **L6 — π₀ checkpoint identity**: "the public π₀ base checkpoint" is not
   pinned to an artifact in the paper; we use LeRobot's π₀ base port and
   record its hash.
+
+- **L8 (no Gaussian splatting, by design)**: the paper's 3DGS
+  reconstruction exists to SYNTHESIZE its ~50 corrective demos --
+  photorealistic novel views of the real room along never-flown recovery
+  trajectories. In this all-sim recreation the simulator itself plays
+  that role for every episode; our correctives (gate near-miss, edge
+  spawn) match the paper's recovery-flavour mix (~16%) but render
+  through the same MuJoCo pipeline as everything else. The difference
+  bites at REAL deployment: their splat doubled as a sim-to-real visual
+  bridge, our mesh scan is coarser. Deployment options, in order of
+  fidelity: build a real 3DGS of the lab and render the three cameras
+  inside it; rely on the domain randomization already collected; or
+  fine-tune on a handful of real demos.
 
 ## 10. Phase plan (review gates in bold)
 

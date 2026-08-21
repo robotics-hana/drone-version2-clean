@@ -36,6 +36,16 @@
        and every recovery pass aimed at a stale pose). The rolling
        coefficients below only act at condim >= 6. -->
   <worldbody>
+    <!-- Raised 40 mm mat slab (2026-08-20, user: "bring the blue mat and
+         everything up a bit"): the real working surface is 3 gym-mat
+         strips, 40 mm thick (lab_registration.json verified the scan
+         shows exactly +40 mm). Everything task-related stands ON this
+         slab; sim floor z=0 now maps 1:1 to the real floor. Footprint
+         matches the scanned mat area so it covers the scan's flat mat
+         visuals. -->
+    <geom name="mat_riser" type="box" pos="0.65 1.0 0.02"
+          size="2.15 2.9 0.02" rgba="0.24 0.44 0.82 1"
+          friction="1.0 0.01 0.001"/>
     <!-- On the mat, base resting on the flat blue_mat surface (z = 0.01). The
          mesh is re-centred by pos: the YCB mesh origin is its own centroid, so
          the visual geom carries the offset that puts the mesh base at body z=0. -->
@@ -105,6 +115,34 @@
             rgba="0.6 0.6 0.65 1"/>
       <geom name="bin2_wall_yhi" type="box" pos="0 0.220 0.085" size="0.230 0.010 0.075"
             rgba="0.6 0.6 0.65 1"/>
+    </body>
+
+    <!-- PLUSH PENGUIN, the second task object (2026-08-20: user request
+         to mirror the paper -- AirVLA's manipulation task is "Penguin
+         Grasp"). Built graspable for THIS hardware like the weight was:
+         a fat plush body on a ballasted flat base (stable, low CoM) with
+         a 22 mm head as the pinch target and a clear column above it.
+         45 g total, well under the 100 g ceiling; head friction/solref
+         match the validated pinch-target values. Black body, white
+         belly, orange beak; collision = base + body + head only. -->
+    <body name="penguin" pos="0.3 0.6 0">
+      <freejoint name="penguin_joint"/>
+      <geom name="penguin_base" type="cylinder" pos="0 0 0.004"
+            size="0.024 0.004" mass="0.017" rgba="0.06 0.06 0.07 1"
+            condim="6" friction="1.0 0.01 0.008"/>
+      <geom name="penguin_body" type="ellipsoid" pos="0 0 0.038"
+            size="0.028 0.024 0.034" mass="0.020"
+            rgba="0.06 0.06 0.07 1" condim="6"
+            friction="1.0 0.01 0.008"/>
+      <geom name="penguin_head" type="sphere" pos="0 0 0.083"
+            size="0.011" mass="0.008" rgba="0.06 0.06 0.07 1"
+            condim="6" friction="1.5 0.01 0.008" solref="0.004 1"/>
+      <geom name="penguin_belly" type="ellipsoid" pos="0 -0.014 0.034"
+            size="0.020 0.018 0.027" rgba="0.95 0.95 0.92 1"
+            contype="0" conaffinity="0" mass="0"/>
+      <geom name="penguin_beak" type="box" pos="0 -0.014 0.081"
+            size="0.004 0.006 0.003" rgba="0.95 0.55 0.10 1"
+            contype="0" conaffinity="0" mass="0"/>
     </body>
 
     <!-- 100 g pick weight (AirVLA recreation, doc D5/D9/D11). Purpose-built

@@ -86,6 +86,19 @@ AIM_Z = CAP_TOP - 0.004       # pinch at the VERY TOP of the cap (review
                               # release at ~14 s, 100x static margin --
                               # creep, not slip). -7 mm nearly doubles the
                               # overlap and keeps 3 mm of housing margin.
+# Side grasp for the upright bottle (user proposal 2026-08-19, probe
+# 8/8 vs the overhead grasp's ~50-60%): Joint_2 rotated so the jaw
+# mouth faces forward-horizontal; the drone approaches the cap from
+# behind at constant altitude and slides the mouth over it. No vertical
+# motion near the object = the whole descent-knock family (housing
+# sweep, loaded-trim y-swing, descent overshoot) is bypassed.
+Q_SIDE = np.array([-0.747, -0.587])
+OFF_SIDE = np.array([-0.007, -0.106, -0.065])
+SIDE_ENTRY = np.array([0.0, 0.96, 0.24])   # reverse of the mouth axis
+SIDE_STANDOFF = 0.14
+
+MAT_TOP = 0.04                # 40 mm gym-mat slab; everything task-
+                              # related stands on it (D31)
 GATE_LEFT, GATE_RIGHT = (-0.7, -0.6), (0.7, -0.6)
 BIN_XY = np.array([1.4, 1.6])
 
@@ -255,24 +268,20 @@ class Runner:
                            narrow=0.75, gate_x=0.0045, gate_y=0.0065,
                            ap_lo=5.0, ap_hi=12.0, stage=0.04,
                            park=(-0.75, 1.25)),
-            "mustard bottle": dict(body=self.bot, adr=self.badr,
-                                   aim_z=AIM_Z, close=0.70,
-                                   narrow=0.89, gate_x=0.0020,
-                                   gate_y=0.0065,
-                                   # stage 0.065: the descent to the
-                                   # correction stage overshoots ~28 mm
-                                   # below its setpoint under load, and
-                                   # at +0.04 that swept the WRIST
-                                   # HOUSING through cap height and
-                                   # tipped the bottle on approach
-                                   # (traced: jaws 56 mm away, housing
-                                   # over the cap). The tall bottle
-                                   # stages higher; the weight's 62 mm
-                                   # stem was never reachable.
-                                   ap_lo=8.0, ap_hi=14.5, stage=0.04,
-                                   park=(-0.55, 1.05)),
+            # plush penguin (2026-08-20, the paper's own manipuland,
+            # replaces the mustard bottle on user request): 22 mm head
+            # pinch, weight-family overhead grasp. aim = head centre.
+            "plush penguin": dict(body=m.body("penguin").id,
+                              adr=m.jnt_qposadr[m.body_jntadr[
+                                  m.body("penguin").id]],
+                              aim_z=0.083, close=0.67,
+                              narrow=0.84, gate_x=0.0020,
+                              gate_y=0.0065,
+                              ap_lo=9.0, ap_hi=13.5, stage=0.04,
+                              park=(-0.55, 1.05)),
         }
         self.cur = self.objs["weight"]
+        self.mustard_adr = self.badr   # bottle = scenery only now
         self.bin_id = m.body("bin").id
         self.bin2_id = m.body("bin2").id
         self.bin_geoms = [m.geom(n).id for n in
@@ -373,8 +382,17 @@ class Runner:
                   else np.asarray(o["park"])
                   + self.rng.uniform(-0.25, 0.25, 2))
             d.qpos[o["adr"]:o["adr"] + 2] = xy
-            d.qpos[o["adr"] + 2] = 0.0
-            d.qpos[o["adr"] + 3:o["adr"] + 7] = [1, 0, 0, 0]
+            d.qpos[o["adr"] + 2] = MAT_TOP + 0.005
+            # random yaw per episode (review 2026-08-20: rotated penguin
+            # demos) -- the penguin faces a random direction; the grasp
+            # is orientation-agnostic (spherical head pinch)
+            t = self.rng.uniform(0, 2 * np.pi)
+            d.qpos[o["adr"] + 3:o["adr"] + 7] = [np.cos(t / 2), 0, 0,
+                                                 np.sin(t / 2)]
+        # the mustard bottle is scenery now: park it out of the workspace
+        d.qpos[self.mustard_adr:self.mustard_adr + 2] = (-0.95, 2.45)
+        d.qpos[self.mustard_adr + 2] = 0.0
+        d.qpos[self.mustard_adr + 3:self.mustard_adr + 7] = [1, 0, 0, 0]
         d.eq_active[self.weld] = 0
         m.eq_obj2id[self.weld] = self.cur["body"]   # weld follows the task
         # Anti-overfit scene variety (review 2026-08-19): the target box
@@ -383,22 +401,34 @@ class Runner:
         self.bin_xy = np.array([self.rng.uniform(1.1, 1.7),
                                 self.rng.uniform(1.2, 2.0)])
         m.body_pos[self.bin_id][0:2] = self.bin_xy
+        m.body_pos[self.bin_id][2] = MAT_TOP
+        # boxes also spawn ROTATED (review 2026-08-20); the placed check
+        # tests the object inside the rotated box frame
+        self.bin_yaw = float(self.rng.uniform(-np.pi, np.pi))
+        m.body_quat[self.bin_id] = [np.cos(self.bin_yaw / 2), 0, 0,
+                                    np.sin(self.bin_yaw / 2)]
+        t2 = self.rng.uniform(-np.pi, np.pi)
+        m.body_quat[self.bin2_id] = [np.cos(t2 / 2), 0, 0, np.sin(t2 / 2)]
         m.body_pos[self.bin2_id][0:2] = [self.rng.uniform(-1.3, -0.7),
                                          self.rng.uniform(1.8, 2.7)]
+        m.body_pos[self.bin2_id][2] = MAT_TOP
         r0 = self.rng.uniform(0.5, 1.0)
         tint = [r0, r0 * self.rng.uniform(0.6, 0.85),
                 r0 * self.rng.uniform(0.35, 0.6), 1.0]
         for g in self.bin_geoms:
             m.geom_rgba[g] = tint
-        g0 = self.rng.uniform(0.3, 0.9)
-        tint2 = [g0 * self.rng.uniform(0.7, 1.3),
-                 g0 * self.rng.uniform(0.7, 1.3),
-                 g0 * self.rng.uniform(0.7, 1.3), 1.0]
+        # distractor stays LIGHT and COOL (pale grey/blue/green): a dark
+        # random tint was hard to tell from a dark-wood target box
+        # (review 2026-08-19)
+        b0 = self.rng.uniform(0.65, 0.95)
+        tint2 = [b0 * self.rng.uniform(0.60, 0.90),
+                 b0 * self.rng.uniform(0.85, 1.05),
+                 b0 * self.rng.uniform(0.95, 1.15), 1.0]
         for g in self.bin2_geoms:
             m.geom_rgba[g] = np.clip(tint2, 0.05, 1.0)
         if gate_xy is not None:
             m.body_pos[self.gate][0:2] = gate_xy
-            m.body_pos[self.gate][2] = 0.0
+            m.body_pos[self.gate][2] = MAT_TOP
         else:
             # No gate in pick-and-place episodes (review 2026-08-19):
             # park it 3 m underground; nav episodes restore it.
@@ -421,49 +451,84 @@ class Runner:
         retry loop reorients and runs the proper fallen recovery."""
         vadr = self.model.jnt_dofadr[
             self.model.body_jntadr[self.cur["body"]]]
-        still = float(np.linalg.norm(
+        return float(np.linalg.norm(
             self.data.qvel[vadr:vadr + 6])) < 0.10
-        if self.cur is self.objs["mustard bottle"]:
-            adr = self.cur["adr"]
-            q = self.data.qpos[adr + 3:adr + 7]
-            R = np.zeros(9)
-            mujoco.mju_quat2Mat(R, q)
-            return still and R.reshape(3, 3)[2, 2] > 0.95
-        return still
+
+    def side_grasp(self, frames, task, ex, aim):
+        """Horizontal mouth-entry grasp of the upright bottle cap.
+        Returns (welded, gate_ok, pre_close, entry_ok)."""
+        so = aim + SIDE_STANDOFF * SIDE_ENTRY
+        ex.set_goal(xyz=so - OFF_SIDE, arm=Q_SIDE)
+        self.settle_near(frames, task, tol=0.03)
+        for _ in range(3):
+            resid = self.jaws() - so
+            if abs(resid[0]) < 0.002 and abs(resid[2]) < 0.004:
+                break
+            ex.set_goal(xyz=ex.goal - np.array([resid[0], 0.0, resid[2]]))
+            self.settle_near(frames, task, tol=0.012)
+        # creep entry, live-gated on the closing axis only (the entry
+        # path itself starts 34 mm off the endpoint by design)
+        ex.slow = True
+        ex.set_goal(xyz=aim - OFF_SIDE)
+        entry_ok = True
+        for _ in range(int(10.0 * FPS)):
+            self.step(frames, task)
+            dv = self.jaws() - aim
+            if abs(dv[0]) > 0.012:
+                entry_ok = False
+                break
+            if np.linalg.norm(dv) < 0.006:
+                break
+        ex.slow = False
+        if not entry_ok:
+            return False, False, self.jaws() - aim, False
+        narrow = self.cur["narrow"]
+        ex.set_goal(grip=narrow)
+        self.run_until(frames, task,
+                       lambda: abs(ex.grip - narrow) < 0.01,
+                       timeout_s=0.8, min_hold=1)
+        pre_close = self.jaws() - aim
+        # upright-only object check: with the cap inside the open mouth,
+        # pad-contact solver jitter keeps any strict at-rest threshold
+        # unreachable (measured); the mid-tip cheat still shows as
+        # R22 << 1 and is caught
+        adr = self.cur["adr"]
+        q = self.data.qpos[adr + 3:adr + 7]
+        R = np.zeros(9)
+        mujoco.mju_quat2Mat(R, q)
+        upright = R.reshape(3, 3)[2, 2] > 0.95
+        gate_ok = bool(abs(pre_close[0]) < 0.004
+                       and np.linalg.norm(pre_close) < 0.008 and upright)
+        welded = False
+        if gate_ok:
+            self.weld_grasp(True)
+            i_pre = self.ctrl.mppi._i_pos.copy()
+            close = self.cur["close"]
+            ex.set_goal(grip=close)
+            self.run_until(frames, task,
+                           lambda: abs(ex.grip - close) < 0.01,
+                           timeout_s=2.0)
+            ap = float(self.data.qpos[self.gadr]) * 1000
+            if self.cur["ap_lo"] < ap < self.cur["ap_hi"]:
+                welded = True
+                self.weld_grasp(True)           # datum re-capture
+                self.ctrl.mppi._i_pos[:] = i_pre
+            else:
+                self.weld_grasp(False)
+        return welded, gate_ok, pre_close, True
 
     def live_target(self, fallen_ok=True):
-        """Grasp aim from the object's LIVE pose (review 2026-08-19:
-        "reorientate the gripper [and drone] to the new position of the
-        cap"). For a FALLEN bottle the aim is the lying cap and the
-        returned yaw puts the closing axis (body x) perpendicular to the
-        bottle's long axis; for anything upright, the usual top-down aim
-        at the object's current -- not spawn -- position."""
+        """Grasp aim from the object's LIVE pose (not the spawn pose):
+        a nudged object is re-aimed at wherever it actually is. Both
+        task objects (weight, red block) are tip- and roll-stable, so
+        the top-down aim is always valid; the bottle-era fallen-recovery
+        machinery retired with the bottle (D30)."""
         adr = self.cur["adr"]
         pos = self.data.qpos[adr:adr + 3]
-        if self.cur is self.objs["mustard bottle"]:
-            q = self.data.qpos[adr + 3:adr + 7]
-            R = np.zeros(9)
-            mujoco.mju_quat2Mat(R, q)
-            R = R.reshape(3, 3)
-            axis = R @ np.array([0.0, 0.0, 1.0])
-            if fallen_ok and axis[2] < 0.95:  # lying OR propped at an
-                # angle (review ep15: a tilted-settle fell into the
-                # upright approach and grasped air beside the cap)
-                # cap-centre TRACKING SITE (objects_lab.xml): MuJoCo FK
-                # gives the exact live cap pose; overhead grasp aims at
-                # it, offset 6 mm outward along the axis so the jaw's
-                # inner edge clears the fatter neck (r 22.5 vs cap 11.5)
-                sid = mujoco.mj_name2id(self.model,
-                                        mujoco.mjtObj.mjOBJ_SITE,
-                                        "mustard_cap_site")
-                cap = self.data.site_xpos[sid]
-                a = axis[0:2] / max(1e-6, np.linalg.norm(axis[0:2]))
-                yaw = float(np.arctan2(-a[0], a[1]))  # body x _|_ axis
-                return (np.array([cap[0] + 0.006 * a[0],
-                                  cap[1] + 0.006 * a[1],
-                                  max(cap[2], 0.016)]),
-                        yaw)
-        return np.array([pos[0], pos[1], self.cur["aim_z"]]), None
+        # aim is OBJECT-RELATIVE (D31): aim_z is the grasp height above
+        # the object's origin, so the raised mat needs no retuning
+        return np.array([pos[0], pos[1],
+                         float(pos[2]) + self.cur["aim_z"]]), None
 
     # -- the three programs --------------------------------------------------
     def manip_episode(self, obj="weight", fallen_start=False):
@@ -478,26 +543,14 @@ class Runner:
         ex, frames = self.expert, []
         task = PROMPT_MANIP.format(obj=obj)
         if fallen_start:
-            # Corrective flavour: the bottle starts KNOCKED OVER and the
-            # demo shows the recovery grasp -- the paper's corrective-demo
-            # concept applied to manipulation.
+            # Corrective flavour (penguin era, D30): the object spawns
+            # at the WORKSPACE EDGE, far outside the nominal region --
+            # recovery-to-coverage (the ballasted penguin cannot tip
+            # or roll).
             adr = self.cur["adr"]
-            phi = float(rng.uniform(0, 2 * np.pi))
-            c45, s45 = np.cos(np.pi / 4), np.sin(np.pi / 4)
-            self.data.qpos[adr + 2] = 0.045
-            self.data.qpos[adr + 3:adr + 7] = [c45, s45 * np.cos(phi),
-                                               s45 * np.sin(phi), 0.0]
+            edge_x = float(rng.choice([-1, 1])) * rng.uniform(0.75, 1.0)
+            self.data.qpos[adr:adr + 2] = [edge_x, rng.uniform(0.1, 1.1)]
             mujoco.mj_forward(self.model, self.data)
-            # wait until the tipped bottle has actually come to REST --
-            # a dropped cylinder bounces and rolls (measured: up to
-            # ~0.9 m), and a grasp aimed at a mid-roll snapshot chases
-            # a phantom
-            vadr = self.model.jnt_dofadr[
-                self.model.body_jntadr[self.cur["body"]]]
-            self.run_until(frames, task,
-                           lambda: float(np.linalg.norm(
-                               self.data.qvel[vadr:vadr + 6])) < 0.01,
-                           timeout_s=5.0)
         ok = True
         self.run_until(frames, task, lambda: False, timeout_s=1.0)  # hover in
 
@@ -617,8 +670,8 @@ class Runner:
             gate_ok = self.run_until(frames, task, aligned, timeout_s=2.0,
                                      min_hold=1)
             pre_close = self.jaws() - aim
-            close = self.cur["close"]     # object-width close (stem/cap)
-            if yaw_g is not None:
+            close = self.cur["close"]     # object-width close
+            if False:  # bottle-era fallen close path retired (D30)
                 # FALLEN grasp: APERTURE-CONFIRMED pickup (review
                 # 2026-08-19: "when the MuJoCo clamp no longer shuts we
                 # know we have picked up the dropped mustard"). Close on
@@ -844,7 +897,7 @@ class Runner:
             # walls while the drone restabilises; still far below the
             # carry-height release that read as throwing)
             ex.set_goal(xyz=np.array([float(ex.goal[0]), float(ex.goal[1]),
-                                      0.16 + 0.22 + hang_z]))
+                                      MAT_TOP + 0.16 + 0.22 + hang_z]))
             self.run_until(frames, task,
                            lambda: (float(np.linalg.norm(
                                         ex.sp - ex.goal)) < 0.01
@@ -863,8 +916,12 @@ class Runner:
         self.run_until(frames, task, lambda: False, timeout_s=1.0)  # hover out
 
         b = self.data.qpos[self.cur["adr"]:self.cur["adr"] + 3]
-        placed = (abs(b[0] - self.bin_xy[0]) < 0.21 and
-                  abs(b[1] - self.bin_xy[1]) < 0.21 and b[2] < 0.20)
+        # placed check in the ROTATED box frame
+        dx, dy = b[0] - self.bin_xy[0], b[1] - self.bin_xy[1]
+        cb, sb = np.cos(-self.bin_yaw), np.sin(-self.bin_yaw)
+        bx, by = cb * dx - sb * dy, sb * dx + cb * dy
+        placed = (abs(bx) < 0.21 and abs(by) < 0.21
+                  and b[2] < MAT_TOP + 0.20)
         # Success = PLACED: an object cannot arrive at rest inside the bin
         # without having been picked and carried there. The mid-episode
         # `held` sample is diagnostic only -- it was measured misreading a
@@ -900,7 +957,7 @@ class Runner:
 
         def track_cross():
             in_ap = (abs(d.qpos[0] - gate_xy[0]) < 0.45
-                     and 0.34 < d.qpos[2] < 1.40)
+                     and 0.34 + MAT_TOP < d.qpos[2] < 1.40 + MAT_TOP)
             if in_ap and d.qpos[1] > gate_xy[1]:
                 crossed["v"] = True
 
@@ -974,8 +1031,8 @@ def main():
         if kind == "manip":
             frames, info = r.manip_episode(obj=obj)
         elif kind == "corrective" and saved % 2 == 0:
-            # corrective slots alternate: fallen-bottle recovery / nav
-            frames, info = r.manip_episode(obj="mustard bottle",
+            # corrective slots alternate: edge-spawn block recovery / nav
+            frames, info = r.manip_episode(obj="plush penguin",
                                            fallen_start=True)
         else:
             frames, info = r.nav_episode(
