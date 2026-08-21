@@ -140,9 +140,12 @@
       <geom name="penguin_belly" type="ellipsoid" pos="0 -0.014 0.034"
             size="0.020 0.018 0.027" rgba="0.95 0.95 0.92 1"
             contype="0" conaffinity="0" mass="0"/>
+      <!-- beak is SOLID (2026-08-21, review: pads clipped through the
+           visual-only beak at some spawn headings); the heading-aware
+           grasp yaw keeps it out of the pinch path -->
       <geom name="penguin_beak" type="box" pos="0 -0.014 0.081"
             size="0.004 0.006 0.003" rgba="0.95 0.55 0.10 1"
-            contype="0" conaffinity="0" mass="0"/>
+            mass="0.001" condim="6" friction="1.0 0.01 0.008"/>
     </body>
 
     <!-- 100 g pick weight (AirVLA recreation, doc D5/D9/D11). Purpose-built

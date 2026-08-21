@@ -725,6 +725,17 @@ cannot hold full-FT memory — recorded as a deviation if taken** (risk R1).
     32 mm jaw or floor-clearance constraints (consistent with the
     original 22-object screen).
 
+- **D32 (solid beak + heading-aware grasp, 2026-08-21, from Hana)**:
+  "make sure to not pick up the penguin from its beak … the gripper is
+  going through the mesh." The beak was a visual-only geom, and the D31
+  random spawn headings could point it into the pads' closing path,
+  where they clipped straight through it. Fixed twice over: the beak is
+  now **solid** (1 g, collidable), and the grasp is **heading-aware** —
+  the drone yaws to match the penguin's facing before descending, so
+  the beak always exits through the open jaw mouth and the pads pinch
+  the SIDES of the head. Verified 5/5 across random headings, seats
+  10.7–11.0 mm.
+
 - **D31 (raised 40 mm mat + rotations + registration, 2026-08-20, from
   Hana)**:
   - **Real-lab registration**: user supplied a Polycam point cloud

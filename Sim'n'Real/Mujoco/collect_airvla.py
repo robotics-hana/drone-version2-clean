@@ -525,10 +525,21 @@ class Runner:
         machinery retired with the bottle (D30)."""
         adr = self.cur["adr"]
         pos = self.data.qpos[adr:adr + 3]
-        # aim is OBJECT-RELATIVE (D31): aim_z is the grasp height above
-        # the object's origin, so the raised mat needs no retuning
-        return np.array([pos[0], pos[1],
-                         float(pos[2]) + self.cur["aim_z"]]), None
+        aim = np.array([pos[0], pos[1],
+                        float(pos[2]) + self.cur["aim_z"]])
+        # HEADING-AWARE grasp for the penguin (2026-08-21): its beak is
+        # solid and protrudes at head height, so the drone yaws to match
+        # the penguin's facing -- the beak points out through the open
+        # jaw mouth and the pads land on the SIDES of the head, never
+        # the beak.
+        if self.cur is self.objs["plush penguin"]:
+            q = self.data.qpos[adr + 3:adr + 7]
+            R = np.zeros(9)
+            mujoco.mju_quat2Mat(R, q)
+            beak = R.reshape(3, 3) @ np.array([0.0, -1.0, 0.0])
+            yaw = float(np.arctan2(beak[0], -beak[1]))
+            return aim, yaw
+        return aim, None
 
     # -- the three programs --------------------------------------------------
     def manip_episode(self, obj="weight", fallen_start=False):
