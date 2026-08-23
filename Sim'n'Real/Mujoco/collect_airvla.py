@@ -44,7 +44,13 @@ import collect_demos as C
 # ---------------------------------------------------------------------------
 MODEL = "SkyGrip_airvla.xml"
 FPS = 10                      # log/control tick rate (= paper action rate)
-IMG = 256                     # paper's policy input resolution
+IMG = 512                     # STORED resolution (D33: store above
+                              # the model input, downsample in the
+                              # training pipeline -- crop margin +
+                              # headroom for higher-res models; the
+                              # paper stored 256 and trained at 224,
+                              # we store 512 and train at 224: same
+                              # training inputs, more future-proof)
 CAMS = {"camera1": "wrist_cam", "camera2": "scene_cam",
         "camera3": "lab_external"}   # full-workspace external (review fix)
 
@@ -116,6 +122,19 @@ WEIGHT_AIM_Z = 0.057          # stem top (0.062) - 5 mm, floor-resting weight
 
 STATE_NAMES = (["x", "y", "z", "qw", "qx", "qy", "qz",
                 "gripper_aperture", "joint1", "joint2"])
+# Scene-state sidecar (D33, splat future-proofing): full poses of the
+# scene. Deliberately NOT under the observation.* prefix: LeRobot's
+# dataset_to_policy_features types every observation.* key as a STATE
+# input and pi0 pads state to 32 dims -- a prefixed sidecar would
+# silently leak into the policy. Unprefixed keys are skipped.
+# dynamic scene, logged per frame but NEVER fed to the policy -- exists
+# so a later Gaussian-splat re-render can reconstruct every frame's
+# visuals without replaying physics.
+SCENE_NAMES = (["task_x", "task_y", "task_z", "task_qw", "task_qx",
+                "task_qy", "task_qz", "other_x", "other_y", "other_z",
+                "other_qw", "other_qx", "other_qy", "other_qz",
+                "bin_x", "bin_y", "bin_yaw",
+                "bin2_x", "bin2_y", "bin2_yaw"])
 ACTION_NAMES = ["dx", "dy", "dz", "droll", "dpitch", "dyaw", "grip"]
 
 
@@ -192,7 +211,15 @@ class Expert:
         if arm is not None:
             self.arm = arm
         if yaw is not None:
-            self.goal_yaw = float(yaw)
+            # wrap-aware (review 2026-08-23, "why is the drone spinning
+            # while carrying"): remap the target to its numerically
+            # nearest 2pi-equivalent of the CURRENT slewed yaw so the
+            # ramp always turns the SHORT way. A beak-aligned grasp
+            # ending near -pi followed by a bin turn near +pi walked
+            # the ~2pi numeric gap as a full spin, still turning when
+            # the 8 s wait timed out and the carry leg began.
+            self.goal_yaw = self.yaw + float(
+                (yaw - self.yaw + np.pi) % (2 * np.pi) - np.pi)
 
     def tick(self):
         """Slew sp/grip/yaw one tick toward the goal; command the
@@ -230,8 +257,10 @@ class Runner:
         self.ik = C.ArmIK(self.model)
         self.expert = Expert(self.ctrl, self.ik)
         self.rng = np.random.default_rng(seed)
-        # render at 2x and downscale: anti-aliased 256px (review fix)
-        self.rend = mujoco.Renderer(self.model, height=2 * IMG, width=2 * IMG)
+        # native-512 render, stored directly (D33); the old 2x-super-
+        # sampled 256 pipeline is superseded -- at 512 the aliasing the
+        # supersampling fought is below the train-time resize kernel
+        self.rend = mujoco.Renderer(self.model, height=IMG, width=IMG)
         m = self.model
         self.bot = m.body("mustard_bottle").id
         self.badr = m.jnt_qposadr[m.body_jntadr[self.bot]]
@@ -327,15 +356,27 @@ class Runner:
             d.qpos[7:9],
         ]).astype(np.float32)
 
+    def scene_state(self):
+        m, d = self.model, self.data
+        other = [o for k, o in self.objs.items() if o is not self.cur][0]
+        b2 = m.body_pos[self.bin2_id]
+        q2 = m.body_quat[self.bin2_id]
+        yaw2 = 2 * np.arctan2(q2[3], q2[0])
+        return np.concatenate([
+            d.qpos[self.cur["adr"]:self.cur["adr"] + 7],
+            d.qpos[other["adr"]:other["adr"] + 7],
+            [self.bin_xy[0], self.bin_xy[1], self.bin_yaw],
+            [b2[0], b2[1], yaw2],
+        ]).astype(np.float32)
+
     def frame(self, task):
         f = {"observation.state": self.state(),
+             "scene_state": self.scene_state(),
              "action": None,                      # filled by step()
              "task": task}
         for key, cam in CAMS.items():
             self.rend.update_scene(self.data, camera=cam)
-            big = self.rend.render()
-            f[f"observation.images.{key}"] = np.asarray(
-                Image.fromarray(big).resize((IMG, IMG), Image.LANCZOS))
+            f[f"observation.images.{key}"] = self.rend.render().copy()
         return f
 
     def step(self, frames, task):
@@ -579,27 +620,77 @@ class Runner:
                                lambda: float(np.linalg.norm(
                                    self.data.qvel[vadr:vadr + 6])) < 0.03,
                                timeout_s=5.0)
-            # aim (and, for a fallen bottle, yaw) from the LIVE pose
+            # aim (and, for the penguin, an alignment yaw) from the
+            # LIVE pose.
             aim, yaw_g = self.live_target()
-            if yaw_g is not None:
+            if yaw_g is not None and not first_pass:
                 ex.set_goal(yaw=yaw_g)
             if first_pass:
                 # travel above the object, arm at the camera-down pose
                 over = aim - ex.off_travel + np.array([0, 0, 0.30])
-                ex.set_goal(xyz=over, arm=ex.q_travel)
-                ok &= self.settle_near(frames, task)
+                if yaw_g is not None:
+                    # Penguin approach (user 2026-08-23): fly AT the
+                    # object nose-first so it is in the forward view,
+                    # brake 0.55 m short, slide to directly overhead,
+                    # and only THEN apply the beak-alignment yaw.
+                    # (Distinct from the REVERTED 2026-08-21 variant:
+                    # no yaw-while-translating spiral -- the facing
+                    # turn completes at a dead hover before the leg.)
+                    here = self.data.qpos[0:2]
+                    to = aim[0:2] - here
+                    dist = float(np.linalg.norm(to))
+                    u = to / max(1e-6, dist)
+                    face = float(np.arctan2(u[0], -u[1]))
+                    ex.set_goal(yaw=face, arm=ex.q_travel)
+                    self.run_until(frames, task,
+                                   lambda: abs(ex.yaw - ex.goal_yaw) < 0.03,
+                                   timeout_s=8.0)
+                    if dist > 0.60:
+                        stand = over.copy()
+                        stand[0:2] = aim[0:2] - 0.55 * u
+                        ex.set_goal(xyz=stand)
+                        ok &= self.settle_near(frames, task, tol=0.03)
+                    # swing to the grasp arm pose HERE at the standoff
+                    # (review 2026-08-23: the travel->grasp swing used
+                    # to happen ABOVE the penguin, arcing the gripper
+                    # out to its side and back before descending; with
+                    # the swing done short of the object, the last leg
+                    # is one straight slide-over + vertical descent)
+                    ex.set_goal(arm=ex.q_grasp)
+                    self.run_until(frames, task, lambda: False,
+                                   timeout_s=1.5)
+                else:
+                    ex.set_goal(xyz=over, arm=ex.q_travel)
+                    ok &= self.settle_near(frames, task)
                 first_pass = False
             # Swing to the grasp pose AT ALTITUDE, then descend VERTICALLY
             # (D17: swinging while descending swept the pads through cap
             # height). For a fallen target, finish the reorienting yaw
             # turn up here too.
-            at = aim - ex.off_grasp
+            # slide target is YAW-AWARE (review 2026-08-23, "the gripper
+            # moves forward next to the penguin then jerks left"): the
+            # FK offsets are BODY-frame vectors -- subtracting them
+            # unrotated is only correct at yaw 0 (the weight's case).
+            # At the penguin's grasp yaw the forward-reaching arm hangs
+            # rotated, so the old target parked the jaws BESIDE the head
+            # and the correction passes dragged them over in visible
+            # jerks. Rotating the offset by the commanded yaw puts the
+            # jaws dead over the head on arrival; the beak-alignment
+            # turn runs DURING the slide-over.
+            yaw_cmd = yaw_g if yaw_g is not None else 0.0
+            cyw, syw = np.cos(yaw_cmd), np.sin(yaw_cmd)
+            offw = np.array([cyw * ex.off_grasp[0] - syw * ex.off_grasp[1],
+                             syw * ex.off_grasp[0] + cyw * ex.off_grasp[1],
+                             ex.off_grasp[2]])
+            at = aim - offw
+            if yaw_g is not None:
+                ex.set_goal(yaw=yaw_g)
             ex.set_goal(xyz=np.array([at[0], at[1], at[2] + 0.30]),
                         arm=ex.q_grasp)
             ok &= self.settle_near(frames, task, tol=0.03)
             if yaw_g is not None:
                 self.run_until(frames, task,
-                               lambda: abs(ex.yaw - yaw_g) < 0.02,
+                               lambda: abs(ex.yaw - ex.goal_yaw) < 0.02,
                                timeout_s=8.0)
             ex.set_goal(xyz=at + np.array([0, 0, self.cur["stage"]]))
             ok &= self.settle_near(frames, task)
@@ -810,7 +901,8 @@ class Runner:
                                    -(self.bin_xy[1] - here[1])))
         ex.set_goal(yaw=yaw_des)
         self.run_until(frames, task,
-                       lambda: abs(ex.yaw - yaw_des) < 0.02, timeout_s=8.0)
+                       lambda: abs(ex.yaw - ex.goal_yaw) < 0.02,
+                       timeout_s=8.0)
 
         held = float(self.data.qpos[self.cur["adr"] + 2]) > 0.15
         # Bin approach: cruise with the arm TUCKED, extend it EN ROUTE
@@ -951,14 +1043,21 @@ class Runner:
         gate_xy = np.array(GATE_LEFT if rng.random() < 0.5 else GATE_RIGHT)
         bxy = np.array([rng.uniform(-0.30, 0.30), rng.uniform(0.35, 0.85)])
         jit = 0.25 if corrective else 0.10
-        jit = max(jit, 0.35)   # wide lateral start variation (review)
-        start = np.array([gate_xy[0] + rng.uniform(-jit, jit),
+        # Start DECOUPLED from the gate position (D34): spawning always
+        # in front of the gate lets a policy pass training by flying
+        # straight; independent spawns force genuine gate-seeking from
+        # varied approach angles (the paper's OOD collapse on novel gate
+        # positions suggests their data had this coupling too).
+        start = np.array([rng.uniform(-0.95, 0.95),
                           rng.uniform(-1.9, -1.2),
                           rng.uniform(0.60, 1.00) + (0.15 if corrective else 0)])
         # Spawn facing the direction of flight (+y): the gate and the
         # hover target sit in the scene camera the whole run, as in the
         # paper. The PD yaw error is wrap-aware, so holding pi is safe.
-        self.reset_scene(bxy, start, gate_xy=gate_xy, yaw=np.pi, obj=obj)
+        # slight initial-heading jitter (D34): the drone should not
+        # always face exactly down the room
+        yaw0 = np.pi + float(rng.uniform(-0.26, 0.26))
+        self.reset_scene(bxy, start, gate_xy=gate_xy, yaw=yaw0, obj=obj)
         ex, frames = self.expert, []
         task = PROMPT_NAV.format(obj=obj)
         gate_z = 0.85
@@ -1020,6 +1119,9 @@ def main():
     features["observation.state"] = {"dtype": "float32",
                                      "shape": (len(STATE_NAMES),),
                                      "names": STATE_NAMES}
+    features["scene_state"] = {"dtype": "float32",
+                                           "shape": (len(SCENE_NAMES),),
+                                           "names": SCENE_NAMES}
     features["action"] = {"dtype": "float32",
                           "shape": (len(ACTION_NAMES),),
                           "names": ACTION_NAMES}

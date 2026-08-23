@@ -725,6 +725,97 @@ cannot hold full-FT memory — recorded as a deviation if taken** (risk R1).
     32 mm jaw or floor-clearance constraints (consistent with the
     original 22-object screen).
 
+- **D36 (penguin approach rebuilt + two flight-quality root causes,
+  2026-08-23, from Hana)**: four changes, each probe-verified 4/4 and
+  the sample recollected between rounds:
+  - **Fly-at-it approach**: "the drone should fly directly to it, so
+    it's in view, then move to hover directly above it, apply yaw then
+    grasp" — first pass now turns nose-toward the penguin at a dead
+    hover, flies straight at it (penguin in the forward camera),
+    brakes 0.55 m short, slides overhead, then grasps. Unlike the
+    REVERTED 2026-08-21 variant there is no yaw-while-translating.
+  - **No side excursion**: the travel→grasp arm swing used to happen
+    above the object (the body shifts between FK offsets, arcing the
+    gripper out beside the penguin and back); the swing now completes
+    at the standoff, making the last leg one straight slide + descent.
+  - **Yaw-aware arrival (root cause)**: the FK offsets are BODY-frame;
+    subtracting them unrotated is only correct at yaw 0 — at the
+    beak-aligned grasp yaw the jaws parked BESIDE the head and the
+    correction passes dragged them over ("jerks left"). The slide
+    target now rotates `off_grasp` by the commanded yaw; jaws arrive
+    dead-centred (wrist-cam verified), episodes shortened ~100 frames.
+  - **Wrap-aware yaw goals (root cause)**: the Expert's ramped yaw
+    setpoint slewed through the raw numeric gap; a grasp yaw near −π
+    followed by a bin turn near +π walked ~2π — a full spin, still
+    turning when the 8 s wait timed out, i.e. "spinning while
+    carrying". `set_goal(yaw=…)` now remaps every target to its
+    nearest 2π-equivalent (short-way turns only) and the convergence
+    checks compare against the remapped goal. Weight/nav behaviour is
+    numerically unchanged (their turns never crossed the seam).
+  - **Behind-and-creep grasp prototyped and retired**: at the user's
+    request the from-behind slow-approach grasp was built as a
+    standalone probe (`behind_creep_probe.py`, v3 with droop-corrected
+    height + production fine-correction): 4/6 lifts vs the overhead
+    protocol's 15/15 — one creep-sweep knock (21 mm), one gate
+    non-convergence. Kept as an artifact (`behind_creep_demo.mp4`);
+    overhead stays the production grasp ("keep overhead").
+
+- **D35 (external camera adopted: box-corner, whole-mat framing,
+  2026-08-23, from Hana)**: after comparing three angles (production
+  start-zone corner, yellow-plank corner, wooden-box corner), the user
+  adopted the **box-corner ceiling viewpoint** for camera3. Placement
+  is measured, not guessed: 30 cm inside the scanned room mesh's own
+  +x,+y wall corner → pos (4.10, 3.87, 3.20); on "increase the fovy so
+  the whole blue mat is in frame", the aim and fovy were **solved** —
+  aim at the mat riser's angular centre, fovy opened just enough to
+  hold all four riser corners plus a 6° margin → **fovy 74.2**
+  (fitting math in `corner2_demo.py`). Pinned in `gate_lab.xml` on
+  both local and cluster copies (surgical edit + content-diff audit;
+  the noisy whole-file git diff was line endings only). The wider view
+  exposes more of the scan's floor-bleed artefact at the near mat edge
+  (L5) — cosmetic only. Sample15 recollected from this viewpoint for
+  user verification before Phase C.
+
+- **D34 (nav-start decoupling + face-approach revert + camera verdicts,
+  2026-08-21, from Hana)**:
+  - **Nav starts decoupled from the gate**: "should start position for
+    hover through gate vary?" — it varied only in x (tied to the gate's
+    own randomised x). Now the start is fully independent: x ±0.95,
+    y −1.9…−1.2, z 0.60…1.00, plus ±15° heading jitter, so the policy
+    must actually FIND the gate rather than inherit alignment. Verified
+    4/4 gate crossings.
+  - **Face-first penguin approach tried and REVERTED**: to answer "the
+    approach to the penguin isn't visible in the wrist camera", a
+    nose-first fly-at-the-target approach was prototyped; on review the
+    user disliked the flight character ("i didlike this approach …
+    undo it") and it was fully reverted — the cruise/approach logic is
+    byte-identical to the validated D32 behaviour. The wrist-visibility
+    concern is instead mitigated by the wide wrist fovy (below).
+  - **Camera verdicts (cameras remain user-owned)**: wrist fovy stays
+    **110** (a 130 experiment was reverted on the user's explicit
+    choice); the external `lab_external` camera zoomed in to fovy 62
+    per "zoom in a bit more". A corner-mounted external angle (near the
+    yellow plank) was demoed (`Reports/external_corner_demo.mp4`) but
+    NOT adopted for production pending user verdict.
+
+- **D33 (512-native frames + `scene_state` sidecar, 2026-08-21, from
+  Hana)**:
+  - **Storage resolution 96→512**: "even though the VLA will downsample
+    anyways its best if input is 1080p or 720p quality" — compromise:
+    frames are now rendered and stored at **512×512** native (no
+    supersampling), keeping the dataset future-proof for higher-res
+    policies while π₀ still trains at 224. Verified (512,512,3) in the
+    parquet stream at no measurable wall-time cost.
+  - **Scene-state sidecar for the splat retrofit**: a 20-dim vector
+    (object/box/gate poses per episode) is stored under the bare key
+    `scene_state` so a later Gaussian-splat re-render can reproject
+    every episode without re-simulating. The key is deliberately NOT
+    `observation.*`-prefixed: LeRobot's `dataset_to_policy_features`
+    types any `observation.*` key as a STATE input (π₀ pads state to
+    32 dims), which would have silently leaked ground-truth object
+    poses into the policy. Verified shape (20,) and confirmed the π₀
+    feature mapper ignores it.
+
 - **D32 (solid beak + heading-aware grasp, 2026-08-21, from Hana)**:
   "make sure to not pick up the penguin from its beak … the gripper is
   going through the mesh." The beak was a visual-only geom, and the D31

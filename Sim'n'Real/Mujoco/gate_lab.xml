@@ -16,12 +16,14 @@
        Bright orange, visually unmistakable against the scanned lab. Static
        and collidable: clipping a member is a real crash, as in the paper. -->
   <worldbody>
-    <!-- Lab external camera (review feedback 2026-08-19): the shared
-         overview_cam was zoomed for the pedestal scene and crops the lab.
-         This one frames the WHOLE work area -- blue mat, gate positions,
-         bin and the start zone -- from a high corner. -->
-    <camera name="lab_external" pos="3.4 -2.4 3.2"
-            xyaxes="0.707 0.707 0  -0.38 0.38 0.843" fovy="75"/>
+    <!-- Lab external camera (user-adopted 2026-08-23): ceiling corner
+         nearest the wooden box, measured from the scanned room mesh
+         (30 cm inside the +x,+y wall corner), aimed at the work-area
+         centre. This is the ORIGINAL box-corner framing (fovy 62, box
+         in the near foreground); a whole-mat fovy-74 variant was
+         demoed and declined -- see corner2_demo.py for both. -->
+    <camera name="lab_external" pos="4.10 3.87 3.20"
+            xyaxes="-0.685 0.728 0  -0.342 -0.322 0.883" fovy="62"/>
     <body name="gate" pos="-0.7 -0.6 0">
       <geom name="gate_post_l" type="box" pos="-0.48 0 0.70" size="0.03 0.03 0.70"
             rgba="0.95 0.45 0.10 1"/>
