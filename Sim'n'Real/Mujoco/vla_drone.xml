@@ -1,0 +1,726 @@
+<mujoco model="vla_drone">
+    <!-- EDITABLE copy of SkyGrip_full.xml, flattened: the contents of
+         SkyGrip_core.xml, pedestal_task.xml and mocap_markers.xml are spliced
+         in verbatim, so this file compiles to the SAME model as SkyGrip_full.xml
+         (verified at creation). It exists so experiments can modify the model
+         WITHOUT touching SkyGrip_full.xml or its include files, which other
+         scripts depend on. Changes here affect nothing else. -->
+
+    <!-- ==================== from SkyGrip_core.xml ==================== -->
+    <!-- SkyGrip CORE: the airframe, arm, gripper, actuators and controller mocap
+         markers -- everything EXCEPT a task's scene objects. Split out of the old
+         monolithic SkyGrip_full.xml so two scenes can share one drone:
+           SkyGrip_full.xml = core + pedestal_task.xml   (the validated bare task)
+           SkyGrip_lab.xml  = core + lab.xml + objects_lab.xml  (the scanned lab)
+         Every comment and value below is unchanged from the validated model. -->
+    <compiler angle="radian" meshdir="./"/>
+    <option timestep="0.001" gravity="0 0 -9.81" integrator="RK4"/>
+        <visual>
+            <map znear="0.001"/>
+        </visual>
+    <asset>
+        <mesh name="base_link" content_type="model/stl" file="base_link.STL"/>
+        <mesh name="Link_1" content_type="model/stl" file="Link_1.STL"/>
+        <!-- Filename case must match the file on disk EXACTLY. connect.stl was
+             once written connect.STL here, which loads fine on Windows because
+             NTFS is case-insensitive but fails on Linux -- i.e. it would have
+             broken on the Spark GPU server, not here.
+
+             GRIPPER SWAP (V0.19.0). The old printed claw gripper is gone; the
+             airframe now flies a Pololu Micro Gripper Kit -- rack and pinion,
+             opposing racks, paddles parallel through a 32 mm range -- on a new
+             forearm bracket. Four meshes changed:
+
+               connect.stl  -> connectf.stl      (forearm bracket)
+               link5_1.stl  -> gripper_base.stl  (gripper body)
+               clamp_1.stl  -> right_clamp.stl   (+x paddle)
+               clamp_2.stl  -> left_clamp.stl    (-x paddle)
+
+             connectf.stl is used raw because it kept its CAD frame: its Joint_2
+             bearing bolt circle is centred on the mesh origin, exactly as the old
+             connect.stl was, so it drops into the same body with no offset. It is
+             drawn in 0.1 mm units, hence 0.0001 and not 0.001 -- at that scale it
+             comes out 42.0 mm wide, matching old connect.stl to the micron, which
+             is what confirms the scale is right.
+
+             The other three are BUILT by prepare_gripper_meshes.py from the
+             supplied slicer files (gripper-base.3mf, left clamp.3mf,
+             right clamp.stl). They have to be: MuJoCo cannot read 3MF, and
+             slicer files carry build-plate coordinates rather than the CAD
+             assembly frame, so the parts had to be re-posed. That script bakes
+             the assembly pose into the STL, which is why every gripper geom
+             below is placed with a plain offset and no quaternion. Re-run it if
+             the printed parts are ever revised; do not hand-edit the STLs. -->
+        <mesh name="connectf" content_type="model/stl" file="connectf.stl" scale="0.0001 0.0001 0.0001"/>
+        <mesh name="gripper_base" content_type="model/stl" file="gripper_base.stl" scale="0.001 0.001 0.001"/>
+        <mesh name="right_clamp" content_type="model/stl" file="right_clamp.stl" scale="0.001 0.001 0.001"/>
+        <mesh name="left_clamp" content_type="model/stl" file="left_clamp.stl" scale="0.001 0.001 0.001"/>
+
+        <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="512"/>
+        <texture name="grid" type="2d" builtin="checker" rgb1="0.1 0.1 0.1" rgb2="0.15 0.15 0.15" width="512" height="512" mark="cross" markrgb="0.2 0.2 0.2"/>
+        <material name="grid_mat" texture="grid" texrepeat="1 1" texuniform="true"/>
+    </asset>
+
+    <contact>
+        <exclude body1="base_link" body2="Link_1"/>
+        <exclude body1="Link_1" body2="connect"/>
+        <exclude body1="connect" body2="gripper_assembly"/>
+        <exclude body1="gripper_assembly" body2="clamp_1"/>
+        <exclude body1="gripper_assembly" body2="clamp_2"/>
+        <exclude body1="clamp_1" body2="clamp_2"/>
+        <exclude body1="Link_1" body2="clamp_1"/>
+        <exclude body1="Link_1" body2="clamp_2"/>
+        <exclude body1="connect" body2="clamp_1"/>
+        <exclude body1="connect" body2="clamp_2"/>
+        
+        <exclude body1="base_link" body2="connect"/>
+        <exclude body1="base_link" body2="gripper_assembly"/>
+    </contact>
+
+    <!-- The two paddles are opposing racks off ONE pinion, so left_clamp is the exact
+         negative of right_clamp and only right_clamp is actuated. polycoef="0 -1 0 0 0"
+         states that relation; solref/solimp are what make MuJoCo actually hold it.
+
+         At the solver defaults (solref 0.02 s) this equality is SOFT, and soft is not
+         good enough here. Free in the air the paddles stay symmetric to 0.000 mm, so
+         the problem is invisible until something pushes back: closing on a 20 mm post,
+         the driven jaw stalled at +2.0 mm while the passive one was shoved out to
+         -14.8 mm -- 12.8 mm of asymmetry, dragging the jaw midpoint 6.4 mm off centre
+         and pushing the object sideways instead of centring it. The real gripper cannot
+         do that; the rack teeth are rigid.
+
+         Measured asymmetry gripping a 20 mm post, against equality stiffness:
+             solref 0.02   (default) -> 12.789 mm
+             solref 0.005            ->  0.500 mm
+             solref 0.002            ->  0.026 mm
+             solref 0.001            ->  0.003 mm   <- chosen
+             solref 0.0002           ->  0.000 mm
+         0.001 s is a time constant equal to the physics timestep -- effectively exact
+         (3 microns) while staying out of the sub-timestep regime, where asking the
+         solver to converge faster than it integrates invites trouble elsewhere. Grip
+         force is unaffected (~0.9-1.0 N a pad at every setting above). -->
+    <equality>
+        <joint joint1="right_clamp" joint2="left_clamp" polycoef="0 -1 0 0 0"
+               solref="0.001 1" solimp="0.999 0.9999 0.0001"/>
+    </equality>
+
+    <!-- Seven actuators. ORDER IS LOAD-BEARING: skygrip.py assigns MPPI noise by index
+         (0,1,2 = arm/gripper, 3 = thrust, 4,5,6 = torques), while Skygrip_objective.py
+         looks them up by name. Renaming or reordering breaks one or the other.
+
+         Thrust and body torques are site-mounted motors rather than xfrc_applied (which
+         is what create_force_general.py used). Physically equivalent -- gear "0 0 1 0 0 0"
+         on thrust_point applies force along the body z axis at the body origin, exactly as
+         the old R @ [0,0,thrust] did -- but expressed as ctrl, so MJX can see it. The JAX
+         path rolls out through mjx and cannot read xfrc_applied, so this is required for
+         Skygrip_objective_jax.py to work at all.
+
+         Arm and gripper are POSITION actuators, not torque. This is the action-space
+         decision: joint-position targets are what the VLA emits (matching the dissertation's
+         joint-space choice), they stay meaningful across action-chunk boundaries, and they
+         let MPPI explore in radians rather than newton-metres.
+
+         ARM forcerange RESCALED x3.3 (2026-08-18, Hana's diagnosis): the
+         +-0.6/+-0.4 limits were sized for the 100 g pre-recalibration arm
+         "plus a 10 g payload"; with the real 331 g arm the joints saturated
+         10-18% of every carry (p95 force = the limit exactly), ringing
+         against the ceiling and jerking the gripper until carried objects
+         ratcheted out of the pinch (filmed mid-carry release). Attitude
+         safety is provided by ARM_SLEW_RATE-limited setpoints, not starved
+         servos; the real servos are 6 N*m-class. Original rationale kept
+         below:
+         ARM forcerange is bounded by the BODY's attitude authority, not by what the servo
+         could theoretically deliver. This was +-6 / +-4 N*m, inherited from the old torque
+         motors, and it is why commanding Joint_1 flung the whole aircraft: the arm could
+         apply 6 N*m while roll_torque can only resist 1 N*m, so the reaction was
+         literally uncontrollable (1467 rad/s^2 on Ixx=0.0041). Joint_1 rotates about x and
+         so does roll, so it loads the weakest axis. Measured on a 0->0.9 rad step while
+         hovering: +-6/+-4 threw the body 17.4 deg and 83 mm; +-0.6/+-0.4 gives 5.4 deg and
+         46 mm and still holds station.
+         The arm only NEEDS 0.21 N*m to hold itself plus a 10 g payload at worst extension
+         (arm subtree is 0.192 kg), so +-0.6 keeps ~3x static margin while staying well
+         under the 1 N*m the flight controller can trim against.
+         kp stays stiff on purpose: with the setpoint rate-limited (ARM_SLEW_RATE) the
+         tracking error is tiny and never saturates, so precision is unaffected -- the
+         forcerange only bites on aggressive/step commands, which is exactly where it
+         should. -->
+
+    <actuator>
+        <position name="act_joint1" joint="Joint_1" ctrlrange="-1.6 1.6" forcerange="-2.0 2.0" kp="998.22" kv="2.731"/>
+        <position name="act_joint2" joint="Joint_2" ctrlrange="-1.6 1.6" forcerange="-1.3 1.3" kp="998.22" kv="2.731"/>
+        <!-- ctrlrange is the travel of ONE paddle, in metres, and the paddles are
+             symmetric, so the jaw GAP is twice the command: 0 = shut, 0.016 =
+             32 mm apart. 32 mm is the Pololu kit's quoted range of motion; the
+             old 0.037 belonged to the larger printed gripper and would now drive
+             the racks clean out of their channels. -->
+        <!-- forcerange set to the REAL HARDWARE spec +-0.5 N (2026-08-18,
+             Hana: measured grip strength 0.2-0.5 N, max object 100 g).
+             0.5 N x mu 1.5 x 2 faces ~ 1.5 N holding capacity ~ 100 g with
+             dynamic margin -- the two hardware specs cohere. Supersedes the
+             day's earlier values (3.5 sim-legacy, 1.8 experiment). History:  1.8 N was
+             tried against the heavy-grasp reaction problem, but it lets a
+             smooth 23 mm cap CREEP rotationally out of the pinch seconds
+             after lift (every carry shed the bottle; static <3 s tests
+             passed). Months of validated pipelines carried at 3.5 N. The
+             heavy-payload reaction issue moved to a purpose-built weight
+             object instead (see AIRVLA_RECREATION.md D9). Original note: steady grip is kp-set at
+             ~1 N/pad, so 3.5 N was pure stall headroom -- and during a
+             one-sided first contact on a heavy object that stall force
+             reacts on the housing at the arm's 0.19 m lever: 0.66 N*m of
+             roll torque against the airframe's +-1 N*m authority (measured
+             86 mm body walk-off closing on a 200 g bottle). 1.8 N keeps
+             ~2x grip margin on a 200 g payload and halves the worst-case
+             reaction torque. A real servo's current limit is the same knob. -->
+        <position name="act_gripper" joint="right_clamp" ctrlrange="0 0.016" forcerange="-0.5 0.5" kp="998.22" kv="2.731"/>
+        <!-- act_gripper_left removed — left_clamp is mechanically slaved to right_clamp
+            via the equality constraint below, matching the real linkage. -->
+        <motor name="thrust" site="thrust_point" gear="0 0 1 0 0 0" ctrlrange="0 30"/>
+        <motor name="roll_torque" site="thrust_point" gear="0 0 0 1 0 0" ctrlrange="-1 1"/>
+        <motor name="pitch_torque" site="thrust_point" gear="0 0 0 0 1 0" ctrlrange="-1 1"/>
+        <motor name="yaw_torque" site="thrust_point" gear="0 0 0 0 0 1" ctrlrange="-1 1"/>
+        <!-- Mirrored left-jaw drive, RESTORED 2026-08-18 (appended LAST so the
+             first seven actuator indices stay load-bearing-order intact).
+             Single-sided actuation + the equality transmits a sustained net
+             lateral reaction to the housing when a pad stalls on a resisting
+             object: measured 80 mm body shove closing on a 200 g bottle
+             (30 g objects yield instead, which is why every earlier pipeline
+             was blind to this). The real rack-and-pinion applies BALANCED
+             jaw forces through the pinion -- the housing feels ~zero net
+             force -- so dual mirrored actuation is the faithful model, not a
+             hack. SkyGripController already drives this channel at -cmd by
+             name when present. -->
+        <position name="act_gripper_left" joint="left_clamp" ctrlrange="-0.016 0" forcerange="-0.5 0.5" kp="998.22" kv="2.731"/>
+    </actuator>
+
+    <worldbody>
+        <geom name="ground" type="plane" size="20 20 0.1" material="grid_mat"/>
+
+        <!-- Fixed external view -- the paper's third camera stream (their "external"
+             camera on a tripod). WORLD-FIXED, not on the drone: it frames the whole
+             task from one constant viewpoint, so the drone, the work surface and the
+             object are all visible in every frame regardless of where the drone flies.
+             Placed to serve both scenes: in the bare task it sees the pedestal (0, 0.35)
+             with the drone above; in the lab it sees the mustard bottle (0, 0.6), the
+             bin (1.4, 1.6) and the mat between them. Height 1.5 m, looking gently down
+             at the workspace centre. -->
+        <!-- fovy 70 -> 40 (2026-08-16): at 70 the 20 mm objects rendered ~10 px and
+     their colours did not survive video compression; 40 keeps drone + table
+     framed (verified by render at the v5 fixed table height) with the
+     objects large enough to discern colour. -->
+<camera name="overview_cam" pos="1.8 -1.4 1.5" xyaxes="2 1.5 0  -1.43 1.9 6.25" fovy="40"/>
+
+        <light name="sunlight" directional="true" pos="0 0 4" dir="0 0 -1" castshadow="true" diffuse="0.8 0.8 0.8"/>
+        <light name="ambient_fill" directional="false" pos="0 0 5" castshadow="false" diffuse="0.3 0.3 0.3" ambient="0.2 0.2 0.2"/>
+
+        <body name="base_link" pos="0 0 1.5">
+            <freejoint name="drone_free_joint"/>
+
+            <!-- Body + battery, WITHOUT the arm. The aircraft weighs 1179 g all-up and
+                 the arm is 250-300 g measured directly, so base_link = 1179 - 275 = 904 g.
+                 Do NOT re-derive the arm from 817 - 386: those two weighings do not
+                 bracket the arm cleanly and give 431 g, which is wrong and unflyable
+                 (0/12 picks, 11 crashes). The direct arm measurement is the one to trust.
+                 An even earlier pass had 1107/72 -- right total, distribution backwards.
+                 diaginertia scaled from the 1.0 kg reference by 0.904; that assumes the
+                 battery is distributed like the rest of the body, an approximation worth
+                 refining if the pack's position is known.
+                 STILL 904 g and still correct: this body is the airframe WITHOUT the arm, so
+                 swapping the gripper does not touch it. What did change is the total -- the
+                 arm subtree is now 200 g rather than 275 g (the Pololu gripper weighs 30 g
+                 against the old gripper's 105 g), so all-up is ~1104 g. The 1179 g figure
+                 above is the weighing that produced 904 g, not a current all-up weight.
+                 RECALIBRATED 2026-08-15 to a new direct weighing of the real build:
+                 body-without-arm 736 g (arm 331 g, gripper 30 g, all-up 1097 g). The old
+                 904 g came from the superseded 1179 g all-up figure. diaginertia scaled
+                 by 736/904 = 0.8142 (same same-shape assumption as before). -->
+            <inertial mass="0.736"
+                      pos="1.928E-06 0.0086666 0.027403"
+                      diaginertia="0.0030103 0.0041071 0.0069906"/>
+
+            <!-- Forward/navigation view. Orientation unchanged (faces +y, pitched ~44 deg down),
+                 matching the real airframe where the Pi sits at the back facing forward.
+                 Moved forward along +y only: at the old y=0.010 the base_link mesh (which spans
+                 y -0.138..+0.169) sat directly in the line of sight, so the gripper was occluded
+                 by the drone's own body at every arm pose -- renders showed only propellers.
+                 y=0.150 is just inside the nose, clearing the body while staying mountable.
+                 Gripper is well framed when the arm is up-and-forward (Joint_1 ~1.0-1.6),
+                 marginal at mid poses where it hangs near the lower frame edge.
+                 Previous value: pos="0 0.01 0.15" -->
+            <!-- Aimed DOWN and BACK, not forward. The task is an overhead grasp: at
+                 GRASP the block sits 54 mm behind and 200 mm below the body (the
+                 body->jaw offset), so the previous forward-and-45-deg-down aim
+                 pointed straight past the workspace. Verified against the recorded
+                 dataset: camera2 showed only floor and horizon in every frame
+                 sampled, mid-grasp included, so that stream carried no task
+                 information at all.
+                 Mounted at the nose tip and below the body plane because anything
+                 inside the airframe just films the drone's own underside.
+                 50 deg from vertical; xyaxes y-column is (0, cos50, -sin50).
+                 Previous value: pos="0 0.15 0.02" xyaxes="1.95 0.05 0 -0.02 0.98 1" -->
+            <!-- NOSE camera, fovy 130, matching the real airframe's wide forward cam.
+                 THE NOSE IS -y: the +y overhang carries the Raspberry Pi board at the BACK
+                 (first attempt put this camera at +y facing +y, and every render framed the
+                 Pi shelf). So: mounted at the -y end of the base_link mesh (spans y -0.138..
+                 +0.169) and aimed out over the nose along -y, pitched ~44 deg down -- the
+                 paper's forward/navigation stream. The jaws hang on the +y side and belong
+                 to wrist_cam, not this stream.
+                 History: pos="0 -0.07 0.15" fovy=100 aimed +y-and-down (framed the gripper);
+                 then pos="0 0.15 0.15" aimed +y (framed the Pi board). -->
+            <!-- Raised nose mount (user direction 2026-08-19: "a bit higher
+                 and the propellers not in view"): moved ahead of the prop
+                 discs' front edge (y -0.187) so the 130-deg view clears them,
+                 and up to z 0.055. Orientation and fovy unchanged (user
+                 hand-tuned). Was pos="0 -0.11500 0.03". -->
+            <!-- vla_drone change: pitched down 45 deg (was ~29 deg) toward the
+                 table, same heading and roll -- more table, less horizon. -->
+            <camera name="scene_cam" pos="0 -0.20 0.055" xyaxes="-1.95 -0.05 0  0.02 -1.27 1.27" fovy="130"/>
+          
+            <!-- overview_cam used to be mounted HERE, on base_link, as a chase view.
+                 Moved to the worldbody as a fixed tripod -- see there. The paper's third
+                 stream is an external static camera, and a chase cam can never be
+                 replicated by a real tripod in the lab. -->
+
+            <!-- Chase view: behind and above the airframe, looking forward and down over
+                 the drone at the workspace. Mounted on base_link, NOT on the gripper --
+                 a gripper-mounted version swings with the arm and the framing breaks.
+                 Shows the drone, the arm hanging below, and the objects ahead in one
+                 frame. Replaces the earlier jaw-close-up, which framed the grasp well but
+                 left the gripper hanging in empty space with the objects as specks at the
+                 bottom edge during the whole approach. Pose derived in _chasecam.py /
+                 _tobase.py and chosen from rendered candidates. -->
+
+            <geom type="mesh" mesh="base_link" rgba="0.08 0.08 0.09 1"/>
+            <!-- Real-drone colours (review 2026-08-19): black plastic body,
+                 BLUE propellers -- visual-only discs aligned to the mesh's own
+                 rotor discs, photogrammetrically measured at (+-0.105, +-0.085,
+                 z 0.030), r 0.060 (2026-08-20). -->
+            <geom name="prop_fl" type="cylinder" size="0.060 0.002"
+                  pos="0.105 0.085 0.033" rgba="0.15 0.35 0.95 1"
+                  contype="0" conaffinity="0" density="0" mass="0.00"/>
+            <geom name="prop_fr" type="cylinder" size="0.060 0.002"
+                  pos="0.105 -0.085 0.033" rgba="0.15 0.35 0.95 1"
+                  contype="0" conaffinity="0" density="0" mass="0.00"/>
+            <geom name="prop_bl" type="cylinder" size="0.060 0.002"
+                  pos="-0.105 0.085 0.033" rgba="0.15 0.35 0.95 1"
+                  contype="0" conaffinity="0" density="0" mass="0.00"/>
+            <geom name="prop_br" type="cylinder" size="0.060 0.002"
+                  pos="-0.105 -0.085 0.033" rgba="0.15 0.35 0.95 1"
+                  contype="0" conaffinity="0" density="0" mass="0.00"/>
+            <!-- Legs shortened: they reached 0.200 m below the body, which set the whole
+                 platform's minimum working height and left the gripper barely clearing
+                 the table. Now 0.150 m, still just below the folded-arm gripper so the
+                 airframe rests on its legs rather than its jaws. -->
+            <geom name="leg_front_left" type="cylinder" size="0.008 0.085" pos="0.108 0.088 -0.065" rgba="0.08 0.08 0.09 1" density="0" mass="0.00"/>
+            <geom name="leg_front_right" type="cylinder" size="0.008 0.085" pos="0.108 -0.088 -0.065" rgba="0.08 0.08 0.09 1" density="0" mass="0.00"/>
+            <geom name="leg_back_left" type="cylinder" size="0.008 0.085" pos="-0.108 0.088 -0.065" rgba="0.08 0.08 0.09 1" density="0" mass="0.00"/>
+            <geom name="leg_back_right" type="cylinder" size="0.008 0.085" pos="-0.108 -0.088 -0.065" rgba="0.08 0.08 0.09 1" density="0" mass="0.00"/>
+
+            <site name="thrust_point" pos="0 0 0" size="0.02" rgba="0 1 1 0.8" type="sphere"/>
+
+            <body name="Link_1" pos="0.001 -2.5e-05 -0.038" quat="1 -0.000327565 0 0">
+                <!-- PROVISIONAL SPLIT of the weighed 431 g arm. The 8 g here previously was
+                     the PRINTED LINK ONLY; the weighed arm is 431 g, the balance being
+                     servos, brackets and wiring. Assumed here: printed link + the Joint_1
+                     (shoulder) servo = 150 g. Confirm against the real build -- where the
+                     servo mass sits sets the arm's centre of mass, which drives the roll
+                     coupling, so this split matters more than the per-link totals.
+                     diaginertia scaled from the 80 g reference by 1.875. -->
+                <!-- RECALIBRATED 2026-08-15: the whole arm (excl. gripper) weighs 331 g on
+                     the real build, not the 100 g previously modelled. Split between Link_1
+                     and connect PROPORTIONALLY to the old 95:5 ratio (Link_1 314.45 g,
+                     connect 16.55 g), inertia scaled by the same 3.31 mass ratio, CoM kept.
+                     ASSUMPTION to confirm against the real build: this keeps nearly all the
+                     added mass (servos) in Link_1 at its current CoM; if the elbow servo
+                     actually rides on the connect bracket, move ~its mass there -- the split
+                     sets the arm CoM and therefore the roll coupling (see note above). -->
+                <inertial pos="-0.0016184 -7.0854E-06 -0.08892"
+                            mass="0.31445"
+                            diaginertia="6.8749e-05 9.0032e-05 4.7168e-05"/>
+                <!-- armature is REQUIRED, not a tuning nicety. It models the servo's
+                     reflected rotor inertia, which on links this light dominates the link's
+                     own inertia. The Pololu swap took the forearm+gripper from 180 g to 35 g;
+                     the position actuators kept kp=998, so the closed-loop frequency at these
+                     joints rose as 1/sqrt(inertia) and went past what a 1 ms RK4 step can
+                     carry. Without it the sim hits "Nan, Inf or huge value in QVEL at DOF 6"
+                     ~0.23 s into every episode -- peak |qvel| 9.6e11 -- and the wreckage reads
+                     like a flight-controller divergence, which is what makes it worth naming
+                     here. Measured: 0 blows up, 1e-5 is already stable, and from 3e-5 up the
+                     arm still tracks a step exactly (0.8 -> 0.8001). 1e-4 sits mid-plateau.
+                     If the arm is ever made lighter again, re-check this before blaming the
+                     controller. -->
+                <joint name="Joint_1" pos="0 0 0" axis="1 0 0" range="-1.6 1.6" armature="1e-4" damping="0.372" frictionloss="0.08"/>
+                <geom contype="0" conaffinity="0" type="mesh" mesh="Link_1" rgba="0.08 0.08 0.09 1"/>
+
+                <body name="connect" pos="-0.003 0 -0.1308" quat="0.7071068 0.7071068 0 0">
+                    <!-- connectf weighed 5 g. Was 0.075, which was the OLD bracket lumped
+                         together with the Joint_2 (elbow) servo, and its centre of mass sat at
+                         z = -69 mm -- 67 mm BELOW the bottom of the part it was supposed to
+                         describe, i.e. outside the geometry entirely. That is now fixed.
+                         This is not a box approximation: connectf is watertight, so these are
+                         the mesh's own volume-integrated mass properties at uniform density
+                         scaled to 5 g, in the geoms' rotated frame (quat="0 0 0 1" below).
+                         SEE THE NOTE ON MASS in gripper_assembly -- if 5 g is the printed
+                         bracket ALONE then the elbow servo is now unaccounted for anywhere in
+                         the model, and it should be added to whichever body carries it. -->
+                    <!-- RECALIBRATED 2026-08-15: scaled 5 g -> 16.55 g as part of the
+                         100 g -> 331 g arm re-weighing (proportional split, see Link_1). -->
+                    <inertial pos="-0.000538 0.001755 0.023525" mass="0.01655"
+                              fullinertia="2.428804e-06 5.359754e-06 4.565245e-06 1.448956e-07 1.068597e-07 -3.549333e-07"/>
+                    <joint name="Joint_2" pos="0 0 0" axis="1 0 0" range="-1.6 1.6" armature="1e-4" damping="0.235" frictionloss="0.203"/>
+                    <!-- quat = 180 deg about the body z axis (w,x,y,z = 0,0,0,1), i.e. the
+                         bracket is turned end-for-end about its own long axis. Done on the
+                         GEOMS and not on the body, so the Joint_2 frame and everything
+                         hanging below it stay put; only the printed part turns. Joint_2
+                         itself is unaffected either way -- its axis is body x, and 180 deg
+                         about z maps that line onto itself.
+                         Applied here rather than baked into connectf.stl because that file
+                         is the one new part that arrived in its true CAD frame, and it is
+                         worth keeping it byte-identical to what came off GitHub. -->
+                    <geom type="mesh" quat="0 0 0 1" contype="0" conaffinity="0" group="1" density="0" rgba="0.08 0.08 0.09 1" mesh="connectf"/>
+                    <geom type="mesh" quat="0 0 0 1" rgba="0.08 0.08 0.09 1" mesh="connectf"/>
+
+                    <!-- SLOTTED, not stacked. The base has a solid rectangular spigot
+                         22.60 x 12.42 mm on its mount face; connectf's servo tower has a
+                         pocket 23.30 x 13.80 mm. That is a slip fit -- 0.35 mm clearance a
+                         side across, 0.69 mm along -- so the two are a mating pair and the
+                         placement is what makes them mate, not a guess.
+                         x/y put the spigot centre on the pocket centre. The spigot sits
+                         off-centre ON THE BASE by (5.30, -6.60) mm, so centring the mating
+                         feature necessarily offsets the whole gripper by the negative of
+                         that; see the note on grasp_site.
+                         z = 29 mm buries the spigot 4 mm into the pocket and is the lowest
+                         height at which the two solids do not interpenetrate at all. Pushed
+                         to 28.25 the spigot tips bottom out on the pocket floor but the
+                         base's shoulder starts cutting 0.46 mm into the tower, so 29 is the
+                         seating. Previously 38.25, merely resting on top of the tower.
+                         except for connectf's screw post (the 4.5 x 5.8 mm lug at
+                         connect x 7.0..11.5, y -15.8..-10.0 that rises to z = 41.8),
+                         which is meant to enter the pocket in the base's mount face and
+                         take the fixing screw. Was 0.03, sitting on the old connect's
+                         servo plate at z = 28.5.
+
+                         The quaternion is UNCHANGED, and that is not a coincidence: it
+                         maps the assembly frame's -y onto connect +z, so the jaws still
+                         point straight out along the forearm, and assembly x onto
+                         connect x, so they still close about the arm's lateral axis --
+                         the axis Joint_1 and Joint_2 both turn about. Closing about
+                         connect y instead would put the paddles' motion in the arm's
+                         swing plane, which is the wrong way round for an overhead pick.
+                         Keeping this frame is also what lets every downstream consumer
+                         (Skygrip_objective, camera_check, wristcam_solve, collect_demos)
+                         carry on unchanged. -->
+                    <body name="gripper_assembly" pos="-0.0053 0.0066 0.029" quat="-0.7071068 0.7071068 0 0">
+                        <!-- The whole gripper -- body, servo and both paddles -- was weighed at
+                             30 g. That 30 g is split across the three bodies in proportion to
+                             their mesh envelope volumes (20.4 cm^3 here against 2.5 cm^3 per
+                             paddle), giving 24 g + 3 g + 3 g. Splitting by envelope rather than
+                             by plastic volume is the right call for THIS part specifically,
+                             because the envelope is what the servo fills, and the servo is most
+                             of the mass in it.
+                             The old value was 85 g -- the old printed housing plus its servo --
+                             so the arm has lost 75 g at its far end, which is exactly where it
+                             matters most for the CoM and the gravity moment the flight
+                             controller trims against. All-up weight is now ~1104 g, not 1179 g;
+                             hover thrust follows total_mass at runtime so it retunes itself,
+                             but any figure quoted against the old 1179 g is stale.
+                             pos and diaginertia also had to change: they described the old mesh,
+                             whose origin sat 4 cm from the body, and put this body's centre of
+                             mass outside its own geometry. They are now the new mesh's bbox
+                             centre, with inertia from a uniform box of the same extents
+                             (48.3 x 32.3 x 36.6 mm along body x/y/z) -- an approximation, but
+                             one that at least describes this part. Note the order: diaginertia
+                             is in BODY axes, so it has to be permuted whenever the base's
+                             orientation changes, even though the part itself never does. -->
+                        <inertial pos="0 -0.01615 0" mass="0.024"
+                                  diaginertia="4.76570e-06 7.34937e-06 6.75683e-06"/>
+                        <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" mesh="gripper_base" rgba="0.08 0.08 0.09 1"/>
+                        <!-- Body collision DISABLED, and this is load-bearing for the whole
+                             task. MuJoCo collides a mesh as its CONVEX HULL, so a gripper body
+                             that in reality is open underneath -- the paddles hang through it --
+                             becomes a solid block spanning the jaw opening. On the old gripper
+                             this was measured by descending onto a post: first contact came
+                             62 mm ABOVE the object's top face, while the jaws need to reach
+                             10 mm BELOW it, so the gripper could never close on anything
+                             standing on a surface; every descent shoved the block off the
+                             pedestal and the reaction flipped the drone. The new body is
+                             smaller but has the same open underside, so the same trap applies.
+                             Grasping is done by the pad_1/pad_2 boxes, so nothing needs this
+                             hull to be collidable. The drone body and legs still collide.
+                             If body collision is ever wanted back, build it from primitives
+                             that leave the mouth open, NOT from this mesh. -->
+                        <geom type="mesh" mesh="gripper_base"
+                              contype="0" conaffinity="0" group="1" rgba="0.6 0.6 0.6 0"/>
+
+                        <!-- Wrist camera: VERBATIM original definition from the start of
+                             the session (git HEAD SkyGrip_full.xml), restored on user
+                             request 2026-08-19. NOTE: this core's gripper body frame is
+                             rotated vs the old SkyGrip_full body, so the view this
+                             renders here differs from what it rendered there (measured:
+                             upside down, camera on the jaw side). The red marker geom
+                             below sits at the camera mount position to make the mount
+                             visible in renders/viewer while the placement is settled. -->
+                        <!-- vla_drone change (2 revisions): first re-aimed at grasp_site
+                             (old axes pointed ~52 deg away, jaws at frame edge); then, on
+                             user direction ("bring it down so only the clamps are
+                             visible"), moved 25 mm down the jaw axis (y -0.04 -> -0.065,
+                             just past the jaw tips at y~-0.052) and pitched 30 deg toward
+                             the tips. Chosen from a rendered position x pitch sweep: the
+                             gripper body/arm mass is fully out of frame, only the clamp
+                             blades + grasped object remain, workspace beyond. Camera and
+                             clamps share this body, so the framing is rigid under arm
+                             motion. Same fovy, same in-plane roll (x-axis kept). -->
+                        <camera name="wrist_cam" pos="0 -0.065 0.042" xyaxes="-1 0 0  0 -0.866025 0.5" fovy="110"/>
+
+                        <!-- Manipulation close-up, mounted to the side of the jaws and looking
+                             in and down at the grasp point. It has to be to the side: a
+                             ray-cast sweep of 1915 mount points around the old gripper found
+                             NONE with line-of-sight along the approach axis (-y), because the
+                             body envelops everything behind the jaws, and the new body is the
+                             same shape in that respect. Every unoccluded view is perpendicular
+                             to the approach.
+                             Pulled in from z = 0.082 to 0.06 and from y = -0.04 to -0.025 with
+                             the gripper: the old stand-off was sized for a housing 2-3x this
+                             one, and at that distance the new jaws are a speck in the frame.
+                             The axes aim it at grasp_site. Re-check with camera_check.py after
+                             any further move -- object visible at zero / reach / extended. -->
+
+                        <!-- True end-effector: the point midway between the paddles' INNER
+                             FACES, where a grasped object actually sits.
+
+                             It is a clean 0 0 -0.0466 now only because the mesh prep put it
+                             there. The old value was 0.00053 -0.07236 -0.00018, and every one
+                             of those digits was a correction: the old clamp meshes carried
+                             ~7 cm offsets, so the body origin was nowhere near the jaws (that
+                             error alone put the w_ee cost 72 mm off), and the meshes were
+                             asymmetric, so even the midpoint of the two geom origins missed
+                             the face midpoint by 21 mm. prepare_gripper_meshes.py removes both
+                             traps at the source by writing each paddle with its gripping face
+                             on x = 0, so the jaw centre is x = 0 by construction.
+                             y = -46.6 mm is mid-way down the 20 mm of paddle that protrudes
+                             below the gripper body, i.e. the middle of the pads.
+
+                             Still invariant to aperture (the paddles move symmetrically) and to
+                             arm pose, so a static site is exact rather than an approximation. -->
+                        <site name="grasp_site" pos="0 -0.0423 -0.0066" size="0.006"
+                              rgba="1 0.5 0 0" type="sphere"/>
+                        
+                        <!-- Both paddles hang from y = -19.0 mm, which puts 13.3 mm of each paddle up
+                             inside the open-bottomed body (where the racks run) and leaves
+                             20 mm protruding as the working jaw. Both are the SAME
+                             printed part: right_clamp.stl and left_clamp.stl are two different
+                             rotations of one mesh, which is why their mounting tabs come out at
+                             opposite z (-11.5 and +11.5) and the two racks pass each other
+                             instead of colliding.
+
+                             Both slide on a clean "1 0 0" now. The old axis was
+                             "0.999848 -0.000154 0.017451" -- a 1 degree tilt inherited from the
+                             old meshes' arbitrary pose, which is exactly the sort of thing the
+                             mesh prep exists to remove.
+
+                             x is 0 for both: prepare_gripper_meshes.py writes each paddle with
+                             its gripping face on the plane x = 0, so at ctrl = 0 the two faces
+                             are coincident (gap 0) and the joint value IS the half-gap.
+                             Gap in millimetres = 2000 * ctrl.
+
+                             x = 0 and z = -6.6 mm centre the paddles on the base's FLANGE --
+                             the wide plate they actually run against -- which is the gripper's
+                             mechanical centreline. Over the band the paddles pass through, the
+                             flange spans x = -24.00..24.00 (mid 0.00) and z = -18.30..5.10
+                             (mid -6.60), so these two numbers are simply that midpoint.
+
+                             x = 0 rather than the mesh's own bbox centre is confirmed
+                             independently by the rack guide slots: they sit at x = -9.90..-8.30
+                             and +8.30..+9.90, i.e. exactly symmetric about x = 0. The racks
+                             travel along those, so the jaws have to close there.
+
+                             Do NOT be tempted to centre on the BODY block above the flange
+                             instead. It sits at x = -6.00..16.60, i.e. 5.3 mm off -- the same
+                             offset the mounting spigot carries, since the block is what the
+                             spigot is part of. Centring the paddles on it was tried and
+                             rejected on inspection: it swings the whole jaw pair 5.3 mm across
+                             and pushes the outer paddle 4 mm past the flange edge at full
+                             aperture. The flange, not the block, is the datum.
+
+                             On the z specifically: Over the band the paddles
+                             run through, the base spans z = -18.30..5.10 -- centre -6.60, width
+                             23.40 mm against the paddles' 23.00 -- so on this offset the two
+                             sit flush to within 0.2 mm a side. The 6.6 mm is not a coincidence:
+                             it is the same offset the mounting spigot carries on the base, so
+                             once gripper_assembly's pos absorbs it, the base body AND the
+                             paddles both come out centred on the bracket and only the
+                             mesh-internal feature is off-axis. -->
+                        <body name="clamp_1" pos="0 -0.019 -0.0066">
+                            <!-- 3 g: the paddle's share of the 30 g weighed gripper, by envelope
+                                 volume. Was 10 g, the old printed blade. See gripper_assembly.
+                                 pos/diaginertia are the new mesh's bbox centre and a uniform
+                                 box of its extents (8.7 x 33.3 x 23 mm), replacing values that
+                                 placed the CoM 22 cm away, outside the body entirely. -->
+                            <inertial pos="0.0025 -0.01665 0" mass="0.003"
+                                      diaginertia="4.09472e-07 1.51242e-07 2.96214e-07"/>
+                            <joint name="right_clamp" pos="0 0 0" axis="1 0 0" type="slide"
+                                   range="0 0.016" actuatorfrcrange="-1.9 1.9" damping="0.5" frictionloss="0.1"/>
+                            <!-- The paddle mesh is the VISIBLE gripper but does NOT do the
+                                 collision: MuJoCo collides a mesh as its convex hull, and the
+                                 hull of a downward-tapering blade is a wedge whose lower point
+                                 contacts an object first and shoves it out -- measured on the
+                                 old gripper, the object was ejected 50-64 mm and never lifted,
+                                 at every blade position tried. A convex hull cannot present the
+                                 flat vertical face the STL has, and this paddle tapers the same
+                                 way. So the physics is done by a slim invisible plate sitting on
+                                 the visible face (pad_1); the mesh provides the appearance. To
+                                 make the mesh itself collide it would have to be convex-
+                                 decomposed (CoACD) into several pieces and re-imported. -->
+                            <geom type="mesh" mesh="right_clamp"
+                                  contype="0" conaffinity="0" group="1" rgba="0.1 0.1 0.11 1"/>
+                            <!-- Flush with the gripping face: the box spans x = 0..0.002, so its
+                                 inner surface is the face itself and the pad grips exactly where
+                                 the render shows the paddle. Sized to the 20 mm of paddle that
+                                 protrudes below the body -- past that it would grip through the
+                                 gripper. Thin (2 mm) on purpose: the paddle narrows toward the
+                                 tip, and a fatter pad would poke out of the back of the mesh. -->
+                            <geom name="pad_1" type="box" pos="0.001 -0.0233 0"
+                                  size="0.001 0.009 0.010"
+                                  rgba="0.25 0.25 0.3 0"
+                                  friction="1.5 0.01 0.001" solref="0.004 1"/>
+                        </body>
+
+                        <body name="clamp_2" pos="0 -0.019 -0.0066">
+                            <inertial pos="-0.0025 -0.01665 0" mass="0.003"
+                                      diaginertia="4.09472e-07 1.51242e-07 2.96214e-07"/>
+                            <joint name="left_clamp" pos="0 0 0" axis="1 0 0" type="slide"
+                                   range="-0.016 0" actuatorfrcrange="-1.9 1.9" damping="0.5" frictionloss="0.1"/>
+                            <geom type="mesh" mesh="left_clamp"
+                                  contype="0" conaffinity="0" group="1" rgba="0.1 0.1 0.11 1"/>
+                            <geom name="pad_2" type="box" pos="-0.001 -0.0233 0"
+                                  size="0.001 0.009 0.010"
+                                  rgba="0.25 0.25 0.3 0"
+                                  friction="1.5 0.01 0.001" solref="0.004 1"/>
+                        </body>
+                    </body>
+                </body>
+            </body>
+        </body>
+
+
+    </worldbody>
+
+    <!-- ==================== from pedestal_task.xml ==================== -->
+  <!-- The PEDESTAL task scene: work surface + target + two distractors, exactly as
+       they lived in SkyGrip_full.xml before the core/task split. collect_demos.py
+       repositions and resizes all of these per episode by name. -->
+  <worldbody>
+        <!-- Pedestal. The arm reaches at most 0.271 m below the body while the legs
+             hang 0.200 m down, so picking off the floor would mean hovering at ~0.29 m
+             with 9 cm of leg clearance at the j2 joint limit -- no margin against a
+             0.10 m controller tolerance. Raising the work surface puts the grasp in
+             the middle of the arm's envelope instead of at its edge.
+             Long in x, narrow in y (0.40 x 0.10). The drone grasps from directly
+             overhead -- straight down is the arm's comfortable direction, reaching
+             0.254 m with j2 only at 0.8, whereas forward reach plus depth together
+             pushes j2 to its 1.6 limit. Hovering overhead is only safe because the
+             legs sit at y = +-0.088 and so straddle a 0.05 half-width surface; a
+             wide table would foul them. The x extent gives pick and place two
+             distinct spots on the same surface.
+             Static -- collect_demos.py repositions it by writing model.body_pos. -->
+        <body name="pedestal" pos="0 0.35 0.25">
+            <!-- Friction lowered to match the target object. Contact friction is
+                 the element-wise max of the pair, so the block can only slide
+                 freely on this surface if BOTH are low -- see target_object. -->
+            <!-- Enlarged from 0.20 x 0.05 to 0.32 x 0.09 half-extents (0.64 x 0.18 m
+                 surface) so three objects fit with real separation and the place point
+                 has somewhere to go. collect_demos rewrites geom_size[2] per episode for
+                 the working-height randomisation, so only x/y are fixed here. -->
+            <geom type="box" size="0.32 0.09 0.25" rgba="0.45 0.42 0.38 1"
+                  friction="0.3 0.005 0.0001"/>
+        </body>
+
+        <!-- Pick target: a 20 x 20 x 80 mm upright post.
+             Both dimensions are dictated by the gripper geometry, measured from
+             the meshes rather than from body origins:
+
+               WIDTH. The true inner-face gap between the jaws is 30.7 mm at full
+               aperture (0.037) and closes to overlap. Note this is NOT the
+               origin-to-origin distance, which reads 87.2 mm -- the same trap as
+               using the gripper_assembly body origin for the end effector. 20 mm
+               leaves ~5 mm either side on approach.
+
+               HEIGHT. Fingertips reach 49.2 mm BELOW the jaw midpoint while the
+               housing obstructs from ~0 mm ABOVE it, so the object must sit
+               entirely below the midpoint and be gripped over the 49 mm beneath.
+               At 80 mm tall, grasped 5 mm above its top face, the fingertips
+               still clear the surface by ~36 mm.
+
+             A 40 mm cube (the original) was unpickable on both counts: too wide
+             for the jaws, and shorter than the fingers, so any midpoint clearing
+             the surface sat above the cube entirely.
+             collect_demos.py randomises this per episode; the pose here is only
+             the reset default. On +y, the side the arm reaches toward at positive
+             Joint_1 and the side scene_cam faces. -->
+        <body name="target_object" pos="0 0.35 0.54">
+            <freejoint name="target_free_joint"/>
+            <!-- No explicit <inertial>: collect_demos randomises geom_size per
+                 episode, and a hardcoded diaginertia would silently describe the
+                 wrong shape. Letting MuJoCo derive it from the geom keeps mass
+                 properties consistent with whatever size was sampled.
+
+                 mass 10 g (was 50 g). Light on purpose: the jaws inevitably nudge
+                 the block as they close, and a light block is both easier to hold
+                 (weight 0.098 N against ~5 N of measured grip) and carries less
+                 momentum when shifted, so it settles instead of toppling.
+
+                 friction 0.3 (was 1.0), and the PEDESTAL is lowered to match.
+                 MuJoCo takes the element-wise MAXIMUM of the two geoms' friction,
+                 so lowering only this one would have changed nothing while the
+                 pedestal stayed at 1.0. Low friction against the table lets a
+                 nudged block SLIDE rather than catch an edge and tip. The pads
+                 are 1.5, and max(1.5, 0.3) = 1.5, so the grip itself is
+                 unaffected -- slippery on the table, grippy in the jaws. -->
+            <geom type="box" size="0.010 0.010 0.040" rgba="0.85 0.2 0.2 1"
+                  mass="0.010" friction="0.3 0.005 0.0001"/>
+        </body>
+
+        <!-- Distractor: a second block, identical in kind to target_object but a
+             DIFFERENT colour, used for language grounding. The episode's task names
+             a colour ("pick up the red block"); with two differently-coloured
+             blocks present the instruction is now informative -- the policy has to
+             key on colour to pick the right one, and success requires leaving this
+             one untouched. collect_demos randomises its size/pose/colour per
+             episode; the pose here is only the reset default, parked to one side. -->
+        <body name="distractor_object" pos="-0.12 0.35 0.54">
+            <freejoint name="distractor_free_joint"/>
+            <geom type="box" size="0.010 0.010 0.040" rgba="0.2 0.35 0.85 1"
+                  mass="0.010" friction="0.3 0.005 0.0001"/>
+        </body>
+
+        <!-- Second distractor. Three objects on the surface makes the colour/shape
+             grounding a genuine 1-of-3 choice rather than 1-of-2, and success still
+             requires leaving BOTH unnamed objects untouched. Same size/mass/friction
+             family as the others; collect_demos randomises pose, size, shape and
+             colour per episode. -->
+        <body name="distractor_object_2" pos="0.12 0.35 0.54">
+            <freejoint name="distractor2_free_joint"/>
+            <geom type="box" size="0.010 0.010 0.040" rgba="0.85 0.7 0.2 1"
+                  mass="0.010" friction="0.3 0.005 0.0001"/>
+        </body>
+  </worldbody>
+
+    <!-- ==================== from mocap_markers.xml ==================== -->
+  <!-- Controller mocap markers, split from the core so scene includes can be
+       ordered core -> scene -> markers, preserving the exact body ordering of
+       the pre-split validated model (markers last). No joints, no collision. -->
+  <worldbody>
+        <body name="current_target" pos="0 0 1.5" mocap="true">
+            <!-- Debug marker, alpha 0: nothing moves it any more (the PD controller
+                 does not use it), so it just sits at (0,0,1.5). Made invisible so it
+                 can never leak into an onboard training frame. -->
+            <geom type="sphere" size="0.05" rgba="0 1 0 0" contype="0" conaffinity="0"/>
+        </body>
+        <body name="waypoint_0" pos="0 0 1.5" mocap="true">
+            <geom type="sphere" size="0.02" rgba="0.5 0.5 1 0" contype="0" conaffinity="0"/>
+        </body>
+        <body name="waypoint_1" pos="0 0 1.5" mocap="true">
+            <geom type="sphere" size="0.02" rgba="0.5 0.5 1 0" contype="0" conaffinity="0"/>
+        </body>
+  </worldbody>
+
+</mujoco>

@@ -725,6 +725,49 @@ cannot hold full-FT memory — recorded as a deviation if taken** (risk R1).
     32 mm jaw or floor-clearance constraints (consistent with the
     original 22-object screen).
 
+- **D37 (Phase E results + the pick-failure investigation, 2026-08-25/26)**:
+  the full ladder ran on the 30k checkpoint (192 episodes: 12-trial s(τ)
+  sweep + 20 trials/task/method), then a three-step causal investigation
+  of the manipulation failure. Headline (ours vs paper):
+  | method | pick | place | nav gate/hover | comp |
+  |---|---|---|---|---|
+  | naive | 10% vs 50% | 0 vs 0 | 100%/60% vs 95% | 0 (gate 19/20) |
+  | +RTC | 5% vs 85% | 0 vs 23.5% | 100%/65% | 0 (gate 19/20) |
+  | +guidance (s=3.0) | 5% vs 100% | 0 vs 50% | 95%/70% | 0 (gate 19/20) |
+  - **Reproduces**: navigation (59/60 crossings) and instruction-level
+    generalisation — the held-out compositional prompt drove correct
+    first-clause behaviour 19/20 in every mode.
+  - **Does not reproduce**: the inference ladder is FLAT on picks
+    (2/1/1 of 20; near-miss median 285–298 mm in all modes). The
+    policy approaches and hovers near the object but does not commit
+    to the vertical descent (Hana's diagnosis from the rollout video,
+    confirmed by the miss distribution).
+  - **Falsified in order**: (1) covariate shift as primary — 50
+    descent-recovery correctives (deliberate 3–8 cm off-centre hovers,
+    probe 4/4, collected 150/150) + 5k-step fine-tune from 30k
+    tightened the near-miss floor (44→25.5 mm) but left picks at 2/20;
+    (2) the world-frame action convention (D3) as primary — 20 trials
+    with the object heading pinned to zero (grasp yaw ≈ 0, world ≡
+    body frame) picked 1/20, miss median 293 mm, distribution
+    unchanged.
+  - **Standing explanation**: an observability/precision ceiling. The
+    expert's descent trigger consumed millimetre-accurate privileged
+    state; the policy must reproduce that discrimination from 224 px
+    views against a ~9 mm grasp window — and the pre-training
+    noise-injection study (grasp-precision gap, 2026-08-16) predicted
+    ≤25% picks at chunked-VLA setpoint precision on exactly this
+    gripper. The paper's grasp (compliant UMI gripper on a plush toy)
+    tolerates roughly an order of magnitude more error, which is why
+    their base policy picked 50% naive and the ladder had a behaviour
+    to refine. Conclusion for the write-up: the ladder's gains
+    presuppose base grasp competence; the embodiment's tightest
+    physical tolerance, not the inference recipe, set our ceiling.
+  - Options recorded, not taken (yet): platform-side terminal guidance
+    at eval (grasp_assist-style close-gate + funnel — arguably D4-type
+    embodiment automation, but a deviation from the paper's
+    policy-does-precision design); body-frame action retrain; higher
+    input resolution.
+
 - **D36 (penguin approach rebuilt + two flight-quality root causes,
   2026-08-23, from Hana)**: four changes, each probe-verified 4/4 and
   the sample recollected between rounds:

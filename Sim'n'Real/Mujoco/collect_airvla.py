@@ -583,7 +583,8 @@ class Runner:
         return aim, None
 
     # -- the three programs --------------------------------------------------
-    def manip_episode(self, obj="weight", fallen_start=False):
+    def manip_episode(self, obj="weight", fallen_start=False,
+                      offset_hover=False):
         rng = self.rng
         # object spawn varies widely too (review 2026-08-19)
         bxy = np.array([rng.uniform(-0.60, 0.60), rng.uniform(0.20, 1.00)])
@@ -692,6 +693,24 @@ class Runner:
                 self.run_until(frames, task,
                                lambda: abs(ex.yaw - ex.goal_yaw) < 0.02,
                                timeout_s=8.0)
+            if offset_hover and grasp_try == 0:
+                # DESCENT-RECOVERY corrective (Phase E finding: the
+                # trained policy arrives overhead but drifts instead of
+                # descending -- training data held only perfectly
+                # centred descents, so off-centre states were OOD).
+                # Deliberately hover 3-8 cm off-centre so the recorded
+                # frames show the off-centre wrist view AND the
+                # expert's visible correction back to centre before
+                # the gated vertical descent.
+                ang = rng.uniform(0, 2 * np.pi)
+                off_r = rng.uniform(0.03, 0.08)
+                g = ex.goal.copy()
+                g[0] += off_r * np.cos(ang)
+                g[1] += off_r * np.sin(ang)
+                ex.set_goal(xyz=g)
+                self.settle_near(frames, task, tol=0.03)
+                self.run_until(frames, task, lambda: False,
+                               timeout_s=1.0)
             ex.set_goal(xyz=at + np.array([0, 0, self.cur["stage"]]))
             ok &= self.settle_near(frames, task)
             # ALL-AXIS correction +4 cm above the object (D19): open pads
@@ -1134,7 +1153,8 @@ def main():
     r = Runner(args.seed)
     counts = [int(x) for x in args.mix.split(",")]
     plan = (["manip"] * counts[0] + ["nav"] * counts[1]
-            + ["corrective"] * counts[2])
+            + ["corrective"] * counts[2]
+            + ["descent"] * (counts[3] if len(counts) > 3 else 0))
     saved = attempts = 0
     names = list(r.objs)
     while saved < len(plan) and attempts < len(plan) * 8:
@@ -1143,6 +1163,8 @@ def main():
         attempts += 1
         if kind == "manip":
             frames, info = r.manip_episode(obj=obj)
+        elif kind == "descent":
+            frames, info = r.manip_episode(obj=obj, offset_hover=True)
         elif kind == "corrective" and saved % 2 == 0:
             # corrective slots alternate: edge-spawn block recovery / nav
             frames, info = r.manip_episode(obj="plush penguin",
