@@ -725,6 +725,66 @@ cannot hold full-FT memory — recorded as a deviation if taken** (risk R1).
     32 mm jaw or floor-clearance constraints (consistent with the
     original 22-object screen).
 
+- **D39 (the LATERAL ORBIT GRASP — converged design for dataset v2,
+  2026-08-26, from Hana)**: three probe rounds under Hana's review
+  landed the final manipulation protocol, on the STANDARD penguin (the
+  D38 tall beacon is retired to the toolkit as the future cliff-target
+  variant; carrying a 0.6 m pole read as odd):
+  - **Flight profile (Hana's spec)**: turn in place → fly STRAIGHT at
+    grasp altitude with the penguin at camera eye level (no yaw while
+    translating) → extend the arm at dead hover on a 0.45 m ring →
+    ORBIT the penguin with the nose locked on it (coordinated pivot —
+    the object stays centre-frame) to the beak/rear bearing → single
+    slow straight creep in → close/weld/lift. The erratic goal-stepping
+    creep of probe v1 replaced by one slewed goal at SP_STEP_FINAL.
+  - **Legs shortened 2/5** (tips −0.150 → −0.090, SkyGrip_core.xml,
+    both copies, diff-audited): enables the low eye-level flight.
+    Landing rule note: at 0.090 the outstretched forward arm (−0.097)
+    would touch first — land arm-TUCKED only (53 mm margin applies to
+    the tucked/travel family; measured per-pose in the geometry probe).
+  - **Probe ladder**: v1 (deep-hang, no orbit) 3/5, legs grazing
+    1–3 mm, one 43 mm shove; v2 (deep-hang pose ix 1157) 5/5 but
+    body 0.33 m — penguin below eye line, rejected on review; v3
+    (Hana's profile, short legs, shallow pose) **5/5, clearance
+    76–77 mm, penguin disturbed ≤1.4 mm, seats 22.0–22.3 mm**.
+  - Beacon findings retained for the record: 5/5 side grasps at
+    altitude, zero downwash tilt, anisotropic weld gate (D28 lesson
+    re-applied); probe artifacts beacon_probe.py / beacon_airvla.xml.
+  - The always-in-view property this family guarantees is the fix for
+    the D37 observability ceiling: no descent phase exists, and the
+    wrist + forward cameras hold the object from approach to pinch.
+
+- **D38 (dataset v2 direction: always-visible object via TALL-OBJECT
+  SIDE GRASP, 2026-08-26, from Hana)**: the plan of record for the next
+  dataset, in the user's own analysis: "currently we have the drone
+  hover above the object, descend (this is where we lose the target
+  object in the camera), then adjust grasp angle and grasp. The descent
+  is what is causing this, but we have to pick up the object this way
+  to have the clamps grasp from the sides rather than the top (a top
+  grasp could let the object slip down; the side pinch gives
+  compressive force). Ideally, if the object were much taller than the
+  drone but hollow and super light, the drone could move NEXT to it,
+  fully extend the arm and grasp — the object always in scene thanks
+  to the scene cam, and in the wrist cam too, losing the
+  lost-target-object issue that results in drift."
+  - Wrist-sweep evidence (same day): at the production grasp pose the
+    wrist camera cannot see the region under the jaws — the vertical
+    descent is flown blind in ALL cameras; a +0.30 wrist-tilt descent
+    demo kept the object in frame and grasped 4/4 (11.2 mm seats).
+  - The side-grasp mechanics are pre-validated: D29 scored 8/8 with
+    the horizontal mouth-over-target entry and was retired with the
+    bottle, not for failure; its low-altitude/ground-effect constraint
+    disappears when the grasp feature sits at flight altitude.
+  - Plan: author a tall manipuland ("beacon": ballasted base disc,
+    hollow light shaft, ~22 mm grip collar at ~0.55 m, total ≤100 g
+    per the hardware ceiling D11), revive the side-approach grasp at
+    altitude, verify per-phase visibility in scene + wrist cameras
+    (the §11 audit), probe grasps honestly (downwash knock risk on a
+    tall light object is the named threat), 15-episode review sample,
+    then regenerate the dataset EXACTLY as airvla_full (same mix
+    120/150/50, same randomisation scheme, same banking gates, same
+    storage) with the new manipulation protocol, and retrain.
+
 - **D37 (Phase E results + the pick-failure investigation, 2026-08-25/26)**:
   the full ladder ran on the 30k checkpoint (192 episodes: 12-trial s(τ)
   sweep + 20 trials/task/method), then a three-step causal investigation
@@ -762,11 +822,29 @@ cannot hold full-FT memory — recorded as a deviation if taken** (risk R1).
     to refine. Conclusion for the write-up: the ladder's gains
     presuppose base grasp competence; the embodiment's tightest
     physical tolerance, not the inference recipe, set our ceiling.
-  - Options recorded, not taken (yet): platform-side terminal guidance
-    at eval (grasp_assist-style close-gate + funnel — arguably D4-type
-    embodiment automation, but a deviation from the paper's
-    policy-does-precision design); body-frame action retrain; higher
-    input resolution.
+  - **Metric correction + fix-checkpoint verdict (2026-08-26, user
+    review of the 15-episode policy video)**: Hana spotted gate
+    contacts the scorer ignored — "crossed" tested only the gate-plane
+    transit, never collision, though the paper counts clipping as a
+    crash. A crash-aware A/B (20 guided nav trials per checkpoint,
+    contact check on all gate-vs-drone geom pairs): original 30k —
+    20/20 crossed, 1/20 gate contact, 8/20 full success; fix
+    checkpoint — 20/20 crossed, **5/20 gate contacts**, 9/20 full.
+    The manip-heavy fine-tune (nav only 20% of the fix data vs 47%
+    originally) degraded flight precision 5×. Rulings: the ORIGINAL
+    30k checkpoint is canonical; the descent-fix is recorded as
+    tested-and-reverted (no pick gain, nav regression); earlier nav
+    numbers carry a ~5%-of-crossings-had-contact caveat under the
+    corrected criterion.
+  - Options recorded, not taken (yet): a fixed top-down workspace
+    camera swapped into the third π₀ slot (candidate render verified:
+    ~18 mm/px at 224 — commitment-scale perception; self-occlusion
+    caveat when perfectly aligned; retrofittable to the existing
+    dataset via the scene_state sidecar with NO recollection);
+    platform-side terminal guidance at eval (grasp_assist-style
+    close-gate + funnel — arguably D4-type embodiment automation, but
+    a deviation from the paper's policy-does-precision design);
+    body-frame action retrain; higher input resolution.
 
 - **D36 (penguin approach rebuilt + two flight-quality root causes,
   2026-08-23, from Hana)**: four changes, each probe-verified 4/4 and
