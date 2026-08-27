@@ -1311,10 +1311,35 @@ class Runner:
             track_cross()
             if np.linalg.norm(d.qpos[0:3] - post) < 0.06:
                 break
+        # post-gate sequence (user 2026-08-27): STOP after the
+        # crossing, yaw IN PLACE toward the target object, then ONE
+        # direct leg to the hover -- no crabbing sideways at the
+        # crossing heading
+        self.run_until(frames, task,
+                       lambda: float(np.linalg.norm(
+                           d.qvel[0:3])) < 0.05,
+                       timeout_s=6.0, min_hold=3)
         # hover floor raised for the stand era (2026-08-26): the object
-        # now tops out at ~0.53 on its pedestal, and a 0.55 body hover
-        # put the legs INSIDE it; 0.78 keeps the legs 8+ cm clear
-        hover = np.array([bxy[0], bxy[1], rng.uniform(0.78, 0.95)])
+        # now tops out at ~0.53 raised, and a 0.55 body hover put the
+        # legs INSIDE it; 0.78 keeps the legs 8+ cm clear. Ceiling
+        # 0.90: wrist visibility falls off above it (probe below).
+        to = bxy - d.qpos[0:2]
+        Lh = float(np.linalg.norm(to))
+        u_h = to / max(1e-6, Lh)
+        if Lh > 0.10:
+            ex.set_goal(yaw=float(np.arctan2(u_h[0], -u_h[1])))
+            self.run_until(frames, task,
+                           lambda: abs(ex.yaw - ex.goal_yaw) < 0.03,
+                           timeout_s=8.0)
+        # STAND-OFF hover (user 2026-08-27: "at the final hover the
+        # object is still slightly in wrist camera"): segmentation
+        # probe measured 0 object px dead-overhead and a 238-510 px
+        # peak 0.10-0.15 m behind -- park 0.12-0.18 m short along the
+        # approach bearing (still inside the 0.25 m hover check)
+        off_h = rng.uniform(0.12, 0.18)
+        hover = np.array([bxy[0] - off_h * u_h[0],
+                          bxy[1] - off_h * u_h[1],
+                          rng.uniform(0.78, 0.90)])
         ex.set_goal(xyz=hover)
         ok &= self.settle_near(frames, task, tol=0.05, timeout_s=12.0)
         self.run_until(frames, task, lambda: False, timeout_s=3.0)  # hold
