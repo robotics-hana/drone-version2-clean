@@ -918,9 +918,10 @@ class Runner:
                                             self.data.qvel[3:6]))
                                         < 0.12),
                                timeout_s=4.0, min_hold=3)
-            # composure beat before the creep (0.4 s, user 2026-08-27:
-            # tried 0.1 s, restored for grasp quality)
-            self.run_until(frames, task, lambda: False, timeout_s=0.4)
+            # composure beat before the creep (0.7 s, user 2026-08-27:
+            # settled on 0.7 after trying 1.0/0.4/0.1 -- a readable
+            # pause for grasp quality without the old full-second wait)
+            self.run_until(frames, task, lambda: False, timeout_s=0.7)
             cyw, syw = np.cos(ex.yaw), np.sin(ex.yaw)
             offw = np.array(
                 [cyw * ex.off_carry[0] - syw * ex.off_carry[1],
