@@ -300,15 +300,10 @@
                  platform's minimum working height and left the gripper barely clearing
                  the table. Now 0.150 m, still just below the folded-arm gripper so the
                  airframe rests on its legs rather than its jaws. -->
-            <!-- Legs shortened again 2/5 (user 2026-08-26, D39): tips
-                 -0.150 -> -0.090, enabling the low lateral grasp with
-                 the penguin at camera eye level. NOTE: at 0.090 the
-                 fully-outstretched forward arm (-0.097) touches before
-                 the legs by 7 mm -- land arm-TUCKED only. -->
-            <geom name="leg_front_left" type="cylinder" size="0.008 0.055" pos="0.108 0.088 -0.035" rgba="0.08 0.08 0.09 1" density="0" mass="0.00"/>
-            <geom name="leg_front_right" type="cylinder" size="0.008 0.055" pos="0.108 -0.088 -0.035" rgba="0.08 0.08 0.09 1" density="0" mass="0.00"/>
-            <geom name="leg_back_left" type="cylinder" size="0.008 0.055" pos="-0.108 0.088 -0.035" rgba="0.08 0.08 0.09 1" density="0" mass="0.00"/>
-            <geom name="leg_back_right" type="cylinder" size="0.008 0.055" pos="-0.108 -0.088 -0.035" rgba="0.08 0.08 0.09 1" density="0" mass="0.00"/>
+            <geom name="leg_front_left" type="cylinder" size="0.008 0.068" pos="0.108 0.088 -0.048" rgba="0.08 0.08 0.09 1" density="0" mass="0.00"/>
+            <geom name="leg_front_right" type="cylinder" size="0.008 0.068" pos="0.108 -0.088 -0.048" rgba="0.08 0.08 0.09 1" density="0" mass="0.00"/>
+            <geom name="leg_back_left" type="cylinder" size="0.008 0.068" pos="-0.108 0.088 -0.048" rgba="0.08 0.08 0.09 1" density="0" mass="0.00"/>
+            <geom name="leg_back_right" type="cylinder" size="0.008 0.068" pos="-0.108 -0.088 -0.048" rgba="0.08 0.08 0.09 1" density="0" mass="0.00"/>
 
             <site name="thrust_point" pos="0 0 0" size="0.02" rgba="0 1 1 0.8" type="sphere"/>
 

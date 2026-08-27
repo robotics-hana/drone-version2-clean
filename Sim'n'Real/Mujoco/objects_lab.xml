@@ -169,5 +169,56 @@
             mass="0.012" rgba="0.35 0.36 0.40 1"
             friction="2.5 0.01 0.001" solref="0.004 1"/>
     </body>
+    <!-- Task STAND (D39/D40, 2026-08-26): pedestal that raises the task
+         object to flight altitude for the lateral orbit grasp -- the
+         fix for the D37 blind-descent ceiling. Ballasted base + shaft +
+         flat top plate (top at z 0.390 incl. the 40 mm mat). Static;
+         reset_scene moves it under the task object each episode. -->
+    <body name="stand" pos="0.0 0.6 0.04">
+      <geom name="stand_base" type="cylinder" size="0.07 0.010"
+            pos="0 0 0.010" rgba="0.35 0.35 0.38 1" condim="6"
+            friction="1.5 0.01 0.008"/>
+      <geom name="stand_shaft" type="cylinder" size="0.012 0.160"
+            pos="0 0 0.180" rgba="0.35 0.35 0.38 1" condim="6"
+            friction="1.5 0.01 0.008"/>
+      <geom name="stand_plate" type="cylinder" size="0.060 0.005"
+            pos="0 0 0.345" rgba="0.42 0.42 0.46 1" condim="6"
+            friction="1.5 0.01 0.008"/>
+    </body>
+    <!-- Distractor STAND (2026-08-26): identical pedestal for the
+         NON-task object, so "sits on a pole" stops being a cue for
+         which object the instruction names -- the policy must read
+         the prompt, not find the only stand. reset_scene moves it
+         under the parked object each episode. -->
+    <body name="stand2" pos="-0.75 1.25 0.04">
+      <geom name="stand2_base" type="cylinder" size="0.07 0.010"
+            pos="0 0 0.010" rgba="0.35 0.35 0.38 1" condim="6"
+            friction="1.5 0.01 0.008"/>
+      <geom name="stand2_shaft" type="cylinder" size="0.012 0.160"
+            pos="0 0 0.180" rgba="0.35 0.35 0.38 1" condim="6"
+            friction="1.5 0.01 0.008"/>
+      <geom name="stand2_plate" type="cylinder" size="0.060 0.005"
+            pos="0 0 0.345" rgba="0.42 0.42 0.46 1" condim="6"
+            friction="1.5 0.01 0.008"/>
+    </body>
+    <!-- Task TABLE (2026-08-26, supersedes the pedestals): both
+         candidate objects sit on one ordinary surface near its front
+         (+y) edge -- language, not furniture, selects the target.
+         Top at z 0.390 = the pedestal plate height, so every validated
+         grasp-altitude constant carries over. reset_scene places it
+         each episode; the stands park underground. -->
+    <body name="table" pos="0.0 0.8 0.04">
+      <geom name="table_top" type="box" size="0.45 0.30 0.02"
+            pos="0 0 0.33" rgba="0.52 0.38 0.25 1" condim="6"
+            friction="1.5 0.01 0.008"/>
+      <geom name="table_leg1" type="cylinder" size="0.02 0.165"
+            pos="0.41 0.26 0.165" rgba="0.35 0.26 0.18 1"/>
+      <geom name="table_leg2" type="cylinder" size="0.02 0.165"
+            pos="-0.41 0.26 0.165" rgba="0.35 0.26 0.18 1"/>
+      <geom name="table_leg3" type="cylinder" size="0.02 0.165"
+            pos="0.41 -0.26 0.165" rgba="0.35 0.26 0.18 1"/>
+      <geom name="table_leg4" type="cylinder" size="0.02 0.165"
+            pos="-0.41 -0.26 0.165" rgba="0.35 0.26 0.18 1"/>
+    </body>
   </worldbody>
 </mujocoinclude>

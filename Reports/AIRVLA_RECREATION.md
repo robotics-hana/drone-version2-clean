@@ -112,6 +112,10 @@ the paper's "4-DoF + gripper padded to 7".
 | Corrective nav | +50 splat-synthetic | +50 scripted corrective (same randomisation scheme) |
 | Compositional | none (held out) | none (held out) |
 
+*Dataset-v2 revision (D45, 2026-08-27): manip raised to **200**
+(additive over paper parity; v1 showed nav saturated at 150 while picks
+starved at 120); nav 150 and corrective 50 unchanged → 400 total.*
+
 Randomisations: object position box on the mat; object identity (see D2);
 gate left/right; start pose jitter; lighting. Episode logging at 10 fps
 (= action rate; D1).
@@ -974,6 +978,88 @@ cannot hold full-FT memory — recorded as a deviation if taken** (risk R1).
     moved the mat down" was the nose-mount raise — the mat itself had
     never moved, but it WAS 40 mm lower than reality until this fix.
 
+- **D40 (SIMPLE CARRY profile + station-holding, 2026-08-26, from
+  Hana)**: "ignore the trajectory code — hover to the object, pause,
+  slowly approach, grasp, hover, yaw on the exact spot, fly to the box,
+  drop." The episode became that six-step machine: the D20 tuck-cruise
+  and box-edge staging were deleted (arm motionless in flight), and
+  every load transient got a pilot-style trim compensation built on one
+  primitive, `hold_xy_until` (aim the setpoint short by the LIVE trim
+  estimate body−sp): the post-weld ascent (was walking 0.1–0.28 m
+  nose-ward over the stand), the loaded yaw (counter-rotating setpoint,
+  `sp(t)=body₀−R(yaw)·lead`; loaded yaw rate halved to 0.2 rad/s —
+  body drift 0.46 m → 2 cm), and the lead-compensated bin leg
+  (reinstated after its deletion overshot the box — the regression
+  Hana caught). An adversarial 15-agent workflow review confirmed
+  NINE gate-blind flaws (sinking carry, ascent surge, release recoil,
+  ring-cutting penguin chords, un-gated corrective flavour, phantom
+  delivery on failed grasp, sentinel-passing windows…); all fixed, and
+  the demo gates now TILE the full episode timeline across all
+  flavours (`d41_demo3.py`).
+
+- **D41 (up-then-across takeoff + flat approach, 2026-08-26, from
+  Hana)**: the residual "flies to the base of the pole" was the spawn —
+  z up to 0.95 near the stand turned the straight leg into a
+  near-vertical plunge that STOPPED at grasp altitude (dive-gate
+  blind; caught by a numeric goal-trace probe). Final design: spawn at
+  the DECK (z 0.21–0.30, ≥0.70 m out), vertical climb to grasp
+  altitude at the spawn spot, then a dead-level transit; sink-rate
+  gate ≤0.06 m/s.
+
+- **D42 (KICKLESS SET-DOWN release, 2026-08-26–27, from Hana)**: a
+  five-value τ-scan proved the weld-off kick (0.51 m/s) is INVARIANT
+  to any setpoint schedule — it is the 1 N load-step on the 0.2 m nose
+  lever, so control cannot remove it, only geometry can. Release
+  protocol: tuck the payload under the body at a station-held hover
+  over the box (the one post-grasp arm move; hover-only rule
+  respected), re-centre, descend into the box mouth, release from
+  ~3–5 cm. dropv 0.43–0.60 → 0.013–0.022 m/s; episode ends at a
+  PINNED hover (finalv ≤0.05 gate) after a stillness-verified arm
+  fold — no retreat drift.
+
+- **D43 (TABLE ERA + 4/5 LEGS, 2026-08-27, from Hana)**: "as the
+  target is always on the pole we need all objects on a pole for
+  segmentation… instead of pedestal should we have a table, and
+  shorten the legs to 4/5?" Both candidate objects now sit on ONE
+  0.9×0.6 m table at the front (+y) edge, ≥0.45 m apart — language,
+  not furniture, selects the target. Legs cut to 4/5 (half-length
+  0.085→0.068 top-anchored; tips −0.150→−0.116; massless geoms, no
+  dynamics change; landing rule preserved — jaws 3.2 cm up when legs
+  touch). Tabletop at PLATE_TOP (0.390) so every validated grasp
+  constant carried over; leg-tip clearance at grasp 2.5 cm (weight) /
+  5.1 cm (penguin). Approach bearings clamped ≤45° off the edge
+  normal; task-penguin beak faces INTO the table so behind-the-beak is
+  always room-side; corrective = whole table at the workspace edge
+  with spawn geometry validated against it; nav hover floor raised
+  0.55→0.78 (the old floor put the legs inside a raised object — a
+  latent collision the pedestal era never tested). Pedestals park
+  underground. Sim-to-real caveat recorded: sim legs now differ from
+  the real airframe.
+
+- **D44 (GENTLENESS + physics-verified gates, 2026-08-27, from
+  Hana)**: per-object creep BACKOFF (weight 8 mm on the stem, penguin
+  3 mm on the depth-sensitive plush head) stops the palm pressing the
+  object pre-close — pre-close object motion now 0–1 mm (gate ≤6 mm);
+  a solver-level contact counter proves ZERO leg–tabletop contacts;
+  close fires only from verified stillness ("grasp at steady hover").
+  The demo suite is now EIGHTEEN gates/episode: dive, sink, extv,
+  lunge, relarc, bodydrift, overshoot, carrydrop, objclear, scrape,
+  nudge, leghit, graspv, dropv, endv, finalv, armmove (+success/gate);
+  all green on 2 weight + 2 penguin + 1 corrective.
+
+- **D45 (dataset-v2 plan, 2026-08-27, from Hana)**: 400 episodes =
+  **200 manip / 150 nav / 50 corrective** (seed 91000). Nav and
+  corrective stay at PAPER parity (150/50 — cutting nav below the
+  paper while adding scene complexity was rejected); picks are a
+  purely ADDITIVE +80 over the paper's ~120, motivated by v1's
+  asymmetric result (nav saturated 59/60, picks starved 2/20). Old
+  nav episodes are NOT reused: they demonstrate a world that no longer
+  exists (pedestals, long legs, 0.55 hover floor = collision with
+  table-mounted objects). Verified end-to-end by a fresh 15-episode
+  all-task sample (8/5/2, seed 71000): **15/15 banked, zero discards**,
+  nav 5/5 gate+hover, both corrective flavours clean
+  (`Reports/table_review15_alltasks.mp4`).
+
 ## 9. Limitations (running)
 
 - **L1 — no teleoperation**: all demos are scripted experts in sim. Expert
@@ -1013,7 +1099,7 @@ cannot hold full-FT memory — recorded as a deviation if taken** (risk R1).
 - **B. Collector**: `collect_airvla.py` — three task programs, delta-action
   logging, staged-success checkers. → **15-episode annotated sample +
   3-camera video for Hana's review. STOP for approval.**
-- C. Full collection (120 + 150 + 50), dataset audit (visibility, action
+- C. Full collection (200 + 150 + 50, D45), dataset audit (visibility, action
   stats).
 - D. π₀ fine-tune (30k steps) + training-curve report.
 - E. Eval harness: naive / RTC / RTC+guidance, 20 trials × 3 tasks + OOD;
