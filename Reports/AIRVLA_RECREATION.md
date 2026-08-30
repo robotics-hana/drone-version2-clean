@@ -1263,6 +1263,24 @@ cannot hold full-FT memory — recorded as a deviation if taken** (risk R1).
   experiment results land. Pre-experiment state tagged
   `pre-cam3v2-2026-08-30`.
 
+- **D50 (language-grounding probe: the prompt noun is behaviourally
+  inert, 2026-08-30 night, from Hana's forgetting question)**: mustard
+  bottle (YCB-canonical, known to pi0 pretraining, retired from this
+  project's tasks) placed against the trained weight in a 2x2 of
+  {prompt: bottle/weight} x {positions: bottle-at-task-spot / swapped},
+  20 paired episodes per arm, 60k checkpoint, repaired harness, seeded
+  (`forgetting_probe.py`, logs `forget_*_out.log`). Task-spot selection
+  = **15/15/14/16 of 20 across the four arms** — invariant to the
+  prompt AND to which object occupies the spot; pooled language effect
+  2/40 (noise). Verdict: the fine-tuned policy selects by POSITION and
+  ignores the object noun. Mechanism is a training-design confound,
+  not necessarily representational forgetting: in all 400 episodes the
+  prompted object sat at the task spot, so language was never needed
+  to solve training. Fix for the next collection: decorrelate target
+  identity from position (target/distractor swap positions in half the
+  episodes). Secondary observation: a novel object in view did not
+  disrupt flight (takeoff 20/20, approach quality in-family).
+
 ## 9. Limitations (running)
 
 - **L1 — no teleoperation**: all demos are scripted experts in sim. Expert
