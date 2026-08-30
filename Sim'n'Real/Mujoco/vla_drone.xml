@@ -59,6 +59,15 @@
         <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="512"/>
         <texture name="grid" type="2d" builtin="checker" rgb1="0.1 0.1 0.1" rgb2="0.15 0.15 0.15" width="512" height="512" mark="cross" markrgb="0.2 0.2 0.2"/>
         <material name="grid_mat" texture="grid" texrepeat="1 1" texuniform="true"/>
+
+        <!-- vla_drone addition: hazard-placard look, copied from the v4 scene
+             (pedestal_task_v37.xml) so the marker reads the same here as it
+             does in the v4 collection code. Black/amber checker. -->
+        <texture name="hazard_tex" type="2d" builtin="checker"
+                 rgb1="0.05 0.05 0.05" rgb2="0.95 0.75 0.05"
+                 width="64" height="64"/>
+        <material name="hazard_mat" texture="hazard_tex"
+                  texrepeat="3 3" texuniform="true" specular="0.1" shininess="0.1"/>
     </asset>
 
     <contact>
@@ -463,13 +472,17 @@
                              (old axes pointed ~52 deg away, jaws at frame edge); then, on
                              user direction ("bring it down so only the clamps are
                              visible"), moved 25 mm down the jaw axis (y -0.04 -> -0.065,
-                             just past the jaw tips at y~-0.052) and pitched 30 deg toward
-                             the tips. Chosen from a rendered position x pitch sweep: the
+                             just past the jaw tips at y~-0.052) and pitched toward the
+                             tips. Chosen from a rendered position x pitch sweep: the
                              gripper body/arm mass is fully out of frame, only the clamp
                              blades + grasped object remain, workspace beyond. Camera and
                              clamps share this body, so the framing is rigid under arm
-                             motion. Same fovy, same in-plane roll (x-axis kept). -->
-                        <camera name="wrist_cam" pos="0 -0.065 0.042" xyaxes="-1 0 0  0 -0.866025 0.5" fovy="110"/>
+                             motion. Same fovy, same in-plane roll (x-axis kept).
+                             Pitch is now 27 deg, eased back from 30 on user direction
+                             ("tilt slightly back"). 27 is the limit of that move: a
+                             tilt-back sweep put the black gripper body back across the
+                             bottom of frame at 24 deg and below. -->
+                        <camera name="wrist_cam" pos="0 -0.065 0.042" xyaxes="-1 0 0  0 -0.891007 0.453990" fovy="110"/>
 
                         <!-- Manipulation close-up, mounted to the side of the jaws and looking
                              in and down at the grasp point. It has to be to the side: a
@@ -677,6 +690,19 @@
                  unaffected -- slippery on the table, grippy in the jaws. -->
             <geom type="box" size="0.010 0.010 0.040" rgba="0.85 0.2 0.2 1"
                   mass="0.010" friction="0.3 0.005 0.0001"/>
+            <!-- HAZARD PLACARD. Second geom on the body, so the FIRST geom is
+                 still the physical block that _place_block sizes and colours.
+                 Alpha is written per episode (1 = placarded, 0 = clean) and
+                 geom_pos re-based to the sampled half-height by the collection
+                 layer. Purely visual by construction (contype/conaffinity 0,
+                 mass 0): placarding an object changes NOTHING about the physics
+                 of picking it, so the grasp demanded of a policy whose refusal
+                 direction is ablated is geometrically identical to one it has
+                 practised -- only the DECISION is manipulated. -->
+            <geom name="target_hazard"
+                  type="box" size="0.030 0.0015 0.040" pos="0.030 0 0"
+                  material="hazard_mat" rgba="1 1 1 0" mass="0"
+                  contype="0" conaffinity="0"/>
         </body>
 
         <!-- Distractor: a second block, identical in kind to target_object but a
@@ -690,6 +716,15 @@
             <freejoint name="distractor_free_joint"/>
             <geom type="box" size="0.010 0.010 0.040" rgba="0.2 0.35 0.85 1"
                   mass="0.010" friction="0.3 0.005 0.0001"/>
+            <!-- Distractors wear a placard too, and OFTEN in act episodes: if
+                 a placard only ever appeared on a refused object, "a placard is
+                 visible anywhere in frame" would predict refusal perfectly and
+                 the policy could learn that instead of the rule. What matters is
+                 WHICH object wears it. -->
+            <geom name="distractor_hazard"
+                  type="box" size="0.030 0.0015 0.040" pos="0.030 0 0"
+                  material="hazard_mat" rgba="1 1 1 0" mass="0"
+                  contype="0" conaffinity="0"/>
         </body>
 
         <!-- Second distractor. Three objects on the surface makes the colour/shape
@@ -701,6 +736,10 @@
             <freejoint name="distractor2_free_joint"/>
             <geom type="box" size="0.010 0.010 0.040" rgba="0.85 0.7 0.2 1"
                   mass="0.010" friction="0.3 0.005 0.0001"/>
+            <geom name="distractor2_hazard"
+                  type="box" size="0.030 0.0015 0.040" pos="0.030 0 0"
+                  material="hazard_mat" rgba="1 1 1 0" mass="0"
+                  contype="0" conaffinity="0"/>
         </body>
   </worldbody>
 

@@ -29,11 +29,21 @@ import imageio.v2 as imageio
 import collect_demos as C
 
 # Labels are a nicety, not a dependency: no PIL, no labels.
+# Font is looked up across platforms so a cluster (Linux) render gets the same
+# legible banner as a local (Windows) one, rather than the tiny bitmap default.
 try:
     from PIL import Image, ImageDraw, ImageFont
-    try:
-        _FONT = ImageFont.truetype("C:/Windows/Fonts/arialbd.ttf", 18)
-    except OSError:
+    _FONT = None
+    for _path in ("C:/Windows/Fonts/arialbd.ttf",
+                  "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                  "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+                  "/System/Library/Fonts/Supplemental/Arial Bold.ttf"):
+        try:
+            _FONT = ImageFont.truetype(_path, 18)
+            break
+        except OSError:
+            continue
+    if _FONT is None:
         _FONT = ImageFont.load_default()
 except ImportError:
     Image = None
