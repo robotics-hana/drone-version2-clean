@@ -1,0 +1,14 @@
+MODE naive delay 2 s 1.0
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 261.8, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 784.5, "frames": 1200}
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 83.3, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 290.1, "frames": 1200}
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "put the {obj} in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 119.5, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "put the {obj} in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 68.5, "frames": 1200}
+EVAL {"kind": "nav", "obj": "plush penguin", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": true, "frames": 286}
+EVAL {"kind": "nav", "obj": "weight", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": true, "frames": 147}
+EVAL {"kind": "nav", "obj": "plush penguin", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": true, "frames": 151}
+EVAL {"kind": "nav", "obj": "weight", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": true, "frames": 167}
+EVAL {"kind": "nav", "obj": "plush penguin", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": true, "frames": 157}
+EVAL {"kind": "nav", "obj": "weight", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": true, "frames": 157}
+EVAL-DONE mode=naive 6/12 success

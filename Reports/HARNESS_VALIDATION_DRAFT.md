@@ -112,6 +112,26 @@ the grasp window. The capability is emerging, and the remaining gap is
 attributable to measured observation deficits (§ ref: the external camera
 contributes 0–4 pixels of target object at the policy's input resolution).
 
+## Methods note: distances, not rates
+
+We report the distribution of closest approach distance as the primary
+outcome and the success count as secondary, for a reason the oracle-yaw
+replicates made concrete. The grasp window is roughly ten millimetres;
+when an intervention moves the approach distribution so that its mass
+straddles that window, the binary outcome of each episode becomes close
+to a coin flip while the distance distribution barely moves between
+replicate runs. Our two seeded oracle-yaw runs measured medians of 27
+and 41 millimetres — a paired median difference of seven millimetres on
+identical scenes — while their success counts were five and one out of
+twenty, a swing that invites exactly the over-interpretation the
+distance metric is immune to. A one-in-twenty rate additionally carries
+a 95% interval of roughly 0.1% to 25% and is quoted with that interval
+wherever it appears. Because every evaluation run draws its scenes from
+the same seeded generator, conditions are compared on identical spawn
+sequences and all tests on distance are paired; rate claims are made
+only at n = 40 or above, with the baseline measured at n = 60 under the
+frozen protocol rather than scaled up from smaller runs.
+
 ## Remark
 
 The two tests cost minutes of compute — the probe needs one GPU pass over

@@ -1208,6 +1208,40 @@ cannot hold full-FT memory — recorded as a deviation if taken** (risk R1).
     retires "just train longer".
   Mechanisms are not exclusive; if several move, ownership is
   apportioned by effect size against these same thresholds.
+  **OUTCOMES (same evening, read off against the criteria above)**:
+  - Horizon-10: picked 0/20, median miss **412 mm** — fails both
+    thresholds; control frequency EXONERATED, and the pre-registered
+    favourite lost. Bonus finding: more frequent replanning made the
+    policy ~2× WORSE than baseline (223 mm), coherent with RTC
+    inverting nav (5/20 vs naive 12/20) — this policy degrades when
+    it re-decides, likely because each replan resamples flow noise.
+  - Oracle-yaw: picked **5/20**, median miss **27.0 mm** (IQR
+    7.7–45.5, max 65) — clears the ownership bar (≥3/20) with an 8×
+    miss collapse. **The aiming channel owns the residual failure.**
+    placed=0/20 is an intervention artifact: the pin ran every tick,
+    so the bearing to a held object degenerated and froze the carry
+    heading; variant 2 (pin released on weld, torch-seeded) queued as
+    the end-to-end test. Caveat for the write-up: the pin bundles
+    aiming-for-flight with training-distribution imagery (object
+    centred in the nose camera) and gripper-lever alignment — the
+    variant-2 and oracle-vector results apportion between those.
+    Statistics discipline (reviewer): rate claims only at n≥40 —
+    oracle-yaw v2 extended to n=40 across torch seeds 1000/2000
+    (paired scenes); the n=60 frozen run is the designated baseline
+    arm, never a scaled-up 1/20. Variant medians 27 vs 41 mm (paired
+    diff +7 mm) against success counts 5 vs 1 of 20 = the
+    coin-flip-at-the-window effect; the distance distribution is the
+    primary metric in all write-ups.
+  **Preservation (same evening)**: frozen protocol
+  `eval_frozen_v1.py` (sha a8cc240ba921, torch-seeded, PROV
+  provenance line); raw logs + evidence scripts committed (V0.46.0,
+  dff2870); checkpoints pushed to private HF repos
+  **hanapasta/airvla_pi0_30k** and **hanapasta/airvla_pi0_60k**
+  (90k to follow on completion). Recorded loss: footage of the first
+  successful grasp (b60k ep 4) was overwritten by later runs before
+  preservation began — unrecoverable, as the run predated torch
+  seeding; the frozen n=60 run records every episode to prevent a
+  recurrence.
 
 ## 9. Limitations (running)
 
