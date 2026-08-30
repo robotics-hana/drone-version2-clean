@@ -1,0 +1,11 @@
+target pixels at 224 px, 532 frames from 4 expert episodes
+distance bin        n |   c3 min   c3 med   c3 max |   c2 min   c2 med   c2 max |   c1 min   c1 med   c1 max
+1.0-9.9 m          14 |        2        2        4 |        0        8       20 |        0       19       83
+0.8-1.0 m          21 |        2        2        4 |        0       18       75 |        0       58      191
+0.6-0.8 m           4 |        2        3        4 |       23       29       45 |      101      151      213
+0.4-0.6 m          56 |        0        4        4 |       45       96      178 |      196      462      878
+0.2-0.4 m         116 |        0        2        5 |       91      677     1028 |      399     2386     3003
+0.0-0.2 m         321 |        0        4       10 |        0        0      937 |        0     2613     3366
+columns: c3 = lab_external (base_0_rgb slot), c2 = scene_cam (nose),
+         c1 = wrist_cam. Frames from EXPERT approaches; a policy that
+         flies elsewhere may see less.
