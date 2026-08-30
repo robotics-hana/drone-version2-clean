@@ -21,212 +21,535 @@
 *{box-sizing:border-box}
 body{background:var(--bg); color:var(--ink);
   font:16px/1.55 "IBM Plex Sans",system-ui,sans-serif; margin:0; padding:0 20px 80px}
-.wrap{max-width:920px; margin:0 auto}
-header{padding:48px 0 18px; border-bottom:2px solid var(--ink)}
+.wrap{max-width:940px; margin:0 auto}
+header{padding:40px 0 14px}
 .kicker{font:500 12px/1 "IBM Plex Mono",monospace; letter-spacing:.14em;
   text-transform:uppercase; color:var(--accent-ink)}
-h1{font-size:clamp(30px,5vw,42px); font-weight:700; letter-spacing:-.02em;
-  margin:10px 0 6px; text-wrap:balance}
-.sub{color:var(--ink-2); max-width:66ch; margin:0}
-.prov{display:flex; flex-wrap:wrap; gap:8px; margin:18px 0 0;
-  font:13px/1.5 "IBM Plex Mono",monospace}
+h1{font-size:clamp(28px,4.5vw,38px); font-weight:700; letter-spacing:-.02em;
+  margin:8px 0 4px; text-wrap:balance}
+.sub{color:var(--ink-2); max-width:70ch; margin:0}
+.prov{display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 0;
+  font:12.5px/1.5 "IBM Plex Mono",monospace}
 .prov span{background:var(--chip); border:1px solid var(--line);
-  border-radius:5px; padding:4px 9px}
-h2{font-size:20px; font-weight:600; letter-spacing:-.01em; margin:44px 0 4px}
-h2 .n{font:500 13px "IBM Plex Mono",monospace; color:var(--accent-ink); margin-right:10px}
-h3{font-size:16px; font-weight:600; margin:22px 0 4px}
-.rule{height:1px; background:var(--line); margin:8px 0 14px}
-p{max-width:70ch; margin:10px 0}
+  border-radius:5px; padding:3px 8px}
+nav{position:sticky; top:0; background:var(--bg); z-index:5;
+  border-bottom:2px solid var(--ink); margin-top:18px;
+  display:flex; flex-wrap:wrap; gap:2px; padding:6px 0}
+nav button{font:500 12.5px/1 "IBM Plex Mono",monospace; letter-spacing:.02em;
+  background:var(--chip); color:var(--ink-2); border:1px solid var(--line);
+  border-bottom:none; border-radius:6px 6px 0 0; padding:9px 11px; cursor:pointer}
+nav button:hover{color:var(--ink)}
+nav button:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
+nav button.on{background:var(--ink); color:var(--bg); border-color:var(--ink)}
+section{display:none; padding-top:6px}
+section.on{display:block}
+h2{font-size:21px; font-weight:600; letter-spacing:-.01em; margin:26px 0 10px}
+h3{font:500 12px/1 "IBM Plex Mono",monospace; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--accent-ink); margin:24px 0 8px}
+p{max-width:72ch; margin:9px 0}
 .muted{color:var(--ink-2)}
 code,.mono{font:13.5px/1.5 "IBM Plex Mono",monospace}
 code{background:var(--code); padding:1px 5px; border-radius:3px}
-.tbl{overflow-x:auto; margin:12px 0}
+.tbl{overflow-x:auto; margin:10px 0}
 table{border-collapse:collapse; width:100%; font-size:14.5px}
 th{font:500 11px/1.3 "IBM Plex Mono",monospace; letter-spacing:.08em;
   text-transform:uppercase; color:var(--ink-3); text-align:left;
   padding:8px 12px 6px 0; border-bottom:1px solid var(--ink); white-space:nowrap}
-td{padding:8px 12px 8px 0; border-bottom:1px solid var(--line);
+td{padding:7px 12px 7px 0; border-bottom:1px solid var(--line);
   vertical-align:top; font-variant-numeric:tabular-nums}
-.v{display:inline-block; font:500 11px/1 "IBM Plex Mono",monospace;
-  letter-spacing:.06em; padding:4px 8px; border-radius:4px; white-space:nowrap}
-.v.own{background:var(--good); color:var(--bg)}
-.v.ex{background:var(--chip); color:var(--ink-2); border:1px solid var(--line)}
-.v.bad{background:var(--bad); color:var(--bg)}
-.v.run{background:var(--warn); color:var(--bg)}
+dl{display:grid; grid-template-columns:auto 1fr; gap:4px 18px; max-width:72ch;
+  margin:10px 0; font-size:14.5px}
+dt{font:500 11.5px/1.7 "IBM Plex Mono",monospace; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--ink-3); white-space:nowrap}
+dd{margin:0}
 .g{color:var(--good)} .b{color:var(--bad)} .w{color:var(--warn)}
-.note{border-left:3px solid var(--accent); background:var(--chip);
-  padding:12px 16px; border-radius:0 6px 6px 0; margin:16px 0; max-width:68ch}
-.note p{margin:4px 0}
-ul,ol{max-width:68ch; padding-left:22px}
+.tagline{display:inline-block; font:500 11px/1 "IBM Plex Mono",monospace;
+  padding:4px 8px; border-radius:4px; margin-left:8px; vertical-align:middle}
+.tagline.run{background:var(--warn); color:var(--bg)}
+ul,ol{max-width:72ch; padding-left:22px}
 li{margin:5px 0}
 li::marker{color:var(--accent-ink); font-weight:600}
-footer{margin-top:56px; padding-top:14px; border-top:1px solid var(--line);
+.files{font:13.5px/1.8 "IBM Plex Mono",monospace; background:var(--chip);
+  border:1px solid var(--line); border-radius:6px; padding:10px 14px;
+  margin:12px 0; overflow-x:auto}
+footer{margin-top:48px; padding-top:12px; border-top:1px solid var(--line);
   color:var(--ink-3); font-size:13px}
 </style>
 
 <div class="wrap">
 <header>
-  <div class="kicker">AirVLA recreation · experiment record · 29–30 Aug 2026</div>
+  <div class="kicker">AirVLA recreation · verified experiment record · 29–30 Aug 2026</div>
   <h1>AirVLA Results Ledger</h1>
-  <p class="sub">Every evaluation of the π₀ drone policy on the repaired
-  harness: checkpoints, seeds, per-experiment results, and the script and raw
-  log behind each number. Companion to the decision log (D46–D48) and the
-  harness-validation draft.</p>
+  <p class="sub">One tab per experiment. Every number was recomputed from its
+  raw log before publication; the trace is in
+  <code>Reports/eval_logs/VERIFICATION.md</code> (60 claims, 52 verified as
+  printed, 8 corrected or re-labelled — all corrections applied here).</p>
   <div class="prov">
-    <span>protocol eval_frozen_v1.py · sha a8cc240ba921</span>
-    <span>scene seed 77000 (paired across conditions)</span>
+    <span>protocol: eval_frozen_v1.py · sha a8cc240ba921</span>
+    <span>scene seed 77000</span>
     <span>torch seeds 1000 / 2000</span>
-    <span>holdout split seed 0 (40 eps)</span>
-    <span>repo commit dff2870+</span>
+    <span>holdout seed 0 (40 eps)</span>
+    <span>git tag results-v1-2026-08-30</span>
   </div>
 </header>
 
-<h2><span class="n">01</span>Checkpoints under test</h2>
-<div class="rule"></div>
+<nav id="tabs" role="tablist"></nav>
+
+<!-- ======================= 1 HOW TO READ ======================= -->
+<section data-tab="How to read this">
+<h2>How to read this page</h2>
+<p>This project recreates the AirVLA paper's aerial pick-and-place system: a
+π₀ vision-language-action model flying a simulated drone with a two-joint
+arm. The drone must pick a small object off a table and place it in a box,
+or fly through a gate and hover over an object. The policy was trained by
+imitation on 400 scripted demonstrations.</p>
+<p>Two ideas organise everything here.</p>
+<p><b>First: the evaluation harness is code, and it was broken.</b> Every
+early result was measured through a test rig that could not have measured a
+successful pick. Two cheap tests establish whether a harness is trustworthy:
+a <i>teacher-forced probe</i> (show the policy training images and check its
+predicted actions against the expert's — no simulator involved), and a
+<i>ground-truth replay</i> (feed the expert's own recorded actions through
+the evaluation rig — if those fail, no policy can pass). "Honest harness"
+on this page means the repaired rig, which passes ground-truth replay, plus
+evaluation start positions matched to training. The repair flags are
+<code>--platfix</code> (repaired arm and grasp logic) and
+<code>--startfix</code> (matched start positions).</p>
+<p><b>Second: distances are the primary metric, success counts are
+secondary.</b> The grasp window is about 10 mm. When an intervention brings
+the typical approach to 30–40 mm, each episode's success becomes close to a
+coin flip: our two oracle-yaw replicates scored 5/20 and 1/20 successes
+while their median approach distances differed by only 7 mm on identical
+scenes. Rates are therefore always quoted with a 95% confidence interval,
+and no rate below n=40 is treated as a comparison.</p>
+<h3>Where things stand</h3>
+<p>The policy has learned the task's structure (probe correlations ≈ 0.9)
+and navigates well (12/20 honest nav successes at 60k training steps). It
+cannot yet pick reliably: one genuine grasp in the honest 60k runs. The
+best-supported account of the residual failure is that the policy
+under-uses the object's lateral position — pinning the drone's heading at
+the true object bearing collapsed the median miss from 223 mm to 27–41 mm —
+but that intervention changes three things at once (aiming, camera view,
+gripper geometry), so the mechanism is measured rather than fully
+attributed. Overnight experiments (oracle-vector, 90k, slot swap) are
+marked <span class="tagline run">running</span> where pending.</p>
+</section>
+
+<!-- ======================= 2 CHECKPOINTS ======================= -->
+<section data-tab="Checkpoints">
+<h2>Checkpoints</h2>
+<p>All training uses LeRobot 0.6 + π₀ (4.03 B parameters) on dataset
+<code>hanapasta/airvla_full</code> (400 episodes, 269,557 frames) unless
+stated. The teacher-forced probe (<code>open_loop_probe.py</code>) predicts
+5-second action chunks on stored training frames.</p>
 <div class="tbl"><table>
-<tr><th>Checkpoint</th><th>Training</th><th>Samples · epochs</th><th>Archived at</th><th>Teacher-forced probe (open_loop_probe.py)</th></tr>
-<tr><td class="mono">30k</td><td>batch 4, Myriad A100, dataset airvla_full (400 eps)</td><td>120,000 · 0.45</td><td class="mono">hanapasta/airvla_pi0_30k</td><td>corr +0.88…+0.999 · spread ratio 0.95–1.01 · 2.90 cm chunk endpoint error (vs 28.6 cm signal)</td></tr>
-<tr><td class="mono">60k</td><td>30k + 30k extension, same recipe</td><td>240,000 · 0.89</td><td class="mono">hanapasta/airvla_pi0_60k</td><td>dz corr 0.941→<b>0.980</b>, endpoint 2.57 cm; all else flat — mapping learned at 30k, vertical channel refined</td></tr>
-<tr><td class="mono">90k</td><td>60k + 30k extension <span class="v run">running</span></td><td>360,000 · 1.34</td><td class="muted">push on completion</td><td class="muted">honest eval queued (b90k)</td></tr>
-<tr><td class="mono">30k-b8</td><td>batch 8, Sparks GB10 (609)</td><td>240,000 · 0.89</td><td class="muted">on Sparks</td><td class="muted">batch-8 replicate; control for the swap arm</td></tr>
+<tr><th>Checkpoint</th><th>Recipe</th><th>Samples · epochs</th><th>Archive</th><th>Probe result <span class="muted">(caveat in-cell)</span></th></tr>
+<tr><td class="mono">30k</td><td>batch 4, Myriad A100-40GB</td><td>120,000 · 0.45</td><td class="mono">hanapasta/airvla_pi0_30k</td><td>corr +0.88…+0.999 by action dimension; predicted/actual spread ratio 0.95–1.01; 2.90 cm integrated error per 5 s chunk (signal: 28.6 cm). <b>Measured on frames the model trained on — no holdout existed.</b></td></tr>
+<tr><td class="mono">60k</td><td>30k + 30,000-step extension, same recipe</td><td>240,000 · 0.89</td><td class="mono">hanapasta/airvla_pi0_60k</td><td>Only the vertical channel moved: dz corr 0.941→0.980, chunk error 2.90→2.57 cm. <b>Same no-holdout caveat.</b></td></tr>
+<tr><td class="mono">90k <span class="tagline run">training</span></td><td>60k + 30,000-step extension</td><td>360,000 · 1.34</td><td class="muted">push on completion</td><td class="muted">honest eval queued; note the model now sees frames twice with no holdout to detect memorisation</td></tr>
+<tr><td class="mono">30k-b8</td><td>batch 8, Sparks GB10 (jobs 608/609)</td><td>240,000 · 0.89</td><td class="mono">hanapasta/airvla_pi0_30k_b8</td><td class="muted">completed 2026-08-30 16:55; serves as the matched control for the slot-swap arm</td></tr>
+<tr><td class="mono">swap <span class="tagline run">training</span></td><td>as 30k-b8 but nose camera → base slot, 40-episode holdout excluded</td><td class="muted">due Monday</td><td class="muted">on Sparks</td><td class="muted">first run with a holdout</td></tr>
 </table></div>
-<p class="muted">Baselines carry a caveat: no holdout existed before the swap
-arm, so probe numbers measure fit to seen data. All later runs exclude the
-40-episode holdout (20 pick / 20 nav, seed 0).</p>
+<p class="muted">Interpretation: the probe rows show the model reproduces its
+training data almost exactly from 30k onward. They do not show
+generalisation; no run before the swap arm held any data out.</p>
+<div class="files">scripts: harness_audit/open_loop_probe.py · logs:
+eval_logs/probe.log, eval_logs/probe60k.log</div>
+</section>
 
-<h2><span class="n">02</span>The instrument: proved broken, then proved fixed</h2>
-<div class="rule"></div>
-<p>Two rollout-independent tests arbitrate policy-vs-harness. The
-<b>teacher-forced probe</b> (above) showed the mapping was learned. The
-<b>ground-truth replay</b> (<code>replay_diag2.py</code>, byte-faithful world)
-showed the expert's own actions <em>failed</em> through the eval harness:
-miss 102–152 mm, nothing welded, the object towed across the room with zero
-drone contacts. Five defects, each alone sufficient for 0/20 — stale arm
-gate, air-weld, start distribution (0/225 training overlap), action clip,
-contact flicker. Repair (<code>fixfit5.py</code>, five gated iterations) was
-accepted only when replay passed: <b>3/3 placed, 7–13 mm from bin centre,
-weld within 4 ticks of the expert's</b> — with both the expert arm and the
-deployable automaton. Fix flags: <code>--platfix --startfix</code>.</p>
-
-<h2><span class="n">03</span>Attribution square — 30k, one fix per arm</h2>
-<div class="rule"></div>
+<!-- ======================= 3 HARNESS ======================= -->
+<section data-tab="Harness validation">
+<h2>The instrument: proved broken, then proved fixed</h2>
+<h3>Question</h3>
+<p>Could the evaluation rig have detected a successful pick at all?</p>
+<h3>What was run</h3>
+<dl>
+<dt>Scripts</dt><dd><code>replay_diag2.py</code> (ground-truth replay, byte-faithful world), <code>fixfit5.py</code> (repair + acceptance)</dd>
+<dt>Method</dt><dd>snapshot the full simulator state at the first expert tick of a demonstration, restore it exactly, drive the evaluation platform with the expert's recorded actions</dd>
+<dt>Episodes</dt><dd>3 (two weight, one plush penguin), all successful in the collector</dd>
+<dt>Harness</dt><dd>broken (before), repaired (after)</dd>
+</dl>
+<h3>Result</h3>
 <div class="tbl"><table>
-<tr><th>Arm (20 picks, naive)</th><th>Success</th><th>Picked up</th><th>Best miss</th><th>Log</th></tr>
-<tr><td>broken harness (old ladder)</td><td>0/20</td><td>0</td><td class="mono">53 mm</td><td class="mono">ladder_naive.log</td></tr>
-<tr><td>--startfix only</td><td>0/20</td><td>0</td><td class="mono">205 mm</td><td class="mono">startfix_naive.log</td></tr>
-<tr><td>--platfix only</td><td>0/20</td><td>0</td><td class="mono">73 mm</td><td class="mono">pfix_naive.log</td></tr>
-<tr><td>both (honest eval)</td><td>0/20</td><td>0</td><td class="mono">57 mm</td><td class="mono">both_naive.log</td></tr>
+<tr><th>Ground-truth replay</th><th>Before repair</th><th>After repair (fixfit5)</th></tr>
+<tr><td>episodes placed in box</td><td class="b">0/3</td><td class="g">3/3</td></tr>
+<tr><td>closest jaws-to-target</td><td>102–152 mm</td><td>3.3–6.5 mm</td></tr>
+<tr><td>final object vs box centre</td><td>towed off the table / 2 m away</td><td>7–13 mm</td></tr>
+<tr><td>grasp-weld timing vs expert</td><td>wrong moment or never</td><td>within 4 control ticks</td></tr>
 </table></div>
-<p>Reading: the harness defects were <em>necessary but not sufficient</em> —
-at 30k the policy genuinely cannot pick even on a fair test.</p>
+<h3>What it means</h3>
+<p>Before the repair, the expert's own actions failed — so no policy could
+have scored a pick, and every earlier pick number measured the rig. Five
+independent defects were found, each alone sufficient for 0/20: a stale
+arm-deployment threshold from an earlier scene geometry; a grasp weld that
+could trigger on empty air and then drag the object; evaluation start
+altitudes that overlapped training starts in 0 of 225 episodes; an action
+clip 14% tighter than the collector's; and a contact check defeated by
+physics-solver flicker on the plush toy. The repair was accepted only when
+ground-truth replay passed.</p>
+<h3>What this does not show</h3>
+<p>A passing replay proves the rig is fair to the expert's trajectory
+family; it does not prove the rig is fair to every strategy a policy might
+try. One earlier replay attempt was itself struck for re-drawing scene
+randomisation, which is why the byte-faithful snapshot matters.</p>
+<div class="files">scripts: harness_audit/replay_diag2.py,
+harness_audit/fixfit5.py · logs: eval_logs/repdiag2.log,
+eval_logs/fixfit5.log (iterations 1–4: fixfit.log…fixfit4.log)</div>
+</section>
 
-<h2><span class="n">04</span>Honest ladder — 60k, repaired harness</h2>
-<div class="rule"></div>
+<!-- ======================= 4 ATTRIBUTION ======================= -->
+<section data-tab="30k attribution">
+<h2>Attribution square — which defect caused 0/20?</h2>
+<h3>Question</h3>
+<p>With the harness fixed, does the 30k policy pick — and which of the two
+fix families (platform repair vs start positions) mattered?</p>
+<h3>What was run</h3>
+<dl>
+<dt>Script</dt><dd><code>eval_pi0.py</code> (pre-freeze working harness)</dd>
+<dt>Checkpoint</dt><dd>30k (batch 4)</dd>
+<dt>Flags</dt><dd>none / <code>--startfix</code> / <code>--platfix</code> / both — one arm each</dd>
+<dt>Episodes</dt><dd>20 picks per arm, naive inference</dd>
+<dt>Seeds</dt><dd>scene 77000; torch unseeded (pre-dates the frozen protocol)</dd>
+<dt>Harness</dt><dd>broken → partially → fully repaired, by arm</dd>
+</dl>
+<h3>Result</h3>
 <div class="tbl"><table>
-<tr><th>Mode</th><th>Pick</th><th>Picked up</th><th>Nav</th><th>Comp</th><th>Logs</th></tr>
-<tr><td>naive</td><td>0/20</td><td class="g"><b>1</b> (best 7.6 mm)</td><td class="g"><b>12/20</b></td><td>0/20</td><td class="mono">b60k_naive.log · lnav_naive_out.log</td></tr>
-<tr><td>RTC</td><td>0/20</td><td>0</td><td class="b">5/20</td><td>0/20</td><td class="mono">60krtc_naive.log · lnav_rtc_out.log</td></tr>
-<tr><td>guided s=3.0</td><td>0/20</td><td>0</td><td>7/20</td><td>0/20</td><td class="mono">60kguided_naive.log · lnav_guided_out.log</td></tr>
-<tr><td>naive + --objyaw0</td><td>0/20</td><td>0</td><td>—</td><td>—</td><td class="mono">objyaw_out.log</td></tr>
+<tr><th>Arm</th><th>Median miss</th><th>Best miss</th><th>Success</th><th>95% CI</th></tr>
+<tr><td>broken harness (original ladder)</td><td>320.3 mm</td><td>53.1 mm</td><td>0/20</td><td>0–17%</td></tr>
+<tr><td>--startfix only</td><td>335.7 mm</td><td>205.4 mm</td><td>0/20</td><td>0–17%</td></tr>
+<tr><td>--platfix only</td><td>338.4 mm</td><td>73.0 mm</td><td>0/20</td><td>0–17%</td></tr>
+<tr><td>both (honest)</td><td>270.4 mm</td><td>56.6 mm</td><td>0/20</td><td>0–17%</td></tr>
 </table></div>
-<ul>
-<li>The 60k naive pick-up (episode 4, penguin, 7.6 mm) was the project's
-first genuine grasp — physically real, since the contact-gated weld cannot
-fire on air. Its footage was overwritten before preservation (pre-seeding
-run); the frozen n=60 run records every episode to prevent recurrence.</li>
-<li><b>RTC inverts on nav</b> (5/20 vs 12/20) and the horizon test below
-degrades picks — two independent measurements that this policy gets worse
-when it re-decides more often.</li>
-<li>1/20 is reported as 5% with 95% CI ≈ 0.1–25%, never as a bare rate.</li>
-</ul>
+<h3>What it means</h3>
+<p>The harness defects were necessary but not sufficient to explain the
+failure. At 30k the policy cannot pick on a fair test. The medians barely
+move across arms, which says the 30k policy's approach error dwarfs every
+harness effect.</p>
+<h3>What this does not show</h3>
+<p>These runs pre-date torch seeding, so exact replication is not possible.
+They also cannot separate the five platform defects from each other — only
+the two fix families.</p>
+<div class="files">logs: eval_logs/ladder_naive.log,
+startfix_naive.log, pfix_naive.log, both_naive.log</div>
+</section>
 
-<h2><span class="n">05</span>Localising the residual miss</h2>
-<div class="rule"></div>
-<h3>Spawn correlation — powered_corr.py, n=66</h3>
-<p>Miss vs the object's Mahalanobis distance from the training prior:
-radial r = +0.44 (mode-demeaned; significance ≈ 0.24). Directional:
-<b>x-axis slope −0.86</b> (r −0.81), y-axis slope +0.02. Later refined by the
-audit: final jaw x tracks object x at slope <b>+0.40</b> — partial tracking,
-not blindness; the policy closes ~40% of the lateral offset.</p>
-<h3>Instrumented audit — audit_analysis.py, n=20 tagged, jaws-frame</h3>
-<p>Jaws median miss <b>223 mm</b> (body 365 mm — the 142 mm gap is the arm
-offset). Body-frame decomposition: lateral <em>scatter</em> (sd 263 mm, side
-split 55/45 — the observed "left" was sampling) plus a systematic
-<b>120 mm fore–aft undershoot</b> (18/20). Heading: object inside the nose
-camera's ±65° FOV for 100% of every approach; nose-on-bearing slope +0.39;
-the heading-error sign test is <em>non-discriminating</em> (prior-following
-predicts the same 18/20 opposition).</p>
-<h3>Camera resolution at 224 px (policy input)</h3>
+<!-- ======================= 5 LADDER ======================= -->
+<section data-tab="60k honest ladder">
+<h2>Honest ladder at 60k — the paper's three inference modes</h2>
+<h3>Question</h3>
+<p>On the repaired harness, how does the 60k policy score on each task under
+plain inference, Real-Time Chunking, and Payload-Aware Guidance?</p>
+<h3>What was run</h3>
+<dl>
+<dt>Script</dt><dd><code>eval_pi0.py</code></dd>
+<dt>Checkpoint</dt><dd>60k</dd>
+<dt>Flags</dt><dd><code>--startfix --platfix</code>; modes naive / rtc / guided s=3.0; plus <code>--objyaw0</code> (object heading pinned to zero — tests the action-frame convention)</dd>
+<dt>Episodes</dt><dd>20 per cell: pick, nav, comp(ositional)</dd>
+<dt>Seeds</dt><dd>scene 77000; torch unseeded (pre-freeze)</dd>
+<dt>Harness</dt><dd>repaired</dd>
+</dl>
+<h3>Result</h3>
 <div class="tbl"><table>
-<tr><th>Distance</th><th>camera3 → base slot</th><th>camera2 nose</th><th>camera1 wrist</th></tr>
-<tr><td>1.0–1.2 m (commitment range)</td><td class="b">0–4 px</td><td class="w">med 7.5 px (drops to 0)</td><td class="muted">~50–135 px</td></tr>
-<tr><td>0.4–0.6 m</td><td class="b">0–4 px</td><td>med 96 px</td><td>300–700 px</td></tr>
-<tr><td>≤0.2 m (grasp)</td><td class="b">0–4 px</td><td>650–935 px</td><td class="g">2,400–3,000 px</td></tr>
+<tr><th>Mode</th><th>Pick success (CI)</th><th>Picked up</th><th>Best pick miss</th><th>Nav success (CI)</th><th>Comp</th></tr>
+<tr><td>naive</td><td>0/20 (0–17%)</td><td class="g">1/20 (0.1–25%)</td><td class="g">7.6 mm</td><td class="g">12/20 (36–81%)</td><td>0/20</td></tr>
+<tr><td>RTC</td><td>0/20 (0–17%)</td><td>0/20</td><td>49.8 mm</td><td class="b">5/20 (9–49%)</td><td>0/20</td></tr>
+<tr><td>guided s=3.0</td><td>0/20 (0–17%)</td><td>0/20</td><td>33.0 mm</td><td>7/20 (15–59%)</td><td>0/20</td></tr>
+<tr><td>naive + objyaw0</td><td>0/20 (0–17%)</td><td>0/20</td><td>—</td><td>—</td><td>—</td></tr>
 </table></div>
+<h3>What it means</h3>
+<p>The single pick-up (episode 3, plush penguin, 7.6 mm approach) was the
+project's first genuine grasp: under the repaired weld, a grasp requires
+real pad-object contact, so it cannot be faked. Navigation at 12/20 is the
+project's best task result. RTC scored below naive on nav; together with
+the horizon test (its own tab) this suggests, consistently across two
+measurements, that this policy performs worse when made to re-decide more
+often. The objyaw0 arm re-confirms on a valid rig that the world-frame
+action convention is not the pick blocker.</p>
+<h3>What this does not show</h3>
+<p>These runs were unseeded, so the 1/20 grasp is not exactly
+reproducible. Its video was recorded but then overwritten by a later run
+before preservation began — <b>the footage of the first successful grasp is
+lost</b>; the frozen n=60 run records every episode to prevent recurrence.
+Comp at 0/20 follows arithmetically from the pick rate and says nothing
+extra.</p>
+<div class="files">logs: eval_logs/b60k_naive.log, 60krtc_naive.log,
+60kguided_naive.log, lnav_naive_out.log, lnav_rtc_out.log,
+lnav_guided_out.log, objyaw_out.log</div>
+</section>
 
-<h2><span class="n">06</span>Mechanism interventions — pre-registered (D48), then measured</h2>
-<div class="rule"></div>
+<!-- ======================= 6 MISS SOURCE ======================= -->
+<section data-tab="Where the miss comes from">
+<h2>Localising the residual miss</h2>
+<h3>Question</h3>
+<p>The honest 60k policy typically stops ~200 mm from the object. Is that
+because it cannot see the object, cannot aim at it, or cannot fly to it?</p>
+<h3>What was run</h3>
+<dl>
+<dt>Scripts</dt><dd><code>powered_corr.py</code> (n=66 spawn correlation), <code>audit_analysis.py</code> (n=20 tagged jaws-frame audit), <code>camera_pixels.py</code> (532-frame resolution measurement)</dd>
+<dt>Data</dt><dd>trajectory records from the honest 60k runs (<code>eval_traj_pre_audit.jsonl</code>, <code>eval_traj.jsonl</code> tag <code>audit60k</code>); training frames for the camera table</dd>
+<dt>Harness</dt><dd>repaired throughout</dd>
+</dl>
+<h3>Result</h3>
 <div class="tbl"><table>
-<tr><th>Experiment</th><th>Config</th><th>Result</th><th>Verdict vs pre-registration</th></tr>
-<tr><td>Horizon-10<br><span class="mono muted">horizon10_out.log</span></td>
-<td class="mono">--exech 10, 20 picks</td>
-<td>picked 0/20 · median <b>412 mm</b> (IQR 286–636)</td>
-<td><span class="v ex">control frequency exonerated</span> — and ~2× <em>worse</em> than baseline: replanning hurts</td></tr>
-<tr><td>Oracle-yaw v1<br><span class="mono muted">oracleyaw_out.log</span></td>
-<td class="mono">--oracleyaw (pin every tick), unseeded</td>
-<td>picked 5/20 · median <b>27.0 mm</b> (IQR 7.7–45.5, max 65)</td>
-<td rowspan="2"><span class="v own">aiming owns the miss</span> — 8× collapse on the primary metric in both replicates; pooled pick-up 6/40 (15%, CI 6–30%)</td></tr>
-<tr><td>Oracle-yaw v2<br><span class="mono muted">orayaw2_out.log</span></td>
-<td class="mono">--oracleyaw2 (release on weld), torch seed 1000; seed-2000 n=+20 queued</td>
-<td>picked 1/20 · median <b>41.1 mm</b> (paired diff vs v1: +7 mm)</td></tr>
-<tr><td>Oracle-vector<br><span class="mono muted">oraeval_out.log</span></td>
-<td class="mono">state 10→13 (true jaws-to-target vector, build_oracle.py); 10k fine-tune of 60k</td>
-<td><span class="v run">running tonight</span></td>
-<td class="muted">upper bound: grasps reliably ⇒ perception is the whole residual; still misses ⇒ perception never was</td></tr>
-<tr><td>Corrupted-vector control<br><span class="mono muted">oracorrupt_out.log</span></td>
-<td class="mono">--oraclecorrupt (lateral direction randomised/episode)</td>
-<td><span class="v run">running tonight</span></td>
-<td class="muted">attendance control — makes an oracle null interpretable</td></tr>
-<tr><td>Frozen baseline n=60<br><span class="mono muted">frozen60k_n60_out.log</span></td>
-<td class="mono">eval_frozen_v1.py, torch seed 1000, all 60 episodes recorded</td>
-<td><span class="v run">running tonight</span></td>
-<td class="muted">the citable miss distribution + reproducible footage</td></tr>
-<tr><td>90k honest eval<br><span class="mono muted">b90k_naive.log</span></td>
-<td class="mono">20 picks after the 60k→90k extension</td>
-<td><span class="v run">tonight ~01:00</span></td>
-<td class="muted">training-scale arm: picked ≥3/20 keeps "train longer" alive</td></tr>
-<tr><td>Slot swap (Sparks 859/860)<br><span class="mono muted">slurm_swap_*.log</span></td>
-<td class="mono">nose camera → base_0_rgb, +40-ep holdout, batch 8, 30k steps</td>
-<td><span class="v run">Monday</span></td>
-<td class="muted">demoted arm (soft prior, confounded with holdout) on otherwise-idle GPU</td></tr>
+<tr><th>Measurement</th><th>Value</th><th>Source</th></tr>
+<tr><td>miss vs object's distance from training-average position (radial, mode-adjusted)</td><td>r = +0.44 (n=66; 0.05-significance ≈ 0.24)</td><td class="mono">powered_corr.py</td></tr>
+<tr><td>lateral miss component vs object's lateral offset from average</td><td>slope −0.86 (r −0.81)</td><td class="mono">powered_corr.py</td></tr>
+<tr><td>final jaw lateral position vs object lateral position</td><td>slope +0.40 (r +0.59)</td><td class="mono">audit</td></tr>
+<tr><td>jaws median miss / body median miss</td><td>223 mm / 365 mm (gap = arm offset)</td><td class="mono">audit</td></tr>
+<tr><td>body-frame decomposition</td><td>lateral scatter sd 263 mm, side split 55/45; fore–aft undershoot +120 mm in 18/20</td><td class="mono">audit</td></tr>
+<tr><td>object inside nose-camera field of view</td><td>median 100% of every approach (20/20)</td><td class="mono">audit</td></tr>
+<tr><td>nose heading vs bearing-to-object</td><td>slope +0.43 (jaws-closest tick)</td><td class="mono">audit</td></tr>
+<tr><td>heading-error sign vs miss sign</td><td>matches 2/20</td><td class="mono">audit</td></tr>
 </table></div>
-<div class="note">
-<p><strong>The sentence the evening earned:</strong> pinning the commanded
-heading at the true bearing — changing nothing else — collapsed the median
-miss from 223 mm to 27–41 mm across two seeded replicates and produced the
-only pick-ups of the project. The aiming channel owns the residual failure;
-the last 30–40 mm is translational precision. The success-count swing
-between replicates (5 vs 1 of 20, paired miss diff +7 mm) is why the
-distance distribution, not the success rate, is the primary metric.</p>
-</div>
+<h3>Camera resolution (target pixels at the 224 px input, 532 expert frames)</h3>
+<div class="tbl"><table>
+<tr><th>Distance</th><th>camera3 → base slot (median)</th><th>camera2 nose (median)</th><th>camera1 wrist (median)</th></tr>
+<tr><td>0.8–1.0 m</td><td class="b">2 px</td><td class="w">18 px (min 0)</td><td>58 px</td></tr>
+<tr><td>0.4–0.6 m</td><td class="b">4 px</td><td>96 px</td><td>462 px</td></tr>
+<tr><td>0.2–0.4 m</td><td class="b">2 px</td><td>677 px</td><td class="g">2,386 px</td></tr>
+</table></div>
+<h3>What it means</h3>
+<p>The policy tracks the object's lateral position partially — it closes
+about 40% of the offset — and flies the remainder toward the training
+average. The information needed to do better exists in the observation:
+the object stays inside the nose camera's view for the whole approach,
+though thinly (18 px median at a metre). The heading-sign test turned out
+to be non-discriminating: a policy flying to a fixed point produces the
+same 18/20 sign opposition as a failed aiming loop, because both derive
+from where the object sits relative to the destination.</p>
+<h3>What this does not show</h3>
+<p>None of these are interventions; they localise the deficit but cannot
+assign cause. The camera table is measured on expert approaches — a policy
+flying elsewhere may see less. An earlier version of this analysis was
+discarded for three methodology faults (positional episode selection,
+airframe-instead-of-jaws distances, world-frame "lateral"); this version
+is the corrected one, and the two attribution retractions it forced are
+recorded in decision log entry D47.</p>
+<div class="files">scripts: harness_audit/powered_corr.py,
+audit_analysis.py, camera_pixels.py · data: eval_logs/eval_traj_pre_audit.jsonl,
+eval_traj.jsonl, eval_traj_v1.jsonl, camera_pixels.log</div>
+</section>
 
-<h2><span class="n">07</span>Scripts and raw data</h2>
-<div class="rule"></div>
+<!-- ======================= 7 HORIZON ======================= -->
+<section data-tab="Horizon test">
+<h2>Horizon test — replan every second instead of every five</h2>
+<h3>Question</h3>
+<p>Does the policy get closer to the object if it replans more often? (The
+wrist camera only resolves the object late; a 5-second open-loop chunk
+might simply be unable to act on late information.)</p>
+<h3>What was run</h3>
+<dl>
+<dt>Script</dt><dd><code>eval_pi0.py</code></dd>
+<dt>Checkpoint</dt><dd>60k</dd>
+<dt>Flags</dt><dd><code>--exech 10 --startfix --platfix --tag horizon10</code> (execute 10 of 50 planned actions, then replan)</dd>
+<dt>Episodes</dt><dd>20 picks, naive</dd>
+<dt>Seeds</dt><dd>scene 77000; torch unseeded (pre-freeze)</dd>
+<dt>Harness</dt><dd>repaired</dd>
+</dl>
+<h3>Result</h3>
+<div class="tbl"><table>
+<tr><th>Metric</th><th>Horizon 10</th><th>Baseline (horizon 50, audit run)</th></tr>
+<tr><td>median miss (IQR)</td><td class="b">412 mm (286–636)</td><td>223 mm</td></tr>
+<tr><td>picked up</td><td>0/20 (CI 0–17%)</td><td>—</td></tr>
+</table></div>
+<h3>What it means</h3>
+<p>Replanning more often did not help; it roughly doubled the median miss.
+This was the pre-registered favourite hypothesis (decision log D48), and it
+lost. Together with RTC scoring below naive on navigation, two independent
+measurements now show this policy degrades when it re-decides more often —
+plausibly because each replan resamples the flow-matching noise.</p>
+<h3>What this does not show</h3>
+<p>It does not rule out that a policy <i>trained</i> for short horizons
+would benefit from them; only that imposing a short horizon on this policy
+at evaluation time hurts. The "resampling noise" account is an inference,
+not a measurement.</p>
+<div class="files">log: eval_logs/horizon10_out.log · pre-registration:
+decision log D48</div>
+</section>
+
+<!-- ======================= 8 ORACLE YAW ======================= -->
+<section data-tab="Oracle-yaw">
+<h2>Oracle-yaw — pin the heading at the true bearing</h2>
+<h3>Question</h3>
+<p>If the drone's commanded heading is forced to point at the object
+(using privileged ground-truth bearing), does the lateral miss disappear?</p>
+<h3>What was run</h3>
+<dl>
+<dt>Script</dt><dd>v1: <code>eval_pi0.py</code>; v2: same, variant released on grasp</dd>
+<dt>Checkpoint</dt><dd>60k</dd>
+<dt>Flags</dt><dd>v1 <code>--oracleyaw</code> (pin every tick, torch unseeded); v2 <code>--oracleyaw2 --torchseed 1000</code> (pin released once the object is welded); a third replicate at torch seed 2000 is queued on the frozen protocol</dd>
+<dt>Episodes</dt><dd>20 picks each, naive</dd>
+<dt>Seeds</dt><dd>scene 77000 (identical scenes across arms → paired comparisons)</dd>
+<dt>Harness</dt><dd>repaired</dd>
+</dl>
+<h3>Result</h3>
+<div class="tbl"><table>
+<tr><th>Metric</th><th>v1 (pin always)</th><th>v2 (release on weld)</th><th>Baseline (audit)</th></tr>
+<tr><td>median miss (IQR)</td><td class="g">27.0 mm (7.7–45.5)</td><td class="g">41.1 mm (18.7–54.4)</td><td>223 mm</td></tr>
+<tr><td>max miss</td><td>65.1 mm</td><td>448.7 mm (one outlier)</td><td>—</td></tr>
+<tr><td>paired median difference v2−v1</td><td colspan="2">+7.1 mm</td><td>—</td></tr>
+<tr><td>picked up (CI)</td><td>5/20 (9–49%)</td><td>1/20 (0.1–25%)</td><td>≈1/20 <span class="muted">(inferred comparator — baseline n=20; the n=60 frozen run replaces it)</span></td></tr>
+<tr><td>pooled pick-up</td><td colspan="2">6/40 (15%, CI 6–30%)</td><td>—</td></tr>
+<tr><td>fore–aft undershoot (was +120 mm)</td><td>+1 mm (sd 10)</td><td>+52 mm (sd 123, outlier-inflated)</td><td>+120 mm</td></tr>
+</table></div>
+<h3>What it means</h3>
+<p>Pinning the heading collapsed the median miss by roughly a factor of
+eight in both replicates, and produced the only pick-ups of the project.
+This is the largest effect any intervention has produced. The success-count
+swing between replicates (5 vs 1) against a 7 mm paired distance difference
+is the page's standing example of why distances are the primary metric.</p>
+<h3>What this does not show</h3>
+<p>It does not isolate a mechanism. The pin changes three things at once:
+the aiming itself; the view — both the nose camera and the arm-mounted
+wrist camera swing to face the object, giving the policy training-like
+imagery; and the geometry — the forward-reaching gripper is placed on the
+drone-to-object line by construction, which reduces lateral miss
+mechanically. This run cannot separate those three. Separately, the
+disappearance of the 120 mm fore–aft undershoot under the pin is measured
+but <b>unexplained</b> — an 18° heading error on a 0.2 m gripper lever
+accounts for about 10 mm of it, not 120. The v1 run's 0/20 <i>successes</i>
+despite 5 pick-ups is an artifact of its own design: the always-on pin
+froze the carry heading once the object was held.</p>
+<div class="files">logs: eval_logs/oracleyaw_out.log, orayaw2_out.log ·
+trajectories: eval_logs/eval_traj_v1.jsonl (tags oracleyaw, orayaw2)</div>
+</section>
+
+<!-- ======================= 9 ORACLE VECTOR ======================= -->
+<section data-tab="Oracle-vector">
+<h2>Oracle-vector — hand the policy the exact target vector <span class="tagline run">running</span></h2>
+<h3>Question</h3>
+<p>If the policy is given the true gripper-to-target vector as three extra
+state inputs, does everything downstream of perception work?</p>
+<h3>What was run</h3>
+<dl>
+<dt>Scripts</dt><dd><code>build_oracle.py</code> (dataset: vector derived by forward kinematics from the logged scene state — no new episodes flown), then a 10,000-step fine-tune of the 60k checkpoint, then <code>eval_frozen_v1.py --oraclestate</code></dd>
+<dt>Control</dt><dd><code>--oraclecorrupt</code>: the same policy evaluated with the vector's lateral direction randomised per episode — if behaviour does not degrade, the model never learned to use the feature and a null result is uninterpretable</dd>
+<dt>Episodes</dt><dd>20 picks per arm</dd>
+<dt>Seeds</dt><dd>scene 77000, torch 1000</dd>
+<dt>Harness</dt><dd>repaired, frozen protocol</dd>
+</dl>
+<h3>Result</h3>
+<p class="muted">Running tonight (Myriad jobs 243211 → 243403/243404).
+Pre-registered readings, committed before results (decision log D48):
+attendance requires ≥3 more pick-ups with the true vector than the
+corrupted one, or ≥8 mm median degradation under corruption. Given
+attendance: ≥10/20 successes means perception is the whole residual
+problem; persistent ≥150 mm misses mean perception never was.</p>
+<h3>What this does not show</h3>
+<p>The oracle vector is privileged information that no deployed system
+would have; this is a diagnostic upper bound, not a capability.</p>
+<div class="files">script: harness_audit/build_oracle.py · dataset:
+hanapasta/airvla_oracle · logs (pending): oraeval_out.log,
+oracorrupt_out.log</div>
+</section>
+
+<!-- ======================= 10 90K ======================= -->
+<section data-tab="90k arm">
+<h2>Training-scale arm — 60k → 90k <span class="tagline run">running</span></h2>
+<h3>Question</h3>
+<p>Does simply training longer keep buying pick capability? (Takeoff
+behaviour appeared as a discrete jump between 30k and 60k; grasp commitment
+could be the next jump.)</p>
+<h3>What was run</h3>
+<dl>
+<dt>Training</dt><dd>30,000 further steps from the 60k checkpoint, batch 4, learning-rate schedule stretched to 90k; completes tonight ≈ 00:10</dd>
+<dt>Eval</dt><dd><code>eval_frozen_v1.py</code>, 20 picks, naive, <code>--startfix --platfix --tag b90k</code>, queued behind training</dd>
+<dt>Caveat</dt><dd>at 1.34 epochs the model sees frames twice, and these runs pre-date the holdout — late gains cannot be distinguished from memorisation</dd>
+</dl>
+<h3>Result</h3>
+<p class="muted">Pending. Pre-registered reading: ≥3/20 pick-ups keeps
+"train longer" alive as a lever; ≤1/20 retires it.</p>
+<div class="files">log (pending): eval_logs/b90k_naive.log</div>
+</section>
+
+<!-- ======================= 11 SWAP ======================= -->
+<section data-tab="Slot swap">
+<h2>Slot swap — nose camera into the base input <span class="tagline run">training</span></h2>
+<h3>Question</h3>
+<p>π₀'s pretraining treats its base-camera input as the always-present
+spatial reference and its wrist inputs as auxiliary. Ours feeds the base
+slot a room-wide view carrying ~2–4 pixels of target. Does swapping the
+informative nose camera into the base slot recover picking?</p>
+<h3>What was run</h3>
+<dl>
+<dt>Training</dt><dd>full retrain from π₀ base, batch 8 on Sparks (jobs 859/860), identical to the 30k-b8 control except: camera2→base_0_rgb, camera3→wrist slot, and a 40-episode holdout excluded (the project's first). Started 2026-08-30 16:55; due Monday.</dd>
+<dt>Eval</dt><dd>frozen protocol, honest harness, vs the 30k-b8 control</dd>
+</dl>
+<h3>Result</h3>
+<p class="muted">Pending (Monday).</p>
+<h3>What this does not show</h3>
+<p>Two things change at once (slot mapping and holdout), so a difference
+from the control is not attributable to the swap alone — this arm was
+deliberately demoted after review; it runs because the hardware was
+otherwise idle. The mechanism it tests is a learned prior, which
+fine-tuning can in principle override — 240,000 samples not having
+overridden it is itself weak evidence against this arm.</p>
+<div class="files">jobs: train_swap_slurm.sh / train_swap2_slurm.sh ·
+holdout: eval_logs/holdout_split.json · control:
+hanapasta/airvla_pi0_30k_b8</div>
+</section>
+
+<!-- ======================= 12 FILES ======================= -->
+<section data-tab="Files & seeds">
+<h2>Files, seeds and raw data</h2>
+<h3>Seeds</h3>
+<div class="tbl"><table>
+<tr><th>Seed</th><th>Value</th><th>Governs</th></tr>
+<tr><td>scene / runner</td><td class="mono">77000</td><td>every evaluation's spawn sequence — identical across conditions, so comparisons are paired</td></tr>
+<tr><td>torch</td><td class="mono">1000, 2000</td><td>flow-matching sampling; unseeded before the frozen protocol (2026-08-30 ~18:30) — runs before that are not exactly reproducible</td></tr>
+<tr><td>holdout split</td><td class="mono">0</td><td>40 held-out episodes (20 pick / 20 nav): eval_logs/holdout_split.json</td></tr>
+<tr><td>collection</td><td class="mono">91000-family</td><td>the 400 training episodes</td></tr>
+</table></div>
+<h3>Scripts</h3>
 <div class="tbl"><table>
 <tr><th>File</th><th>Role</th></tr>
-<tr><td class="mono">Sim'n'Real/Mujoco/eval_frozen_v1.py</td><td>Frozen protocol (sha a8cc240ba921): torch-seeded, PROV provenance line; the only source of citable numbers from here on</td></tr>
-<tr><td class="mono">Sim'n'Real/Mujoco/eval_pi0.py</td><td>Working harness: repaired Platform + all diagnostic flags (--platfix --startfix --exech --oracleyaw[2] --oraclestate --oraclecorrupt --videps --torchseed --tag)</td></tr>
-<tr><td class="mono">harness_audit/open_loop_probe.py</td><td>Teacher-forced probe (condition 1)</td></tr>
-<tr><td class="mono">harness_audit/replay_diag2.py</td><td>Scene-faithful ground-truth replay (condition 2)</td></tr>
-<tr><td class="mono">harness_audit/fixfit5.py</td><td>Platform repair + replay acceptance (A/B both 3/3)</td></tr>
-<tr><td class="mono">harness_audit/powered_corr.py</td><td>n=66 spawn-correlation with asserted block identification</td></tr>
-<tr><td class="mono">harness_audit/audit_analysis.py</td><td>Jaws-frame / body-frame / heading audit on the tagged run</td></tr>
-<tr><td class="mono">harness_audit/build_oracle.py</td><td>Oracle dataset: FK-derived jaws-to-target vector, state 10→13, hardlinked videos</td></tr>
-<tr><td class="mono">Reports/eval_logs/ (33 files)</td><td>Raw results incl. both trajectory JSONLs — the data behind every table above</td></tr>
-<tr><td class="mono">harness_audit/README.md</td><td>Experiment → script → log map with seed inventory</td></tr>
+<tr><td class="mono">Sim'n'Real/Mujoco/eval_frozen_v1.py</td><td>Frozen protocol, sha a8cc240ba921 — torch-seeded, writes a PROV provenance line (script sha, checkpoint, argv, seeds, timestamp) as the first line of every results file. All new results come from this file.</td></tr>
+<tr><td class="mono">Sim'n'Real/Mujoco/eval_pi0.py</td><td>Working harness (repaired platform + every diagnostic flag); numbers before the freeze came from dated states of this file — flag noted per tab</td></tr>
+<tr><td class="mono">harness_audit/open_loop_probe.py</td><td>teacher-forced probe</td></tr>
+<tr><td class="mono">harness_audit/replay_diag2.py</td><td>scene-faithful ground-truth replay</td></tr>
+<tr><td class="mono">harness_audit/fixfit5.py</td><td>platform repair + replay acceptance</td></tr>
+<tr><td class="mono">harness_audit/powered_corr.py</td><td>n=66 spawn correlation, asserted block identification</td></tr>
+<tr><td class="mono">harness_audit/audit_analysis.py</td><td>jaws-frame / body-frame / heading audit</td></tr>
+<tr><td class="mono">harness_audit/camera_pixels.py</td><td>532-frame camera resolution measurement</td></tr>
+<tr><td class="mono">harness_audit/build_oracle.py</td><td>oracle dataset builder (state 10→13 by forward kinematics)</td></tr>
+<tr><td class="mono">harness_audit/verify_ledger.py</td><td>recomputes every number on this page from the raw logs</td></tr>
 </table></div>
+<h3>Raw data</h3>
+<p><code>Reports/eval_logs/</code> — 35+ files: every results log referenced
+on this page, both trajectory JSONLs (<code>eval_traj_pre_audit.jsonl</code>,
+<code>eval_traj_v1.jsonl</code>), the camera measurement and its input
+states, the holdout split, and <code>VERIFICATION.md</code> — the 60-claim
+verification table with per-claim source files and statuses. Checkpoints:
+<code>hanapasta/airvla_pi0_30k</code>, <code>airvla_pi0_60k</code>,
+<code>airvla_pi0_30k_b8</code> (private). Everything is committed at git tag
+<code>results-v1-2026-08-30</code>; the pre-rebuild page is preserved as
+<code>results_ledger_v1.html</code> for diffing.</p>
+</section>
 
-<footer>Companion pages: decision log D46–D48 (AIRVLA_RECREATION.md) ·
-HARNESS_VALIDATION_DRAFT.md · Night Audit (29–30 Aug). Pending results are
-marked and will be filled in from the overnight queue.</footer>
+<footer>Companions: decision log D46–D48 (AIRVLA_RECREATION.md) ·
+HARNESS_VALIDATION_DRAFT.md · VERIFICATION.md. Pending tabs update as the
+overnight queue lands.</footer>
 </div>
+
+<script>
+(function () {
+  var secs = [].slice.call(document.querySelectorAll("section[data-tab]"));
+  var nav = document.getElementById("tabs");
+  var btns = secs.map(function (s, i) {
+    var b = document.createElement("button");
+    b.textContent = (i + 1) + " " + s.getAttribute("data-tab");
+    b.setAttribute("role", "tab");
+    b.addEventListener("click", function () { show(i, true); });
+    nav.appendChild(b);
+    return b;
+  });
+  function show(i, save) {
+    secs.forEach(function (s, j) { s.classList.toggle("on", i === j); });
+    btns.forEach(function (b, j) { b.classList.toggle("on", i === j); });
+    if (save) { try { localStorage.setItem("ledger-tab", i); } catch (e) {} }
+  }
+  var start = 0;
+  try { start = Math.min(parseInt(localStorage.getItem("ledger-tab") || "0", 10) || 0, secs.length - 1); } catch (e) {}
+  show(start, false);
+})();
+</script>
