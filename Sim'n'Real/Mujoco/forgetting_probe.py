@@ -41,8 +41,16 @@ ARM = sys.argv[2]                        # bottle | control
 N = int(sys.argv[3]) if len(sys.argv) > 3 else 20
 TORCHSEED = int(sys.argv[4]) if len(sys.argv) > 4 else 1000
 
+# swap arms: positions exchanged so language and position DISAGREE --
+# the first arm-pair showed selection follows the task position regardless
+# of prompt (both arms 15/20 to the task spot), because training always
+# placed the prompted object there. Only a position/language conflict can
+# test whether the object vocabulary survived fine-tuning.
 PROMPT = {"bottle": "pick up the mustard bottle and put it in the wooden box",
-          "control": "pick up the weight and put it in the wooden box"}[ARM]
+          "control": "pick up the weight and put it in the wooden box",
+          "bottle_swap": "pick up the mustard bottle and put it in the wooden box",
+          "control_swap": "pick up the weight and put it in the wooden box"}[ARM]
+SWAP = ARM.endswith("_swap")
 
 KEY = {"observation.images.camera3": "observation.images.base_0_rgb",
        "observation.images.camera1": "observation.images.left_wrist_0_rgb",
@@ -83,8 +91,12 @@ for ep in range(N):
     # vacated; BOTTLE upright at the task spot
     dist_xy = r.data.qpos[padr:padr + 2].copy()
     r.data.qpos[padr:padr + 2] = (-0.95, 2.60)
-    r.data.qpos[wadr:wadr + 2] = dist_xy
-    r.data.qpos[badr:badr + 2] = bxy
+    if SWAP:
+        # weight keeps the task spot; bottle takes the distractor spot
+        r.data.qpos[badr:badr + 2] = dist_xy
+    else:
+        r.data.qpos[wadr:wadr + 2] = dist_xy
+        r.data.qpos[badr:badr + 2] = bxy
     r.data.qpos[badr + 2] = A.PLATE_TOP + 0.10
     r.data.qpos[badr + 3:badr + 7] = [1, 0, 0, 0]
     mujoco.mj_forward(m, r.data)
@@ -105,13 +117,13 @@ for ep in range(N):
                                             - r.data.qpos[wadr:wadr + 2])))
             zs.append(float(r.data.qpos[2]))
     d_b, d_w = np.array(d_b), np.array(d_w)
-    k = int((d_b if ARM == "bottle" else d_w).argmin())
+    prompted_is_bottle = ARM.startswith("bottle")
     sel = "bottle" if d_b.min() < d_w.min() else "weight"
     print("EP " + json.dumps(dict(
         ep=ep, arm=ARM, bottle_xy=[round(float(x), 3) for x in bxy],
         min_d_bottle_mm=round(d_b.min() * 1000, 1),
         min_d_weight_mm=round(d_w.min() * 1000, 1),
-        d_prompted_mm=round((d_b if ARM == "bottle" else d_w).min() * 1000, 1),
+        d_prompted_mm=round((d_b if prompted_is_bottle else d_w).min() * 1000, 1),
         selected=sel, zrange=round(max(zs) - min(zs), 2))), flush=True)
 
 print("FORGETTING-PROBE-DONE arm=%s" % ARM, flush=True)
