@@ -1,0 +1,30 @@
+node-l00a-004.myriad.ucl.ac.uk
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+ep0 weight         ok=True ticks=1081 | weld on=[379] off=[937] | arm-switch=[100, 735, 989] | hover-seg starts after weld=[461, 808, 846, 945, 1008]
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+ep1 plush penguin  ok=True ticks=1061 | weld on=[369] off=[919] | arm-switch=[136, 708, 969] | hover-seg starts after weld=[829, 927, 992]
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+ep2 weight         ok=True ticks=968 | weld on=[340] off=[824] | arm-switch=[95, 619, 876] | hover-seg starts after weld=[694, 732, 832, 895]
+
+ACCEPTANCE A (expert-recorded arm + contact-weld + clip 0.035):
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+  [A] ep0 weight         welded=False lifted=False placed=True miss=6.5 mm dz=-0.336 weld=[(383, 'ON'), (935, 'OFF')] -> PASS
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+  [A] ep1 plush penguin  welded=False lifted=False placed=False miss=2.0 mm dz=-0.006 weld=[] -> FAIL
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+  [A] ep2 weight         welded=False lifted=False placed=True miss=4.9 mm dz=-0.336 weld=[(344, 'ON'), (822, 'OFF')] -> PASS
+ACCEPT-A 2/3
+
+ACCEPTANCE B (automaton: deploy on approach alt; tuck on 2nd hover after weld; travel after release; slewed):
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+  [B] ep0 weight         welded=False lifted=False placed=True miss=6.5 mm dz=-0.336 weld=[(384, 'ON'), (935, 'OFF')] -> PASS
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+  [B] ep1 plush penguin  welded=False lifted=False placed=False miss=3.5 mm dz=-0.311 weld=[(371, 'ON'), (916, 'OFF')] -> FAIL
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+  [B] ep2 weight         welded=False lifted=False placed=False miss=5.7 mm dz=-0.316 weld=[(346, 'ON'), (822, 'OFF')] -> FAIL
+ACCEPT-B 1/3
+PLATFORM-FIX2 A=2/3 B=1/3
+REPDIAG-EXIT=0

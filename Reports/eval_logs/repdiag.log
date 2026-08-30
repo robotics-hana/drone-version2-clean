@@ -1,0 +1,29 @@
+node-l00a-003.myriad.ucl.ac.uk
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+ep0 weight         EXPERT success=True ticks=1081  expert q_grasp dwell=0 ticks
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+   AUTOMATON  gate=0.42  ticks below=49  crossings=3  longest run=34  min sp_z=0.279
+   ARM DWELL  expert=0  harness=49  ratio=nan
+   CONTACTS on task object: [('ground', 435), ('table_top', 385), ('wall_xhi', 52), ('wall_ylo', 10)]
+   TIMING  first contact tick=0  gate crossing ticks=[np.int64(14), np.int64(918), np.int64(952)]
+   MISS (live_target) = 138.6 mm
+   object dz=-0.395 m
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+ep1 plush penguin  EXPERT success=True ticks=1061  expert q_grasp dwell=0 ticks
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+   AUTOMATON  gate=0.42  ticks below=42  crossings=3  longest run=27  min sp_z=0.257
+   ARM DWELL  expert=0  harness=42  ratio=nan
+   CONTACTS on task object: [('table_top', 1061), ('leg_back_right', 69)]
+   TIMING  first contact tick=0  gate crossing ticks=[np.int64(14), np.int64(904), np.int64(931)]
+   MISS (live_target) = 151.1 mm
+   object dz=-0.006 m
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+ep2 weight         EXPERT success=True ticks=968  expert q_grasp dwell=0 ticks
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+   AUTOMATON  gate=0.42  ticks below=49  crossings=3  longest run=34  min sp_z=0.267
+   ARM DWELL  expert=0  harness=49  ratio=nan
+   CONTACTS on task object: [('ground', 435), ('table_top', 371), ('wall_xhi', 38), ('leg_back_right', 2), ('wall_ylo', 1)]
+   TIMING  first contact tick=0  gate crossing ticks=[np.int64(14), np.int64(805), np.int64(839)]
+   MISS (live_target) = 115.6 mm
+   object dz=-0.395 m
+REPDIAG-EXIT=0

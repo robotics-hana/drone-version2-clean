@@ -1,0 +1,26 @@
+node-l00a-004.myriad.ucl.ac.uk
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+ep0 weight         EXPERT success=True ticks=1081  arm dwell: grasp=254 carry=635
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+   REPLAY  welded=False lifted=False placed=False  MISS(live_target)=101.7 mm  obj dz=-0.395
+   WELD events: [(377, 'ON'), (935, 'OFF')]
+   AUTOMATON  ticks<gate=49 crossings=3 longest=34 min_spz=0.279 | crossing ticks=[14, 918, 952]
+   CONTACTS: [('ground', 435), ('table_top', 386), ('wall_xhi', 86), ('wall_ylo', 6)] | first non-rest contact tick=449
+   drone end=[1.519 1.326 0.709]
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+ep1 plush penguin  EXPERT success=True ticks=1061  arm dwell: grasp=261 carry=572
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+   REPLAY  welded=False lifted=False placed=False  MISS(live_target)=151.9 mm  obj dz=-0.006
+   WELD events: none
+   AUTOMATON  ticks<gate=42 crossings=3 longest=27 min_spz=0.257 | crossing ticks=[14, 904, 931]
+   CONTACTS: [('table_top', 1061), ('leg_back_right', 32)] | first non-rest contact tick=611
+   drone end=[1.432 1.526 0.71 ]
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+ep2 weight         EXPERT success=True ticks=968  arm dwell: grasp=257 carry=524
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+   REPLAY  welded=False lifted=False placed=False  MISS(live_target)=138.6 mm  obj dz=-0.395
+   WELD events: [(338, 'ON'), (822, 'OFF')]
+   AUTOMATON  ticks<gate=49 crossings=3 longest=34 min_spz=0.267 | crossing ticks=[14, 805, 839]
+   CONTACTS: [('ground', 435), ('table_top', 375), ('wall_xhi', 64), ('leg_back_right', 2)] | first non-rest contact tick=276
+   drone end=[1.343 1.207 0.707]
+REPDIAG-EXIT=0

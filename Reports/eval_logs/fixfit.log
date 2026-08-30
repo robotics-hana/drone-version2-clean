@@ -1,0 +1,43 @@
+node-l00a-004.myriad.ucl.ac.uk
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+ep0 weight         success=True ticks=1081
+   expert phases: [(0, 'travel', 'z=0.28'), (100, 'carry', 'z=0.53'), (735, 'grasp', 'z=0.98'), (989, 'travel', 'z=0.72')]
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+ep1 plush penguin  success=True ticks=1061
+   expert phases: [(0, 'travel', 'z=0.26'), (136, 'carry', 'z=0.56'), (708, 'grasp', 'z=1.01'), (969, 'travel', 'z=0.73')]
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+ep2 weight         success=True ticks=968
+   expert phases: [(0, 'travel', 'z=0.27'), (95, 'carry', 'z=0.53'), (619, 'grasp', 'z=0.98'), (876, 'travel', 'z=0.72')]
+
+automaton fit (fraction of ticks matching expert arm label):
+  lo=0.00 hi=0.56  all=0.442  pinch+-50=0.505
+  lo=0.00 hi=0.58  all=0.434  pinch+-50=0.505
+  lo=0.00 hi=0.60  all=0.436  pinch+-50=0.505
+  lo=0.00 hi=0.62  all=0.439  pinch+-50=0.505
+  lo=0.00 hi=0.65  all=0.442  pinch+-50=0.505
+  lo=0.35 hi=0.56  all=0.454  pinch+-50=0.505
+  lo=0.35 hi=0.58  all=0.445  pinch+-50=0.505
+  lo=0.35 hi=0.60  all=0.447  pinch+-50=0.505
+  lo=0.35 hi=0.62  all=0.450  pinch+-50=0.505
+  lo=0.35 hi=0.65  all=0.454  pinch+-50=0.505
+  lo=0.42 hi=0.56  all=0.443  pinch+-50=0.505
+  lo=0.42 hi=0.58  all=0.435  pinch+-50=0.505
+  lo=0.42 hi=0.60  all=0.437  pinch+-50=0.505
+  lo=0.42 hi=0.62  all=0.440  pinch+-50=0.505
+  lo=0.42 hi=0.65  all=0.443  pinch+-50=0.505
+  lo=0.45 hi=0.56  all=0.441  pinch+-50=0.505
+  lo=0.45 hi=0.58  all=0.432  pinch+-50=0.505
+  lo=0.45 hi=0.60  all=0.434  pinch+-50=0.505
+  lo=0.45 hi=0.62  all=0.437  pinch+-50=0.505
+  lo=0.45 hi=0.65  all=0.441  pinch+-50=0.505
+BEST lo=0.35 hi=0.56 (pinch=0.505 all=0.454)
+
+ACCEPTANCE replay (patched Platform):
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+  ep0 weight         welded=False lifted=False placed=False miss=104.7 mm dz=-0.006 weld_events=0  -> FAIL
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+  ep1 plush penguin  welded=False lifted=False placed=False miss=95.6 mm dz=-0.006 weld_events=0  -> FAIL
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+  ep2 weight         welded=False lifted=False placed=False miss=45.1 mm dz=-0.356 weld_events=0  -> FAIL
+PLATFORM-FIX REJECTED (0/3, lo=0.35 hi=0.56 clip=0.035 contact-weld)
+REPDIAG-EXIT=0

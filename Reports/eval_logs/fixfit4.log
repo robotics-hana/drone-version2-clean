@@ -1,0 +1,47 @@
+node-l00a-003.myriad.ucl.ac.uk
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+ep0 weight         ok=True ticks=1081 | weld on=[379] off=[937] | arm-switch=[100, 735, 989] | hover-seg starts after weld=[461, 808, 846, 945, 1008]
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+ep1 plush penguin  ok=True ticks=1061 | weld on=[369] off=[919] | arm-switch=[136, 708, 969] | hover-seg starts after weld=[829, 927, 992]
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+ep2 weight         ok=True ticks=968 | weld on=[340] off=[824] | arm-switch=[95, 619, 876] | hover-seg starts after weld=[694, 732, 832, 895]
+
+ACCEPTANCE A (expert-recorded arm + contact-weld + clip 0.035):
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+    obj_geoms=2
+  [A] ep0 weight         welded=False lifted=False placed=True miss=6.5 mm dz=-0.336 weld=[(383, 'ON'), (935, 'OFF')] -> PASS
+    final obj xy=(1.530,1.318) bin_xy=(1.534,1.311) d=0.009 m
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+    obj_geoms=5
+  [A] ep1 plush penguin  welded=False lifted=False placed=False miss=2.0 mm dz=-0.006 weld=[] -> FAIL
+    final obj xy=(-0.437,0.655) bin_xy=(1.416,1.515) d=2.042 m
+    pinch debug (tick, aperture, pad_contact): [(0, 0.0, False), (1, 0.016, False), (363, 0.0152, False), (364, 0.0144, False), (365, 0.0136, False), (366, 0.0128, False), (367, 0.0121, False), (368, 0.0112, False), (369, 0.011, True), (370, 0.011, False), (371, 0.0111, True), (372, 0.0111, False), (373, 0.0111, True), (374, 0.0111, False), (918, 0.0123, False), (919, 0.0131, False), (920, 0.0139, False), (921, 0.0147, False), (922, 0.0155, False)]
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+    obj_geoms=2
+  [A] ep2 weight         welded=False lifted=False placed=True miss=4.9 mm dz=-0.336 weld=[(344, 'ON'), (822, 'OFF')] -> PASS
+    final obj xy=(1.352,1.204) bin_xy=(1.364,1.210) d=0.013 m
+ACCEPT-A 2/3
+
+ACCEPTANCE B (automaton: deploy on approach alt; tuck on 2nd hover after weld; travel after release; slewed):
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+    obj_geoms=2
+    [B] tuck fired at tick 442
+  [B] ep0 weight         welded=False lifted=False placed=True miss=6.5 mm dz=-0.335 weld=[(384, 'ON'), (935, 'OFF')] -> PASS
+    final obj xy=(1.662,1.354) bin_xy=(1.534,1.311) d=0.135 m
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+    obj_geoms=5
+    [B] tuck fired at tick 674
+  [B] ep1 plush penguin  welded=False lifted=False placed=True miss=3.5 mm dz=-0.335 weld=[(371, 'ON'), (916, 'OFF')] -> PASS
+    final obj xy=(1.537,1.557) bin_xy=(1.416,1.515) d=0.129 m
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+    obj_geoms=2
+    [B] tuck fired at tick 404
+  [B] ep2 weight         welded=False lifted=False placed=False miss=5.7 mm dz=-0.336 weld=[(346, 'ON'), (822, 'OFF')] -> FAIL
+    final obj xy=(1.499,1.261) bin_xy=(1.364,1.210) d=0.145 m
+    pinch debug (tick, aperture, pad_contact): [(0, 0.0, False), (1, 0.016, False), (333, 0.0152, False), (334, 0.0144, False), (335, 0.0136, False), (336, 0.0128, False), (337, 0.012, False), (338, 0.0112, False), (339, 0.0104, False), (340, 0.0096, False), (341, 0.0088, False), (342, 0.0081, False), (345, 0.008, True), (347, 0.0075, True), (822, 0.0088, False), (823, 0.0096, False), (824, 0.0104, False), (825, 0.0112, False), (826, 0.012, False), (827, 0.0128, False), (828, 0.0136, False), (829, 0.0144, False), (830, 0.0152, False), (831, 0.016, False)]
+ACCEPT-B 2/3
+PLATFORM-FIX4 A=2/3 B=2/3
+REPDIAG-EXIT=0

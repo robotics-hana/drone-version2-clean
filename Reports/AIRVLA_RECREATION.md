@@ -1060,6 +1060,155 @@ cannot hold full-FT memory — recorded as a deviation if taken** (risk R1).
   nav 5/5 gate+hover, both corrective flavours clean
   (`Reports/table_review15_alltasks.mp4`).
 
+- **D46 (eval-harness audit and repair, 2026-08-29/30)**: two cheap,
+  rollout-independent tests — a teacher-forced probe (predict action
+  chunks on training frames; no simulator) and a ground-truth replay
+  (expert's logged actions through the eval harness on a byte-faithful
+  world) — proved the Phase-E harness could not have measured a pick:
+  expert actions missed by 102–152 mm, welded nothing, and the object
+  crossed the room with zero drone contacts (air-weld tow). Five
+  defects, each sufficient for 0/20: (1) stale `sp[2]<0.42` arm gate
+  (pedestal-era; table-era grasp is at z≈0.53) parking jaws 100–150 mm
+  off; (2) aperture-only weld firing on air and towing the object;
+  (3) eval pick starts z∼U(0.55,0.95) vs training deck spawns
+  [0.21,0.30] — **0/225 overlap** (nav 161/175, and nav worked);
+  (4) action clip ±0.03 vs SP_STEP 0.035; (5) weld contact gate
+  requiring consecutive ticks while plush contact flickers (solver
+  jitter). Repair validated ONLY by ground-truth replay passing —
+  fixfit5: **3/3 placed, 7–13 mm from bin centre**, weld within 4
+  ticks of the expert's; arm poses calibrated from demonstrations
+  (the pose *named* q_grasp is the delivery tuck, ~0.13 m of FK from
+  the true grasp pose). Fixes flag-gated: `--platfix`, `--startfix`.
+  Probe result (spread ratio 0.95–1.01 at 30k AND 60k) falsifies
+  undertraining/collapse. Every prior rollout-derived conclusion is
+  *unmeasured, not false*; re-measured on the honest harness:
+  30k picks 0/20 (best 57 mm); 60k picks 0/20 but **1 genuine
+  pick-up** + 7.6 mm best approach, takeoff behaviour emerged
+  (z-range 0.03→0.33 m); nav naive **12/20** (project best), RTC
+  *inverts* (5/20 — frozen-prefix chunking degrades station-keeping
+  on a weak base policy); `--objyaw0` re-confirmed 0/20 (convention
+  exonerated on a valid instrument). Full account:
+  `Reports/HARNESS_VALIDATION_DRAFT.md`; memory note
+  `eval-harness-ground-truth-replay`.
+
+- **D47 (residual-failure localisation: the policy is laterally
+  blind, 2026-08-30, method audit by Hana's reviewer)**: Hana observed
+  the gripper "consistently left of the object" in the 60k trial
+  video. A first trajectory analysis (26 episodes) was **discarded on
+  review** — episodes selected by fragile positional slicing, distance
+  measured from the airframe not the jaws, "lateral" measured against
+  a world line rather than the body frame. Corrected pipeline: `tag`
+  field added to the trajectory log, jaws xyz + yaw logged per sample,
+  and a properly powered spawn-correlation test (n=66: b60k+vid+rtc+
+  guided honest blocks, identified by deck-spawn altitude + asserted
+  block counts, 30k and yaw-pinned blocks excluded, mode demeaned as
+  covariate, Mahalanobis spawn distance). Result: radial r=+0.44
+  (signif. threshold ~0.24); **directional x-axis slope −0.863
+  (r=−0.805)** vs y-axis slope +0.016 — the policy **ignores the
+  object's lateral position and flies to the training prior**
+  (miss grows ~1:1 opposite the object's x-deviation from the mean),
+  while tracking the approach axis. This is the predicted signature
+  of the observation deficit (base_0_rgb carries 0–4 px of target;
+  wrist resolves only in the final half-metre) and it **gates the
+  next intervention: camera3 re-render** (from the `scene_state`
+  sidecar, no recollection) before any corrective-data collection —
+  correctives cannot teach servoing on a signal the inputs don't
+  carry. Confirmatory n=20 instrumented audit (jaws-frame, body-frame,
+  axis semantics nose = body −y): jaws median miss 0.223 m vs body
+  0.365 m (gap 0.142 = arm offset — the earlier "0.36 m short" was one
+  fact in two frames); body-frame decomposition splits the miss into
+  **lateral SCATTER** (x_b sd 0.263, side split 55/45 — Hana's "left"
+  was sampling, not bias; this is the spawn-driven blindness in the
+  drone's own frame) plus a **systematic 12 cm fore–aft undershoot**
+  (y_b +0.120 ± 0.110, consistent in 18/20) on the axis the policy CAN
+  track — i.e. the scatter needs the camera; the undershoot is
+  trainable/correctable afterwards. Spawn correlation at n=20:
+  r=+0.33 (underpowered as predicted; direction matches the powered
+  n=66 result). Four episodes landed at 35–44 mm.
+  **Heading check (reviewer-requested, decisive)**: the object stays
+  inside the nose camera's ±65° FOV for a median 100% of every
+  approach (min 97%, 20/20) — the lateral information IS in the
+  observation via camera2 (78–900 px through the approach), so the
+  strong "information absent" form of the camera claim is FALSE.
+  **SIGN CORRECTION (reviewer-caught, same day)**: the first reading
+  of the heading test ("yaw falsified, 2/20") had the convention
+  inverted. Verified synthetically: the yaw mechanism predicts
+  OPPOSITE signs (object bearing left → fly past on the right), and
+  2/20 equal = **18/20 opposite** (binomial p≈2×10⁻⁴). Second
+  correction, same reviewer round: this sign test **cannot
+  discriminate** yaw failure from prior-following — a policy flying
+  straight to a fixed point P also points roughly at P, so heading
+  error and miss direction both derive from where the object sits
+  relative to the destination and come out opposite either way. The
+  honest status of the yaw mechanism is therefore *no longer
+  excluded*, not "supported"; the discriminating test is the queued
+  oracle-yaw INTERVENTION (heading pinned at the true bearing), not
+  any observational correlation. What IS measured on identical
+  episodes: body-x tracks object-x at slope +0.22 and jaw-x at
+  +0.40. **Attribution retracted (reviewer)**: the +0.18 gap is a
+  kinematic identity — the arm's joints rotate about body-x and the
+  jaws sit ~0.2 m along body −y, so ANY yaw swings the jaws laterally
+  (reach·sin ψ) whether or not it is commanded toward the object. The
+  direct observational measurement instead: nose angle regressed on
+  bearing-to-object gives slope **+0.39** (r +0.64) at closest
+  approach AND at mid-approach — the heading partially tracks the
+  target, the same ~0.4 fraction as position tracking. Every channel
+  closes ~40% of the offset; the causal owner is left to the queued
+  interventions. Camera2 pixel-vs-distance closes the
+  resolution question: ~11 px at 0.9 m, ~100 px at 0.4 m, 650–935 px
+  at 0.2 m (0 px once the object passes under the nose; wrist takes
+  over at 2,400–3,000 px) — early-approach signal is marginal
+  everywhere, mid-approach usable in two streams. And final jaw x
+  tracks OBJECT x with slope +0.40 (r +0.59): the policy uses SOME
+  lateral information and closes ~40% of the offset. Coherent
+  mechanism: partial visual tracking + systematic under-aiming, with
+  slot and horizon effects unresolved. Experiments queued (all
+  Myriad, honest harness, 60k): **horizon test** (`--exech 10`,
+  replan every 1 s — is late-arriving wrist info unusable between 5 s
+  open-loop chunks?), **oracle-yaw** (`--oracleyaw`, platform pins
+  heading at the object bearing — direct test of the aiming channel),
+  and the **oracle-vector ablation** (jaws-to-target vector appended
+  to state, 10→13 dims within π₀'s 32-dim pad; dataset built by FK
+  from the sidecar, fine-tune 60k+10k, eval with `--oraclestate`) —
+  the upper-bound experiment: reliable grasps ⇒ everything downstream
+  of perception works; persistent lateral miss ⇒ perception was never
+  the constraint. The swap arm (Sparks 859/860) is DEMOTED to a
+  parallel arm — soft-prior mechanism, 38 h, confounded with the
+  holdout — but left running on otherwise-idle GPU.
+
+- **D48 (pre-registered predictions for the mechanism experiments,
+  2026-08-30, before any result lands)**: written in advance, per the
+  reviewer, so tomorrow is a lookup rather than an interpretation —
+  the same discipline as the harness acceptance test, and twice this
+  project has been caught by post-hoc fits (the arm-gate
+  "impossibility", the inverted sign test). Baseline for all
+  comparisons: audit60k, jaws median miss 0.223 m, lateral sd 0.263,
+  picked 1/20-equivalent, spawn-slope −0.86 (n=66).
+  - **Oracle-yaw (243198)** — the aiming channel OWNS the residual
+    miss iff jaws median miss ≤ 0.12 m OR picked ≥ 3/20; it
+    CONTRIBUTES iff median miss ≤ 0.17 m; unchanged (≥ 0.19 m and
+    picked ≤ 1) = aiming exonerated causally.
+  - **Horizon-10 (243197)** — control frequency owns iff jaws median
+    miss ≤ 0.12 m OR picked ≥ 3/20; the camera2 profile (7.5 px
+    median at commitment range, ~100 px at 0.5 m, abundant only when
+    a 5 s chunk can no longer act) PREDICTS this is the experiment
+    that moves. Reviewer's noted asymmetry: a positive costs one
+    integer in the inference loop — no data, no camera, no training.
+  - **Oracle-vector pair (243212 true vs 243213 corrupted)** — the
+    model ATTENDS iff picked_true − picked_corrupt ≥ 3 OR median
+    miss rises ≥ 0.08 m under corruption; if it does not attend, the
+    oracle null is PRE-DECLARED uninterpretable. Given attendance:
+    picks ≥ 10/20 with the true vector = everything downstream of
+    perception works and perception is the whole residual problem;
+    lateral miss persisting ≥ 0.15 m despite the true vector =
+    perception was never the constraint (control/action
+    representation owns it).
+  - **90k (242899)** — ordinal only: picked ≥ 3/20 on the honest
+    harness favours training scale as a continuing lever; ≤ 1/20
+    retires "just train longer".
+  Mechanisms are not exclusive; if several move, ownership is
+  apportioned by effect size against these same thresholds.
+
 ## 9. Limitations (running)
 
 - **L1 — no teleoperation**: all demos are scripted experts in sim. Expert

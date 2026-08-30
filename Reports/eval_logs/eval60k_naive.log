@@ -1,0 +1,42 @@
+MODE naive delay 2 s 1.0
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 388.6, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "pick up the {obj} and put it in the wooden box", "picked": true, "placed": false, "success": false, "miss_mm": 439.9, "frames": 1200}
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 273.9, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 334.2, "frames": 1200}
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 167.3, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 186.7, "frames": 1200}
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 375.5, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 337.7, "frames": 1200}
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 270.9, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 204.7, "frames": 1200}
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 573.3, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 444.1, "frames": 1200}
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 238.8, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "pick up the {obj} and put it in the wooden box", "picked": true, "placed": false, "success": false, "miss_mm": 564.2, "frames": 1200}
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 316.2, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "pick up the {obj} and put it in the wooden box", "picked": true, "placed": false, "success": false, "miss_mm": 238.7, "frames": 1200}
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 164.3, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 129.4, "frames": 1200}
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "put the {obj} in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 293.3, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "put the {obj} in the wooden box", "picked": true, "placed": false, "success": false, "miss_mm": 141.7, "frames": 1200}
+EVAL {"kind": "nav", "obj": "plush penguin", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": false, "frames": 450}
+EVAL {"kind": "nav", "obj": "weight", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": false, "frames": 450}
+EVAL {"kind": "nav", "obj": "plush penguin", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": true, "clean_cross": false, "success": false, "frames": 450}
+EVAL {"kind": "nav", "obj": "weight", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": true, "frames": 172}
+EVAL {"kind": "nav", "obj": "plush penguin", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": false, "frames": 450}
+EVAL {"kind": "nav", "obj": "weight", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": true, "frames": 215}
+EVAL {"kind": "nav", "obj": "plush penguin", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": true, "frames": 196}
+EVAL {"kind": "nav", "obj": "weight", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": false, "frames": 450}
+EVAL {"kind": "nav", "obj": "plush penguin", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": true, "frames": 103}
+EVAL {"kind": "nav", "obj": "weight", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": true, "frames": 195}
+EVAL {"kind": "nav", "obj": "plush penguin", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": false, "frames": 450}
+EVAL {"kind": "nav", "obj": "weight", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": true, "clean_cross": false, "success": false, "frames": 439}
+EVAL {"kind": "nav", "obj": "plush penguin", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": true, "clean_cross": false, "success": false, "frames": 450}
+EVAL {"kind": "nav", "obj": "weight", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": true, "frames": 204}
+EVAL {"kind": "nav", "obj": "plush penguin", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": true, "frames": 186}
+EVAL {"kind": "nav", "obj": "weight", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": true, "frames": 191}
+EVAL {"kind": "nav", "obj": "plush penguin", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": false, "frames": 450}
+EVAL {"kind": "nav", "obj": "weight", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": false, "frames": 450}
+EVAL {"kind": "nav", "obj": "plush penguin", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": false, "frames": 450}
+EVAL {"kind": "nav", "obj": "weight", "prompt": "fly through the gate and hover over the {obj}", "crossed": true, "gate_hit": false, "clean_cross": true, "success": false, "frames": 450}
+EVAL-DONE mode=naive 8/40 success

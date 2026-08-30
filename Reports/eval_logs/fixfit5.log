@@ -1,0 +1,37 @@
+node-l00a-003.myriad.ucl.ac.uk
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+ep0 weight         ok=True ticks=1081
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+ep1 plush penguin  ok=True ticks=1061
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+ep2 weight         ok=True ticks=968
+calibrated poses: travel=[-0.053  0.267] deploy=[-1.333  1.547] tuck=[ 0.533 -0.16 ]
+
+ACCEPTANCE A (expert-recorded arm + debounced contact-weld + clip):
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+  [A] ep0 weight         welded=False placed=True miss=6.5 mm dz=-0.336 weld=[(383, 'ON'), (935, 'OFF')] -> PASS
+    final obj xy=(1.530,1.318) bin_xy=(1.534,1.311) d=0.009 m
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+  [A] ep1 plush penguin  welded=False placed=True miss=3.3 mm dz=-0.336 weld=[(371, 'ON'), (916, 'OFF')] -> PASS
+    final obj xy=(1.404,1.512) bin_xy=(1.416,1.515) d=0.012 m
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+  [A] ep2 weight         welded=False placed=True miss=4.9 mm dz=-0.336 weld=[(344, 'ON'), (822, 'OFF')] -> PASS
+    final obj xy=(1.352,1.204) bin_xy=(1.364,1.210) d=0.013 m
+ACCEPT-A 3/3
+
+ACCEPTANCE B (automaton: deploy at approach alt; tuck at weld+60; travel on release; calibrated poses, slewed):
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+    [B] weld at tick 383
+  [B] ep0 weight         welded=False placed=True miss=5.1 mm dz=-0.336 weld=[(383, 'ON'), (935, 'OFF')] -> PASS
+    final obj xy=(1.530,1.318) bin_xy=(1.534,1.311) d=0.009 m
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+    [B] weld at tick 371
+  [B] ep1 plush penguin  welded=False placed=True miss=4.8 mm dz=-0.336 weld=[(371, 'ON'), (916, 'OFF')] -> PASS
+    final obj xy=(1.404,1.512) bin_xy=(1.416,1.515) d=0.012 m
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+    [B] weld at tick 344
+  [B] ep2 weight         welded=False placed=True miss=5.7 mm dz=-0.336 weld=[(344, 'ON'), (822, 'OFF')] -> PASS
+    final obj xy=(1.358,1.212) bin_xy=(1.364,1.210) d=0.007 m
+ACCEPT-B 3/3
+PLATFORM-FIX5 A=3/3 B=3/3
+REPDIAG-EXIT=0

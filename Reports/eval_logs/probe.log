@@ -1,0 +1,28 @@
+node-l00a-004.myriad.ucl.ac.uk
+NVIDIA A100-PCIE-40GB
+The PI0 model is a direct port of the OpenPI implementation. 
+This implementation follows the original OpenPI structure for compatibility. 
+Original implementation: https://github.com/Physical-Intelligence/openpi
+Loading model from: /home/ucabhe0/Scratch/airvla/pi0_out/checkpoints/030000/pretrained_model
+✓ Loaded state dict from model.safetensors
+All keys loaded successfully!
+device cuda | dataset frames 269557 | samples 40
+ 10/40
+ 20/40
+ 30/40
+ 40/40
+
+dim         MAE      corr    pred_sd     gt_sd
+dx        0.00069  +0.940    0.00562   0.00581
+dy        0.00094  +0.876    0.00722   0.00739
+dz        0.00024  +0.941    0.00285   0.00290
+droll     0.00000  +nan    0.00000   0.00000
+dpitch    0.00000  +nan    0.00000   0.00000
+dyaw      0.00047  +0.937    0.00853   0.00881
+grip      0.00303  +0.999    0.21639   0.21667
+
+5s integrated endpoint err (m): 0.0290  | gt endpoint magnitude (m): 0.2856
+pred spread across frames: [0.00427 0.00547 0.00216 0.      0.      0.00642 0.21072]
+gt   spread across frames: [0.00439 0.00577 0.00214 0.      0.      0.00671 0.21056]
+ratio pred/gt            : [0.973 0.948 1.01  0.    0.    0.957 1.001]
+PROBE-EXIT=0

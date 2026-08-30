@@ -1,0 +1,17 @@
+node-l00a-004.myriad.ucl.ac.uk
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+ep0 weight         EXPERT success=True  ticks=1081
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+   REPLAY  min sp_z=0.279  gate(<0.42) fired 49/1081 ticks  welded=False lifted=False placed=False  miss=138.6 mm
+   drone end xyz=[1.519 1.326 0.709]  object dz=-0.395 m
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+ep1 plush penguin  EXPERT success=True  ticks=1061
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+   REPLAY  min sp_z=0.257  gate(<0.42) fired 42/1061 ticks  welded=False lifted=False placed=False  miss=151.1 mm
+   drone end xyz=[1.431 1.526 0.71 ]  object dz=-0.006 m
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+ep2 weight         EXPERT success=True  ticks=968
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+   REPLAY  min sp_z=0.267  gate(<0.42) fired 49/968 ticks  welded=False lifted=False placed=False  miss=115.6 mm
+   drone end xyz=[1.344 1.207 0.707]  object dz=-0.395 m
+REPLAY-EXIT=0
