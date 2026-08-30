@@ -1,0 +1,22 @@
+MODE naive delay 2 s 1.0
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 60.8, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 769.4, "frames": 1200}
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 41.6, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 59.3, "frames": 1200}
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 486.0, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 244.8, "frames": 1200}
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 289.4, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 571.4, "frames": 1200}
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 321.6, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 410.2, "frames": 1200}
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 409.9, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 192.6, "frames": 1200}
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 265.9, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 363.3, "frames": 1200}
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 111.4, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 90.0, "frames": 1200}
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 544.1, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "pick up the {obj} and put it in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 143.3, "frames": 1200}
+EVAL {"kind": "pick", "obj": "plush penguin", "prompt": "put the {obj} in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 420.8, "frames": 1200}
+EVAL {"kind": "pick", "obj": "weight", "prompt": "put the {obj} in the wooden box", "picked": false, "placed": false, "success": false, "miss_mm": 101.7, "frames": 1200}
+EVAL-DONE mode=naive 0/20 success
