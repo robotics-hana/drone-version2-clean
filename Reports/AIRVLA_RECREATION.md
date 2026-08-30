@@ -1243,6 +1243,26 @@ cannot hold full-FT memory — recorded as a deviation if taken** (risk R1).
   seeding; the frozen n=60 run records every episode to prevent a
   recurrence.
 
+- **D49 (camera3 re-render: pre-flight done, PARKED to 2026-08-31,
+  from Hana)**: demo of candidate framing delivered
+  (`Reports/cam3v2_demo.mp4`, free-camera from the stairs quadrant,
+  object sub-pixel → clearly resolvable). Step-1 recoverability
+  audit: logged ✓ both object poses incl. random yaws, bin/bin2
+  pose+yaw, drone/arm/gripper, table-y (derived), gate parked for the
+  200 pure picks. NOT logged ✗: table-x (`u_off` ±0.10–0.28 m), both
+  bin tints (7 draws/ep), gate-x for 150 nav + 50 corrective; no
+  `episodes_meta.json` exists. Cause: one sequential Runner(91000)
+  rng stream over all 400 episodes. Correction: camera3 =
+  `lab_external` in `gate_lab.xml`, not `overview_cam`. Mitigations
+  on the table: (A) deterministic re-collection on Sparks (mujoco
+  3.11.0 — bit-faithful; verifiable by parquet byte-equality; GPU
+  free Monday) or (C) recover unlogged values from the stored
+  camera3 frames themselves (table-x by detection ~±3 cm, tints by
+  pixel sampling, gate side trivially), validated by the brief's
+  Step-2 centroid acceptance. Decision deferred until the pending
+  experiment results land. Pre-experiment state tagged
+  `pre-cam3v2-2026-08-30`.
+
 ## 9. Limitations (running)
 
 - **L1 — no teleoperation**: all demos are scripted experts in sim. Expert
