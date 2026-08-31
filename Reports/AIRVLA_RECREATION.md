@@ -1266,10 +1266,17 @@ cannot hold full-FT memory — recorded as a deviation if taken** (risk R1).
     with no holdout. Checkpoint pushed: hanapasta/airvla_pi0_90k.
   - **Frozen n=60 baseline** (protocol v1, torch seed 1000, every
     episode recorded): median **242.1 mm** (IQR 110–359, min 5.0),
-    **picked 3/60 (5.0%, exact CI ≈1–14%)**, success 0/60. The three
-    pick-ups (episodes 4, 24, 46) are on video and reproducible —
-    clips banked as Reports/frozen60_pickup_ep{4,24,46}.mp4, closing
-    the lost-footage episode.
+    **picked 3/60 (5.0%, exact CI ≈1–14%)**, success 0/60. Clips
+    banked as Reports/frozen60_pickup_ep{4,24,46}.mp4, closing the
+    lost-footage episode. **Semantics note (2026-08-31, from Hana's
+    video review)**: `picked` is a latched criterion (weld active AND
+    object >12 cm above the table for ≥1 tick), so it admits transient
+    grabs. Frame-by-frame review: ep4 = genuine ~40 s carry to the bin
+    (dropped outside it, knocking the table over en route), ep46 =
+    genuine ~58 s carry (dropped mid-flight), ep24 = grab-and-drop
+    (~5 s). Honest phrasing: 2 sustained carries + 1 momentary grab in
+    60. Next frozen protocol should log per-tick weld state and object
+    z so carry duration becomes computable.
   - Other agent's pickhold chain released and started 02:22 as
     designed; Sparks swap arm healthy (step 6k, loss 0.073).
 
@@ -1303,12 +1310,16 @@ cannot hold full-FT memory — recorded as a deviation if taken** (risk R1).
   = **15/15/14/16 of 20 across the four arms** — invariant to the
   prompt AND to which object occupies the spot; pooled language effect
   2/40 (noise). Verdict: the fine-tuned policy selects by POSITION and
-  ignores the object noun. Mechanism is a training-design confound,
-  not necessarily representational forgetting: in all 400 episodes the
-  prompted object sat at the task spot, so language was never needed
-  to solve training. Fix for the next collection: decorrelate target
-  identity from position (target/distractor swap positions in half the
-  episodes). Secondary observation: a novel object in view did not
+  ignores the object noun. ~~Mechanism is a training-design confound: the
+  prompted object always sat at the task spot, so language was never
+  needed to solve training.~~ **CORRECTED 2026-08-31** (dataset_tests/
+  REPORT.md): measured from frame 0 of all 225 pick episodes, the two
+  objects sit side by side at the same y with the distractor offset
+  symmetrically in x; the best cross-validated position rule identifies
+  the target at 52.3% — chance. Position was never informative; language
+  was the only cue, and the model failed to learn it. The inert prompt
+  is a model/training failure, not a collector design flaw, so a v2
+  collection campaign is not the fix. Secondary observation: a novel object in view did not
   disrupt flight (takeoff 20/20, approach quality in-family).
 
 ## 9. Limitations (running)

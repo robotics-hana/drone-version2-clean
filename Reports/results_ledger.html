@@ -126,13 +126,16 @@ and no rate below n=40 is treated as a comparison.</p>
 <p>The policy has learned the task's structure (probe correlations ≈ 0.9)
 and navigates well (12/20 honest nav successes at 60k). Picking remains
 rare: the frozen n=60 baseline measures 3/60 pick-ups (5%, CI ≈ 1–14%) at
-median 242 mm. The overnight experiment set completed on 31 Aug: pinning
+median 242 mm — on video these are 2 sustained carries and 1 momentary grab
+(`picked` latches on one tick of weld + 12 cm lift). The overnight experiment set completed on 31 Aug: pinning
 the heading collapses the miss 6.3× (38.6 mm at n=40); handing the policy
 the exact target vector helps far less (168 mm) even though an attendance
 control proves the feature is used; training to 90k retired "train longer"
 by the pre-registered rate criterion; and a 2×2 language probe showed the
-prompt noun is behaviourally inert (a training-design confound — the
-prompted object always sat at the task spot). The consistent picture:
+prompt noun is behaviourally inert — and a dataset test (31 Aug) shows the
+training data never let position stand in for language (best position rule:
+52.3%, chance), so the inert prompt is a model/training failure, not a
+collector flaw. The consistent picture:
 information and training scale are not the binding constraint — converting
 known target position into flight, dominated by the heading channel, is.
 Only the slot-swap arm (Monday) remains
@@ -394,7 +397,7 @@ decision log D48</div>
 <tr><td>median miss (IQR)</td><td class="g">27.0 mm (7.7–45.5)</td><td class="g">41.1 mm (18.7–54.4)</td><td>223 mm</td></tr>
 <tr><td>max miss</td><td>65.1 mm</td><td>448.7 mm (one outlier)</td><td>—</td></tr>
 <tr><td>paired median difference v2−v1</td><td colspan="2">+7.1 mm</td><td>—</td></tr>
-<tr><td>picked up (CI)</td><td>5/20 (9–49%)</td><td>1/20 (0.1–25%)</td><td>3/60 (5%, CI 1–14%) <span class="muted">(frozen n=60 run)</span></td></tr>
+<tr><td>picked up (CI)</td><td>5/20 (9–49%)</td><td>1/20 (0.1–25%)</td><td>3/60 (5%, CI 1–14%) <span class="muted">(frozen n=60 run; on video: 2 sustained carries + 1 transient grab — the flag latches on one tick of weld + 12 cm lift)</span></td></tr>
 <tr><td>v2 replicate, torch seed 2000 (frozen protocol v2)</td><td colspan="2">median 36.4 mm (IQR 22–59) · picked 5/20</td><td>—</td></tr>
 <tr><td><b>pooled v2, n=40</b></td><td colspan="2"><b>median 38.6 mm · picked 6/40 (15%, CI 6–30%)</b> — 6.3× below the frozen baseline's 242 mm</td><td>—</td></tr>
 <tr><td>fore–aft undershoot (was +120 mm)</td><td>+1 mm (sd 10)</td><td>+52 mm (sd 123, outlier-inflated)</td><td>+120 mm</td></tr>
