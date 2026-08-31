@@ -1243,6 +1243,36 @@ cannot hold full-FT memory — recorded as a deviation if taken** (risk R1).
   seeding; the frozen n=60 run records every episode to prevent a
   recurrence.
 
+- **D48-OUTCOMES-2 (overnight 30→31 Aug: the table completes)**:
+  - **Oracle-vector pair**: attendance control PASSES — corrupting the
+    vector's lateral direction costs a paired median **+146 mm** (bar
+    +80), worse in 13/20; the model learned the feature in 10k steps.
+    True-vector result therefore interpretable: median **168 mm**
+    (bimodal: 9/20 under 80 mm), picked 1/20 — **perception was never
+    the whole constraint**; converting known target position into
+    flight is. Triangulates with oracle-yaw: pinning the heading
+    (38.6 mm) beats providing the information (168 mm).
+  - **Oracle-yaw at n=40** (v2, seeds 1000/2000, the seed-2000 arm
+    re-run on frozen protocol v2 after the v1-freeze flag incident):
+    medians 41.1 / 36.4 mm, **pooled 38.6 mm, picked 6/40 (15%,
+    CI 6–30%)** vs the frozen n=60 baseline below — 6.3× median
+    reduction. Seed pair (picked 1 vs 5, medians 5 mm apart) is the
+    third coin-flip-at-the-window demonstration.
+  - **90k honest**: median 184.5 mm, picked **1/20** → by the
+    pre-registered rate criterion, "just train longer" is RETIRED as
+    the primary lever; the low tail nonetheless thickened again
+    (6/20 under 70 mm vs 1/20 at 60k) — emergence-in-the-tail
+    continues, indistinguishable from memorisation at 1.34 epochs
+    with no holdout. Checkpoint pushed: hanapasta/airvla_pi0_90k.
+  - **Frozen n=60 baseline** (protocol v1, torch seed 1000, every
+    episode recorded): median **242.1 mm** (IQR 110–359, min 5.0),
+    **picked 3/60 (5.0%, exact CI ≈1–14%)**, success 0/60. The three
+    pick-ups (episodes 4, 24, 46) are on video and reproducible —
+    clips banked as Reports/frozen60_pickup_ep{4,24,46}.mp4, closing
+    the lost-footage episode.
+  - Other agent's pickhold chain released and started 02:22 as
+    designed; Sparks swap arm healthy (step 6k, loss 0.073).
+
 - **D49 (camera3 re-render: pre-flight done, PARKED to 2026-08-31,
   from Hana)**: demo of candidate framing delivered
   (`Reports/cam3v2_demo.mp4`, free-camera from the stairs quadrant,

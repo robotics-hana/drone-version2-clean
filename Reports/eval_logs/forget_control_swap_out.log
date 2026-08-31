@@ -1,0 +1,31 @@
+WARNING:root:Vision embedding key might need handling: model.paligemma_with_expert.paligemma.model.vision_tower.vision_model.embeddings.patch_embedding.bias
+WARNING:root:Vision embedding key might need handling: model.paligemma_with_expert.paligemma.model.vision_tower.vision_model.embeddings.patch_embedding.weight
+The PI0 model is a direct port of the OpenPI implementation. 
+This implementation follows the original OpenPI structure for compatibility. 
+Original implementation: https://github.com/Physical-Intelligence/openpi
+Loading model from: /home/ucabhe0/Scratch/airvla/pi0_out/checkpoints/060000/pretrained_model
+✓ Loaded state dict from model.safetensors
+All keys loaded successfully!
+PROV {"script_sha": "45f1ffb2de7d", "ckpt": "/home/ucabhe0/Scratch/airvla/pi0_out/checkpoints/060000/pretrained_model", "arm": "control_swap", "prompt": "pick up the weight and put it in the wooden box", "n": 20, "torch_seed": 1000, "runner_seed": 88000, "when": "2026-08-30T23:30:21"}
+PD flight controller initialised: mass 1.097 kg, hover 10.76 N
+EP {"ep": 0, "arm": "control_swap", "bottle_xy": [-0.532, 0.38], "min_d_bottle_mm": 64.1, "min_d_weight_mm": 539.3, "d_prompted_mm": 539.3, "selected": "bottle", "zrange": 0.37}
+EP {"ep": 1, "arm": "control_swap", "bottle_xy": [0.001, 0.665], "min_d_bottle_mm": 233.7, "min_d_weight_mm": 126.9, "d_prompted_mm": 126.9, "selected": "weight", "zrange": 0.33}
+EP {"ep": 2, "arm": "control_swap", "bottle_xy": [0.341, 0.356], "min_d_bottle_mm": 628.5, "min_d_weight_mm": 217.4, "d_prompted_mm": 217.4, "selected": "weight", "zrange": 0.24}
+EP {"ep": 3, "arm": "control_swap", "bottle_xy": [-0.292, 0.282], "min_d_bottle_mm": 313.2, "min_d_weight_mm": 157.9, "d_prompted_mm": 157.9, "selected": "weight", "zrange": 0.14}
+EP {"ep": 4, "arm": "control_swap", "bottle_xy": [0.188, 0.728], "min_d_bottle_mm": 42.3, "min_d_weight_mm": 538.8, "d_prompted_mm": 538.8, "selected": "bottle", "zrange": 0.41}
+EP {"ep": 5, "arm": "control_swap", "bottle_xy": [0.091, 0.385], "min_d_bottle_mm": 546.6, "min_d_weight_mm": 153.0, "d_prompted_mm": 153.0, "selected": "weight", "zrange": 0.22}
+EP {"ep": 6, "arm": "control_swap", "bottle_xy": [0.06, 0.646], "min_d_bottle_mm": 452.0, "min_d_weight_mm": 33.8, "d_prompted_mm": 33.8, "selected": "weight", "zrange": 0.34}
+EP {"ep": 7, "arm": "control_swap", "bottle_xy": [0.228, 0.74], "min_d_bottle_mm": 122.9, "min_d_weight_mm": 609.3, "d_prompted_mm": 609.3, "selected": "bottle", "zrange": 0.26}
+EP {"ep": 8, "arm": "control_swap", "bottle_xy": [-0.202, 0.519], "min_d_bottle_mm": 359.3, "min_d_weight_mm": 250.0, "d_prompted_mm": 250.0, "selected": "weight", "zrange": 0.28}
+EP {"ep": 9, "arm": "control_swap", "bottle_xy": [-0.006, 0.568], "min_d_bottle_mm": 397.7, "min_d_weight_mm": 293.1, "d_prompted_mm": 293.1, "selected": "weight", "zrange": 0.29}
+EP {"ep": 10, "arm": "control_swap", "bottle_xy": [0.377, 0.353], "min_d_bottle_mm": 624.3, "min_d_weight_mm": 167.5, "d_prompted_mm": 167.5, "selected": "weight", "zrange": 0.3}
+EP {"ep": 11, "arm": "control_swap", "bottle_xy": [0.389, 0.537], "min_d_bottle_mm": 356.6, "min_d_weight_mm": 259.6, "d_prompted_mm": 259.6, "selected": "weight", "zrange": 0.31}
+EP {"ep": 12, "arm": "control_swap", "bottle_xy": [0.271, 0.452], "min_d_bottle_mm": 550.8, "min_d_weight_mm": 284.9, "d_prompted_mm": 284.9, "selected": "weight", "zrange": 0.21}
+EP {"ep": 13, "arm": "control_swap", "bottle_xy": [0.302, 0.86], "min_d_bottle_mm": 251.8, "min_d_weight_mm": 222.7, "d_prompted_mm": 222.7, "selected": "weight", "zrange": 0.32}
+EP {"ep": 14, "arm": "control_swap", "bottle_xy": [0.284, 0.33], "min_d_bottle_mm": 522.8, "min_d_weight_mm": 60.0, "d_prompted_mm": 60.0, "selected": "weight", "zrange": 0.35}
+EP {"ep": 15, "arm": "control_swap", "bottle_xy": [-0.422, 0.884], "min_d_bottle_mm": 439.3, "min_d_weight_mm": 201.7, "d_prompted_mm": 201.7, "selected": "weight", "zrange": 0.29}
+EP {"ep": 16, "arm": "control_swap", "bottle_xy": [0.586, 0.828], "min_d_bottle_mm": 39.0, "min_d_weight_mm": 432.0, "d_prompted_mm": 432.0, "selected": "bottle", "zrange": 0.36}
+EP {"ep": 17, "arm": "control_swap", "bottle_xy": [-0.154, 0.963], "min_d_bottle_mm": 231.3, "min_d_weight_mm": 101.7, "d_prompted_mm": 101.7, "selected": "weight", "zrange": 0.36}
+EP {"ep": 18, "arm": "control_swap", "bottle_xy": [0.544, 0.473], "min_d_bottle_mm": 774.7, "min_d_weight_mm": 324.1, "d_prompted_mm": 324.1, "selected": "weight", "zrange": 0.3}
+EP {"ep": 19, "arm": "control_swap", "bottle_xy": [0.26, 0.545], "min_d_bottle_mm": 776.9, "min_d_weight_mm": 150.9, "d_prompted_mm": 150.9, "selected": "weight", "zrange": 0.39}
+FORGETTING-PROBE-DONE arm=control_swap

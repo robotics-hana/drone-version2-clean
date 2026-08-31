@@ -78,14 +78,14 @@ footer{margin-top:48px; padding-top:12px; border-top:1px solid var(--line);
 
 <div class="wrap">
 <header>
-  <div class="kicker">AirVLA recreation · verified experiment record · 29–30 Aug 2026</div>
+  <div class="kicker">AirVLA recreation · verified experiment record · 29–31 Aug 2026</div>
   <h1>AirVLA Results Ledger</h1>
   <p class="sub">One tab per experiment. Every number was recomputed from its
   raw log before publication; the trace is in
   <code>Reports/eval_logs/VERIFICATION.md</code> (60 claims, 52 verified as
   printed, 8 corrected or re-labelled — all corrections applied here).</p>
   <div class="prov">
-    <span>protocol: eval_frozen_v1.py · sha a8cc240ba921</span>
+    <span>protocols: eval_frozen_v1 a8cc240ba921 · v2 1ec61ae930ca</span>
     <span>scene seed 77000</span>
     <span>torch seeds 1000 / 2000</span>
     <span>holdout seed 0 (40 eps)</span>
@@ -124,15 +124,19 @@ scenes. Rates are therefore always quoted with a 95% confidence interval,
 and no rate below n=40 is treated as a comparison.</p>
 <h3>Where things stand</h3>
 <p>The policy has learned the task's structure (probe correlations ≈ 0.9)
-and navigates well (12/20 honest nav successes at 60k training steps). It
-cannot yet pick reliably: one genuine grasp in the honest 60k runs. The
-best-supported account of the residual failure is that the policy
-under-uses the object's lateral position — pinning the drone's heading at
-the true object bearing collapsed the median miss from 223 mm to 27–41 mm —
-but that intervention changes three things at once (aiming, camera view,
-gripper geometry), so the mechanism is measured rather than fully
-attributed. Overnight experiments (oracle-vector, 90k, slot swap) are
-marked <span class="tagline run">running</span> where pending.</p>
+and navigates well (12/20 honest nav successes at 60k). Picking remains
+rare: the frozen n=60 baseline measures 3/60 pick-ups (5%, CI ≈ 1–14%) at
+median 242 mm. The overnight experiment set completed on 31 Aug: pinning
+the heading collapses the miss 6.3× (38.6 mm at n=40); handing the policy
+the exact target vector helps far less (168 mm) even though an attendance
+control proves the feature is used; training to 90k retired "train longer"
+by the pre-registered rate criterion; and a 2×2 language probe showed the
+prompt noun is behaviourally inert (a training-design confound — the
+prompted object always sat at the task spot). The consistent picture:
+information and training scale are not the binding constraint — converting
+known target position into flight, dominated by the heading channel, is.
+Only the slot-swap arm (Monday) remains
+<span class="tagline run">running</span>.</p>
 </section>
 
 <!-- ======================= 2 CHECKPOINTS ======================= -->
@@ -146,7 +150,7 @@ stated. The teacher-forced probe (<code>open_loop_probe.py</code>) predicts
 <tr><th>Checkpoint</th><th>Recipe</th><th>Samples · epochs</th><th>Archive</th><th>Probe result <span class="muted">(caveat in-cell)</span></th></tr>
 <tr><td class="mono">30k</td><td>batch 4, Myriad A100-40GB</td><td>120,000 · 0.45</td><td class="mono">hanapasta/airvla_pi0_30k</td><td>corr +0.88…+0.999 by action dimension; predicted/actual spread ratio 0.95–1.01; 2.90 cm integrated error per 5 s chunk (signal: 28.6 cm). <b>Measured on frames the model trained on — no holdout existed.</b></td></tr>
 <tr><td class="mono">60k</td><td>30k + 30,000-step extension, same recipe</td><td>240,000 · 0.89</td><td class="mono">hanapasta/airvla_pi0_60k</td><td>Only the vertical channel moved: dz corr 0.941→0.980, chunk error 2.90→2.57 cm. <b>Same no-holdout caveat.</b></td></tr>
-<tr><td class="mono">90k <span class="tagline run">training</span></td><td>60k + 30,000-step extension</td><td>360,000 · 1.34</td><td class="muted">push on completion</td><td class="muted">honest eval queued; note the model now sees frames twice with no holdout to detect memorisation</td></tr>
+<tr><td class="mono">90k</td><td>60k + 30,000-step extension</td><td>360,000 · 1.34</td><td class="mono">hanapasta/airvla_pi0_90k</td><td class="muted">honest eval: see the 90k tab. The model sees frames twice at 1.34 epochs with no holdout — tail gains and memorisation are indistinguishable.</td></tr>
 <tr><td class="mono">30k-b8</td><td>batch 8, Sparks GB10 (jobs 608/609)</td><td>240,000 · 0.89</td><td class="mono">hanapasta/airvla_pi0_30k_b8</td><td class="muted">completed 2026-08-30 16:55; serves as the matched control for the slot-swap arm</td></tr>
 <tr><td class="mono">swap <span class="tagline run">training</span></td><td>as 30k-b8 but nose camera → base slot, 40-episode holdout excluded</td><td class="muted">due Monday</td><td class="muted">on Sparks</td><td class="muted">first run with a holdout</td></tr>
 </table></div>
@@ -268,8 +272,10 @@ action convention is not the pick blocker.</p>
 <h3>What this does not show</h3>
 <p>These runs were unseeded, so the 1/20 grasp is not exactly
 reproducible. Its video was recorded but then overwritten by a later run
-before preservation began — <b>the footage of the first successful grasp is
-lost</b>; the frozen n=60 run records every episode to prevent recurrence.
+before preservation began — <b>the footage of that first grasp is lost</b>.
+The frozen n=60 run then recorded every episode and banked three
+reproducible pick-ups on video (episodes 4, 24, 46 —
+<code>Reports/frozen60_pickup_ep*.mp4</code>), closing the gap.
 Comp at 0/20 follows arithmetically from the pick rate and says nothing
 extra.</p>
 <div class="files">logs: eval_logs/b60k_naive.log, 60krtc_naive.log,
@@ -377,7 +383,7 @@ decision log D48</div>
 <dl>
 <dt>Script</dt><dd>v1: <code>eval_pi0.py</code>; v2: same, variant released on grasp</dd>
 <dt>Checkpoint</dt><dd>60k</dd>
-<dt>Flags</dt><dd>v1 <code>--oracleyaw</code> (pin every tick, torch unseeded); v2 <code>--oracleyaw2 --torchseed 1000</code> (pin released once the object is welded); a third replicate at torch seed 2000 is queued on the frozen protocol</dd>
+<dt>Flags</dt><dd>v1 <code>--oracleyaw</code> (pin every tick, torch unseeded); v2 <code>--oracleyaw2 --torchseed 1000</code> (pin released once the object is welded); seed-2000 replicate on frozen protocol v2 — its first attempt silently ran flagless because <code>--oracleyaw2</code> post-dated the v1 freeze (the PROV line exposed it; the accidental run is banked as a seed-2000 baseline)</dd>
 <dt>Episodes</dt><dd>20 picks each, naive</dd>
 <dt>Seeds</dt><dd>scene 77000 (identical scenes across arms → paired comparisons)</dd>
 <dt>Harness</dt><dd>repaired</dd>
@@ -388,8 +394,9 @@ decision log D48</div>
 <tr><td>median miss (IQR)</td><td class="g">27.0 mm (7.7–45.5)</td><td class="g">41.1 mm (18.7–54.4)</td><td>223 mm</td></tr>
 <tr><td>max miss</td><td>65.1 mm</td><td>448.7 mm (one outlier)</td><td>—</td></tr>
 <tr><td>paired median difference v2−v1</td><td colspan="2">+7.1 mm</td><td>—</td></tr>
-<tr><td>picked up (CI)</td><td>5/20 (9–49%)</td><td>1/20 (0.1–25%)</td><td>≈1/20 <span class="muted">(inferred comparator — baseline n=20; the n=60 frozen run replaces it)</span></td></tr>
-<tr><td>pooled pick-up</td><td colspan="2">6/40 (15%, CI 6–30%)</td><td>—</td></tr>
+<tr><td>picked up (CI)</td><td>5/20 (9–49%)</td><td>1/20 (0.1–25%)</td><td>3/60 (5%, CI 1–14%) <span class="muted">(frozen n=60 run)</span></td></tr>
+<tr><td>v2 replicate, torch seed 2000 (frozen protocol v2)</td><td colspan="2">median 36.4 mm (IQR 22–59) · picked 5/20</td><td>—</td></tr>
+<tr><td><b>pooled v2, n=40</b></td><td colspan="2"><b>median 38.6 mm · picked 6/40 (15%, CI 6–30%)</b> — 6.3× below the frozen baseline's 242 mm</td><td>—</td></tr>
 <tr><td>fore–aft undershoot (was +120 mm)</td><td>+1 mm (sd 10)</td><td>+52 mm (sd 123, outlier-inflated)</td><td>+120 mm</td></tr>
 </table></div>
 <h3>What it means</h3>
@@ -416,7 +423,7 @@ trajectories: eval_logs/eval_traj_v1.jsonl (tags oracleyaw, orayaw2)</div>
 
 <!-- ======================= 9 ORACLE VECTOR ======================= -->
 <section data-tab="Oracle-vector">
-<h2>Oracle-vector — hand the policy the exact target vector <span class="tagline run">running</span></h2>
+<h2>Oracle-vector — hand the policy the exact target vector</h2>
 <h3>Question</h3>
 <p>If the policy is given the true gripper-to-target vector as three extra
 state inputs, does everything downstream of perception work?</p>
@@ -429,23 +436,36 @@ state inputs, does everything downstream of perception work?</p>
 <dt>Harness</dt><dd>repaired, frozen protocol</dd>
 </dl>
 <h3>Result</h3>
-<p class="muted">Running tonight (Myriad jobs 243211 → 243403/243404).
-Pre-registered readings, committed before results (decision log D48):
-attendance requires ≥3 more pick-ups with the true vector than the
-corrupted one, or ≥8 mm median degradation under corruption. Given
-attendance: ≥10/20 successes means perception is the whole residual
-problem; persistent ≥150 mm misses mean perception never was.</p>
+<div class="tbl"><table>
+<tr><th>Metric</th><th>True vector</th><th>Corrupted vector (control)</th></tr>
+<tr><td>median miss (IQR)</td><td>168.1 mm (54–232)</td><td class="b">306.9 mm (178–396)</td></tr>
+<tr><td>picked up</td><td>1/20 (CI 0.1–25%)</td><td>0/20</td></tr>
+<tr><td>paired degradation, corrupt − true</td><td colspan="2"><b>+145.8 mm median</b> (attendance bar: +80 mm) · worse in 13/20</td></tr>
+<tr><td>distribution shape (true)</td><td colspan="2">bimodal: 9/20 episodes under 80 mm, heavy tail to 680 mm</td></tr>
+</table></div>
+<h3>What it means</h3>
+<p>The attendance control passes: corrupting the vector's direction costs
+146 mm, so the model learned to use the feature within the 10,000-step
+fine-tune. That makes the true-vector result interpretable under the
+pre-registration, and it reads on the "perception was never the whole
+constraint" side: even attending to the exact gripper-to-target vector,
+the policy reaches only 168 mm median and one pick-up. Set beside
+oracle-yaw — pinning the heading achieves 38.6 mm — providing the
+information helps far less than acting on it, which points at the
+action side, dominated by the heading channel.</p>
 <h3>What this does not show</h3>
 <p>The oracle vector is privileged information that no deployed system
-would have; this is a diagnostic upper bound, not a capability.</p>
+would have; this is a diagnostic bound, not a capability. Attendance is
+partial — the bimodal true-arm distribution suggests the 10k fine-tune
+integrated the new feature in only about half the episodes, so 168 mm is
+an upper bound on the deficit, not a converged measurement.</p>
 <div class="files">script: harness_audit/build_oracle.py · dataset:
-hanapasta/airvla_oracle · logs (pending): oraeval_out.log,
-oracorrupt_out.log</div>
+hanapasta/airvla_oracle · logs: eval_logs/oraeval_out.log, oracorrupt_out.log</div>
 </section>
 
 <!-- ======================= 10 90K ======================= -->
 <section data-tab="90k arm">
-<h2>Training-scale arm — 60k → 90k <span class="tagline run">running</span></h2>
+<h2>Training-scale arm — 60k → 90k</h2>
 <h3>Question</h3>
 <p>Does simply training longer keep buying pick capability? (Takeoff
 behaviour appeared as a discrete jump between 30k and 60k; grasp commitment
@@ -457,9 +477,21 @@ could be the next jump.)</p>
 <dt>Caveat</dt><dd>at 1.34 epochs the model sees frames twice, and these runs pre-date the holdout — late gains cannot be distinguished from memorisation</dd>
 </dl>
 <h3>Result</h3>
-<p class="muted">Pending. Pre-registered reading: ≥3/20 pick-ups keeps
-"train longer" alive as a lever; ≤1/20 retires it.</p>
-<div class="files">log (pending): eval_logs/b90k_naive.log</div>
+<div class="tbl"><table>
+<tr><th>Metric</th><th>90k</th><th>60k (audit)</th></tr>
+<tr><td>median miss (IQR)</td><td>184.5 mm (61–348)</td><td>223 mm</td></tr>
+<tr><td>picked up</td><td>1/20 (CI 0.1–25%)</td><td>≈1/20</td></tr>
+<tr><td>episodes under 70 mm</td><td class="g">6/20</td><td>1/20</td></tr>
+</table></div>
+<h3>What it means</h3>
+<p>By the pre-registered rate criterion (≤1/20), training longer is
+retired as the primary lever. The distance distribution still moved: the
+low tail thickened again, the same pattern each doubling has produced.</p>
+<h3>What this does not show</h3>
+<p>At 1.34 epochs with no holdout, the tail improvement cannot be
+distinguished from memorisation. Checkpoint archived:
+<code>hanapasta/airvla_pi0_90k</code>.</p>
+<div class="files">log: eval_logs/b90k_naive.log</div>
 </section>
 
 <!-- ======================= 11 SWAP ======================= -->
@@ -513,6 +545,9 @@ hanapasta/airvla_pi0_30k_b8</div>
 <tr><td class="mono">harness_audit/camera_pixels.py</td><td>532-frame camera resolution measurement</td></tr>
 <tr><td class="mono">harness_audit/build_oracle.py</td><td>oracle dataset builder (state 10→13 by forward kinematics)</td></tr>
 <tr><td class="mono">harness_audit/verify_ledger.py</td><td>recomputes every number on this page from the raw logs</td></tr>
+<tr><td class="mono">Sim'n'Real/Mujoco/eval_frozen_v2.py</td><td>Frozen protocol v2 (sha 1ec61ae930ca): v1 plus <code>--oracleyaw2</code>, which post-dated the v1 freeze — the seed-2000 arm silently ran flagless on v1 until the PROV argv exposed it</td></tr>
+<tr><td class="mono">Sim'n'Real/Mujoco/forgetting_probe.py</td><td>2×2 language-grounding probe (mustard bottle vs weight × normal/swapped positions) — see decision log D50</td></tr>
+<tr><td class="mono">Reports/frozen60_pickup_ep{4,24,46}.mp4</td><td>the three reproducible pick-ups of the frozen n=60 run, on video</td></tr>
 </table></div>
 <h3>Raw data</h3>
 <p><code>Reports/eval_logs/</code> — 35+ files: every results log referenced
