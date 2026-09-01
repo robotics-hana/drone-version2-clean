@@ -36,7 +36,10 @@ import imageio.v2 as imageio
 
 import collect_airvla as A
 
-CAM3_POS = np.array([0.00, 2.25, 1.22])
+# pulled back 0.30 m (Hana, 2026-09-01 demo review) -- wider view of
+# the workspace; costs some object pixels vs the 2.25 pose (measured
+# 19-36 px weight at 2.50 in the sign-off sweep, still >= the 20 px bar)
+CAM3_POS = np.array([0.00, 2.55, 1.30])
 CAM3_LOOK = np.array([0.05, 0.08, 0.30])
 CAM3_FOVY = 52.0
 PENGUIN_BLUE = (0.13, 0.33, 0.82, 1.0)     # base/body/head; belly+beak keep
@@ -52,6 +55,24 @@ class V2Runner(A.Runner):
         # blue penguin (recolour at load; XML untouched)
         for g in ("penguin_base", "penguin_body", "penguin_head"):
             m.geom(g).rgba = PENGUIN_BLUE
+        # legs shortened 20% (Hana): keep the hip attachment fixed --
+        # top of leg stays at z=+0.020 in the body frame
+        for g in ("leg_front_left", "leg_front_right",
+                  "leg_back_left", "leg_back_right"):
+            gm = m.geom(g)
+            top = float(gm.pos[2]) + float(gm.size[1])
+            gm.size[1] = gm.size[1] * 0.8
+            gm.pos[2] = top - float(gm.size[1])
+        # geom sets for the table-clip episode gate
+        tb = m.body("table").id
+        self._table_geoms = set(
+            g for g in range(m.ngeom)
+            if m.body_rootid[m.geom_bodyid[g]] == tb)
+        rb = m.body_rootid[m.geom_bodyid[m.geom("leg_front_left").id]]
+        self._drone_geoms = set(
+            g for g in range(m.ngeom)
+            if m.body_rootid[m.geom_bodyid[g]] == rb)
+        self._table_hits = 0
         # measured workspace camera as a free camera
         self.cam3 = mujoco.MjvCamera()
         mujoco.mjv_defaultCamera(self.cam3)
@@ -64,6 +85,19 @@ class V2Runner(A.Runner):
             np.arcsin(v[2] / self.cam3.distance)))
         self._fovy0 = float(m.vis.global_.fovy)
         self.bin_id = m.body("bin").id
+
+    def step(self, frames, task):
+        super().step(frames, task)
+        # episode gate (Hana): any drone-table contact disqualifies the
+        # episode -- counted per tick, checked at banking time
+        d = self.data
+        for i in range(d.ncon):
+            g1, g2 = d.contact[i].geom1, d.contact[i].geom2
+            if ((g1 in self._drone_geoms and g2 in self._table_geoms)
+                    or (g2 in self._drone_geoms
+                        and g1 in self._table_geoms)):
+                self._table_hits += 1
+                break
 
     def frame(self, task):
         f = {"observation.state": self.state(),
@@ -112,6 +146,11 @@ class V2Runner(A.Runner):
         self.bin_xy = bxy
         m.body_pos[self.bin_id][0:2] = bxy
         m.body_pos[self.bin_id][2] = A.MAT_TOP
+        # ALIGNED with the table (Hana): the v1 scene rotates the bin
+        # randomly; squared-with-the-table reads as aligned
+        m.body_quat[self.bin_id] = [1, 0, 0, 0]
+        self.bin_yaw = 0.0
+        self._table_hits = 0
         mujoco.mj_forward(m, self.data)
         return obj, start, alt, tgt_xy
 
@@ -153,7 +192,11 @@ class V2Runner(A.Runner):
             u0 = u0 / max(1e-9, float(np.linalg.norm(u0)))
             u0 = u0 + np.array([0.0, -1.4])
             u0 = u0 / float(np.linalg.norm(u0))
-            pre = np.array([*(wrong - 0.20 * u0), alt])
+            # displaced leg flies 6 cm high: the corrective creep can
+            # cross the tabletop diagonally, and at grasp height the
+            # jaw pads graze it (measured: 28 pad-contact ticks); the
+            # creep's P-arrival then descends into the grasp
+            pre = np.array([*(wrong - 0.20 * u0), alt + 0.06])
             self.yaw_then_go(frames, task, pre[0:2])
             ex.set_goal(xyz=pre, arm=ex.q_travel)
             self.settle_near(frames, task, tol=0.05, timeout_s=14.0)
@@ -259,8 +302,9 @@ class V2Runner(A.Runner):
         lift_z = float(self.data.qpos[2]) + 0.30
         self.hold_xy_until(
             frames, task, here0, lift_z,
-            lambda: abs(float(self.data.qpos[2]) - lift_z) < 0.06,
-            timeout_s=8.0)
+            lambda: abs(float(self.data.qpos[2]) - lift_z) < 0.06
+            and float(np.linalg.norm(self.data.qvel[0:3])) < 0.06,
+            timeout_s=10.0)
         v = self.bin_xy - self.data.qpos[0:2]
         ex.set_goal(yaw=float(np.arctan2(v[0], -v[1])))
         self.hold_xy_until(
@@ -281,7 +325,11 @@ class V2Runner(A.Runner):
                 self.jaws()[0:2] - self.bin_xy)) < 0.05
             and abs(float(self.data.qpos[2]) - drop_z) < 0.08,
             timeout_s=20.0)
-        low_z = A.MAT_TOP + 0.40
+        # release height keeps the LEGS above the tabletop: the box is
+        # flush with the table, so a descent below tabletop level parks
+        # the table-side legs into the edge (measured: 6-13 leg-contact
+        # ticks in the final descent of every first-gate demo episode)
+        low_z = A.PLATE_TOP + 0.12
         self.hold_xy_until(
             frames, task, base, low_z,
             lambda: abs(float(self.data.qpos[2]) - low_z) < 0.05
@@ -305,7 +353,9 @@ class V2Runner(A.Runner):
         d_bin = self.place_v2(frames, task) if grasped else float("nan")
         return frames, dict(obj=obj, corrective=corrective,
                             grasped=grasped, d_bin_mm=round(1000 * d_bin, 1)
-                            if grasped else None, ticks=len(frames))
+                            if grasped else None, ticks=len(frames),
+                            table_hits=self._table_hits,
+                            clean=self._table_hits == 0)
 
 
 def parking_window(frames):
@@ -332,11 +382,12 @@ if __name__ == "__main__":
         frames, res = r.episode_v2(corrective=corrective, obj=obj)
         pw = parking_window(frames)
         print("EP %-14s corrective=%-5s grasped=%-5s d_bin=%s mm  "
-              "parking window=%s ticks  (%d ticks; creep dmin %.1f mm "
-              "fired=%s)"
+              "parking window=%s ticks  table_hits=%d %s (%d ticks; "
+              "creep dmin %.1f mm)"
               % (res["obj"], corrective, res["grasped"], res["d_bin_mm"],
-                 pw, res["ticks"], 1000 * r._creep_diag["dmin"],
-                 r._creep_diag.get("fired")), flush=True)
+                 pw, res["table_hits"],
+                 "CLEAN" if res["clean"] else "REJECT",
+                 res["ticks"], 1000 * r._creep_diag["dmin"]), flush=True)
         for f in frames[::2]:
             img = np.concatenate(
                 [f["observation.images.camera1"],
