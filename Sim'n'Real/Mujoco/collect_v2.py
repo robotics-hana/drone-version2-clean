@@ -719,7 +719,37 @@ def collect_main(repo_id, seed, n_units):
     the dissertation checklist (sections B and F)."""
     import json
     import time
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    import imageio_ffmpeg
+    import lerobot.datasets.dataset_writer as DW
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
+
+    def ffmpeg_concat(input_video_paths, output_video_path,
+                      overwrite=True, compatibility_check=False):
+        # lerobot's pyav concat path needs av>=15, which Myriad's glibc
+        # 2.17 ceiling cannot install (av 14.2: the time_base setter
+        # raises; av 13.1: canonical_name missing -- both measured).
+        # The ffmpeg concat demuxer with stream copy is the same
+        # operation, version-proof.
+        ff = imageio_ffmpeg.get_ffmpeg_exe()
+        with tempfile.NamedTemporaryFile("w", suffix=".txt",
+                                         delete=False) as fh:
+            for p in input_video_paths:
+                fh.write("file '%s'\n" % str(Path(p).resolve()))
+            lst = fh.name
+        out = str(output_video_path)
+        Path(out).parent.mkdir(parents=True, exist_ok=True)
+        r = subprocess.run([ff, "-y", "-f", "concat", "-safe", "0",
+                            "-i", lst, "-c", "copy", out],
+                           capture_output=True)
+        Path(lst).unlink(missing_ok=True)
+        if r.returncode != 0:
+            raise RuntimeError("ffmpeg concat failed: %s"
+                               % r.stderr[-400:])
+
+    DW.concatenate_video_files = ffmpeg_concat
     features = {f"observation.images.{k}": {
         "dtype": "video", "shape": (A.IMG, A.IMG, 3),
         "names": ["height", "width", "channels"]} for k in A.CAMS}
@@ -783,9 +813,19 @@ def collect_main(repo_id, seed, n_units):
             print("attempt %d [%s] REJECTED: %s" % (attempts, kind,
                                                     reason), flush=True)
             continue
-        for f in frames:
-            dataset.add_frame(f)
-        dataset.save_episode(parallel_encoding=False)
+        try:
+            for f in frames:
+                dataset.add_frame(f)
+            dataset.save_episode(parallel_encoding=False)
+        except Exception as e:            # noqa: BLE001 -- a writer
+            # failure on one episode must not kill a 15 h job (the av
+            # incompatibility crash of job 257126); log and continue
+            print("attempt %d [%s] WRITER-ERROR: %s" % (attempts, kind,
+                                                        e), flush=True)
+            rec.update(banked=False, reason="writer:%s" % e)
+            man.write(json.dumps(rec) + "\n")
+            man.flush()
+            continue
         saved += 1
         if saved % 10 == 0:
             el = time.time() - t0
