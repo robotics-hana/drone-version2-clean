@@ -77,6 +77,21 @@ class V2Runner(A.Runner):
         self._drone_geoms = set(
             g for g in range(m.ngeom)
             if m.body_rootid[m.geom_bodyid[g]] == rb)
+        # OBJECT-STRIKE gate (Hana: the body crashed into the penguin
+        # on a missed grasp): any drone-object contact NOT via the
+        # gripper (clamp bodies + their pads) disqualifies the episode
+        grip_bodies = {m.body(n).id for n in ("clamp_1", "clamp_2",
+                                              "gripper_assembly")}
+        self._strike_geoms = set(
+            g for g in self._drone_geoms
+            if m.geom_bodyid[g] not in grip_bodies)
+        self._obj_geoms = set()
+        for bn in ("pick_weight", "penguin"):
+            b = m.body(bn).id
+            self._obj_geoms |= set(
+                g for g in range(m.ngeom)
+                if m.body_rootid[m.geom_bodyid[g]] == b)
+        self._obj_hits = 0
         self._table_hits = 0
         # measured workspace camera as a free camera
         self.cam3 = mujoco.MjvCamera()
@@ -96,12 +111,22 @@ class V2Runner(A.Runner):
         # episode gate (Hana): any drone-table contact disqualifies the
         # episode -- counted per tick, checked at banking time
         d = self.data
+        table_hit = obj_hit = False
         for i in range(d.ncon):
             g1, g2 = d.contact[i].geom1, d.contact[i].geom2
-            if ((g1 in self._drone_geoms and g2 in self._table_geoms)
+            if not table_hit and (
+                    (g1 in self._drone_geoms and g2 in self._table_geoms)
                     or (g2 in self._drone_geoms
                         and g1 in self._table_geoms)):
                 self._table_hits += 1
+                table_hit = True
+            if not obj_hit and (
+                    (g1 in self._strike_geoms and g2 in self._obj_geoms)
+                    or (g2 in self._strike_geoms
+                        and g1 in self._obj_geoms)):
+                self._obj_hits += 1
+                obj_hit = True
+            if table_hit and obj_hit:
                 break
 
     def frame(self, task):
@@ -156,8 +181,28 @@ class V2Runner(A.Runner):
         m.body_quat[self.bin_id] = [1, 0, 0, 0]
         self.bin_yaw = 0.0
         self._table_hits = 0
+        self._obj_hits = 0
         mujoco.mj_forward(m, self.data)
         return obj, start, alt, tgt_xy
+
+    def hold_xy_v2(self, frames, task, base_xy, z_target, done,
+                   timeout_s):
+        """Trim-compensated station-keeping with a LOW-PASS on the
+        correction (one pole, 0.25/tick): the raw per-tick corr
+        feedback chatters at 10 Hz -- visible as hover wobble (Hana),
+        worst right after the weld transient."""
+        ex = self.expert
+        corr_f = self.data.qpos[0:2] - ex.sp[0:2]
+        for _ in range(int(timeout_s * A.FPS)):
+            corr = self.data.qpos[0:2] - ex.sp[0:2]
+            corr_f = 0.75 * corr_f + 0.25 * corr
+            ex.set_goal(xyz=np.array([base_xy[0] - corr_f[0],
+                                      base_xy[1] - corr_f[1],
+                                      float(z_target)]))
+            self.step(frames, task)
+            if done():
+                return True
+        return False
 
     # -- v2 choreography ---------------------------------------------------
     def yaw_then_go(self, frames, task, to_xy, min_turn=0.03):
@@ -216,6 +261,24 @@ class V2Runner(A.Runner):
             # nose-first leg to the pre-grasp point at grasp altitude
             ex.set_goal(xyz=np.array([ex.sp[0], ex.sp[1], alt]))
             self.settle_near(frames, task, tol=0.05, timeout_s=8.0)
+            # arm deploys AT THE SPAWN HOVER, far from the table: the
+            # deployment swing (CoM shift) was the wobble at the
+            # table-edge hover; it now happens over open floor
+            ex.set_goal(arm=ex.q_carry)
+            self.run_until(frames, task,
+                           lambda: float(np.linalg.norm(
+                               self.data.qpos[7:9] - ex.q_carry)) < 0.06,
+                           timeout_s=10.0)
+            held0 = [0]
+
+            def spawn_calm():
+                ok0 = (float(np.linalg.norm(self.data.qvel[0:3])) < 0.05
+                       and float(np.linalg.norm(
+                           self.data.qvel[3:6])) < 0.12)
+                held0[0] = held0[0] + 1 if ok0 else 0
+                return held0[0] >= 5
+            self.hold_xy_v2(frames, task, self.data.qpos[0:2].copy(),
+                            alt, spawn_calm, timeout_s=6.0)
             # approach direction biased toward the front-edge normal
             # (from the room side, +y): a diagonal arrival stands the
             # body over the tabletop and the legs catch the table edge
@@ -225,18 +288,28 @@ class V2Runner(A.Runner):
             u0 = u0 / max(1e-9, float(np.linalg.norm(u0)))
             u0 = u0 + np.array([0.0, -1.4])
             u0 = u0 / float(np.linalg.norm(u0))
+            # standoff widened 0.35 -> 0.50 m (Hana: hover further
+            # from the table edge); the tapered creep below keeps the
+            # longer approach quick and pause-free
             pre = aim.copy()
-            pre[0:2] -= 0.35 * u0
+            pre[0:2] -= 0.50 * u0
             pre[2] = alt
             self.yaw_then_go(frames, task, pre[0:2])
-            ex.set_goal(xyz=pre, arm=ex.q_travel)
+            # arm already deployed at the spawn; the standoff hover is
+            # a calm gate, not a reconfiguration point
+            ex.set_goal(xyz=pre)
             self.settle_near(frames, task, tol=0.05, timeout_s=14.0)
             self.yaw_then_go(frames, task, aim[0:2])
-            ex.set_goal(arm=ex.q_carry)
-            self.run_until(frames, task,
-                           lambda: float(np.linalg.norm(
-                               self.data.qpos[7:9] - ex.q_carry)) < 0.06,
-                           timeout_s=10.0)
+            held0 = [0]
+
+            def pre_calm():
+                ok0 = (float(np.linalg.norm(self.data.qvel[0:3])) < 0.05
+                       and float(np.linalg.norm(
+                           self.data.qvel[3:6])) < 0.12)
+                held0[0] = held0[0] + 1 if ok0 else 0
+                return held0[0] >= 5
+            self.hold_xy_v2(frames, task, self.data.qpos[0:2].copy(),
+                            alt, pre_calm, timeout_s=6.0)
         # continuous creep at 3 mm/tick: goal slightly PAST dead-centre
         # so the setpoint is still moving when the grip fires. The fire
         # distance covers the travel DURING the close ramp (the first
@@ -251,7 +324,12 @@ class V2Runner(A.Runner):
         fired = [False]
         welded = [False]
 
+        u_fix = [None]                   # approach axis frozen at start
+        fire_tick = [None]
+        tick_n = [0]
+
         def creep_tick():
+            tick_n[0] += 1
             aim_l, _ = self.live_target()
             cyw, syw = np.cos(ex.yaw), np.sin(ex.yaw)
             offw = np.array([cyw * ex.off_carry[0] - syw * ex.off_carry[1],
@@ -261,17 +339,37 @@ class V2Runner(A.Runner):
             d = float(np.linalg.norm(u))
             diag["dmin"] = min(diag["dmin"], d)
             diag["fired"] = fired[0]
+            # distance-tapered creep: 8 mm/tick far, at the 3 mm/tick
+            # floor BEFORE the table edge (~0.15 m out) -- at 10 mm/tick
+            # the nose-down pitch of faster flight reached the front
+            # leg into the table edge (measured: contacts from tick
+            # ~210 in both standard episodes; 3 mm/tick round 3 was
+            # clean over the identical final geometry)
+            A.SP_STEP_FINAL = float(np.clip(0.12 * (d - 0.13) + creep,
+                                            creep, 0.008))
+            if u_fix[0] is None:
+                u_fix[0] = u / max(1e-9, d)
             goal = aim_l - offw
-            goal[0:2] += 0.012 * (u / max(1e-9, d))   # overshoot: in motion
+            # overshoot along the FROZEN approach axis: the live axis
+            # flips sign once the jaws pass the object, and the
+            # re-aimed overshoot ratcheted the body onto the penguin
+            # on a missed close (Hana's crash report)
+            goal[0:2] += 0.012 * u_fix[0]
             ex.set_goal(xyz=goal)
             if not fired[0] and d < fire_d:
                 fired[0] = True
+                fire_tick[0] = tick_n[0]
                 ex.set_goal(grip=close)
+            if (fired[0] and not welded[0]
+                    and tick_n[0] - fire_tick[0] > 25):
+                raise StopIteration     # missed close: abort, discard
             if fired[0] and not welded[0]:
                 pc = self.jaws() - aim_l
                 ap = float(self.data.qpos[self.gadr])
                 if (float(np.linalg.norm(pc[0:2])) < 0.010
                         and abs(float(pc[2])) < 0.015
+                        and float(np.linalg.norm(
+                            self.data.qvel[0:3])) < 0.06
                         and self.cur["ap_lo"] < ap * 1000 < self.cur["ap_hi"]):
                     welded[0] = True
                     self.weld_grasp(True)
@@ -285,6 +383,8 @@ class V2Runner(A.Runner):
         try:
             ok = self.run_until(frames, task, creep_tick, timeout_s=25.0,
                                 min_hold=1)
+        except StopIteration:
+            ok = False                  # banking filter discards this one
         finally:
             A.SP_STEP_FINAL = sp_final0
             ex.slow = False
@@ -305,7 +405,7 @@ class V2Runner(A.Runner):
                              self.data.qvel[3:6])) < 0.12)
                 held[0] = held[0] + 1 if still else 0
                 return held[0] >= 5
-            self.hold_xy_until(frames, task, self.data.qpos[0:2].copy(),
+            self.hold_xy_v2(frames, task, self.data.qpos[0:2].copy(),
                                float(ex.sp[2]), calm, timeout_s=5.0)
         return ok
 
@@ -332,11 +432,11 @@ class V2Runner(A.Runner):
                    and float(np.linalg.norm(self.data.qvel[3:6])) < 0.12)
             held[0] = held[0] + 1 if ok_ else 0
             return held[0] >= 5
-        self.hold_xy_until(frames, task, here0, lift_z, lifted_calm,
+        self.hold_xy_v2(frames, task, here0, lift_z, lifted_calm,
                            timeout_s=12.0)
         v = self.bin_xy - self.data.qpos[0:2]
         ex.set_goal(yaw=float(np.arctan2(v[0], -v[1])))
-        self.hold_xy_until(
+        self.hold_xy_v2(
             frames, task, here0, lift_z,
             lambda: abs(ex.yaw - ex.goal_yaw) < 0.03,
             timeout_s=8.0)
@@ -347,19 +447,20 @@ class V2Runner(A.Runner):
         offw = np.array([cyw * ex.off_carry[0] - syw * ex.off_carry[1],
                          syw * ex.off_carry[0] + cyw * ex.off_carry[1]])
         base = self.bin_xy - offw
-        drop_z = A.MAT_TOP + 0.55
-        self.hold_xy_until(
-            frames, task, base, drop_z,
+        # constant-altitude carry (Hana: descending while translating
+        # makes the loaded drone drift): fly AT lift_z to above the
+        # box, only then descend vertically
+        self.hold_xy_v2(
+            frames, task, base, lift_z,
             lambda: float(np.linalg.norm(
-                self.jaws()[0:2] - self.bin_xy)) < 0.05
-            and abs(float(self.data.qpos[2]) - drop_z) < 0.08,
+                self.jaws()[0:2] - self.bin_xy)) < 0.05,
             timeout_s=20.0)
         # release height keeps the LEGS above the tabletop: the box is
         # flush with the table, so a descent below tabletop level parks
         # the table-side legs into the edge (measured: 6-13 leg-contact
         # ticks in the final descent of every first-gate demo episode)
         low_z = A.PLATE_TOP + 0.12
-        self.hold_xy_until(
+        self.hold_xy_v2(
             frames, task, base, low_z,
             lambda: abs(float(self.data.qpos[2]) - low_z) < 0.05
             and float(np.linalg.norm(
@@ -385,7 +486,7 @@ class V2Runner(A.Runner):
                    and float(np.linalg.norm(self.data.qvel[3:6])) < 0.15)
             held[0] = held[0] + 1 if ok_ else 0
             return held[0] >= 5
-        self.hold_xy_until(frames, task, here, safe_z, recovered,
+        self.hold_xy_v2(frames, task, here, safe_z, recovered,
                            timeout_s=8.0)
         adr = self.cur["adr"]
         oxy = self.data.qpos[adr:adr + 2]
@@ -402,7 +503,9 @@ class V2Runner(A.Runner):
                             grasped=grasped, d_bin_mm=round(1000 * d_bin, 1)
                             if grasped else None, ticks=len(frames),
                             table_hits=self._table_hits,
-                            clean=self._table_hits == 0)
+                            obj_hits=self._obj_hits,
+                            clean=(self._table_hits == 0
+                                   and self._obj_hits == 0))
 
 
 def parking_window(frames):
@@ -429,10 +532,10 @@ if __name__ == "__main__":
         frames, res = r.episode_v2(corrective=corrective, obj=obj)
         pw = parking_window(frames)
         print("EP %-14s corrective=%-5s grasped=%-5s d_bin=%s mm  "
-              "parking window=%s ticks  table_hits=%d %s (%d ticks; "
-              "creep dmin %.1f mm)"
+              "parking window=%s ticks  table_hits=%d obj_hits=%d %s "
+              "(%d ticks; creep dmin %.1f mm)"
               % (res["obj"], corrective, res["grasped"], res["d_bin_mm"],
-                 pw, res["table_hits"],
+                 pw, res["table_hits"], res["obj_hits"],
                  "CLEAN" if res["clean"] else "REJECT",
                  res["ticks"], 1000 * r._creep_diag["dmin"]), flush=True)
         for f in frames[::2]:
