@@ -1,5 +1,37 @@
 # v2 collection — sign-off package
 
+> **AMENDED 2026-09-01 per Hana's design decisions**: (1) the goal box
+> sits **next to the table** — this replaces §2's taped square AND the
+> far-spawned bin; (2) camera3 is the measured workspace camera of §1,
+> confirmed; (3) the **penguin is blue** (fixes Test B's finding that
+> colour never separated the objects — both rendered near-black);
+> (4) the terminal approach is one continuous slow forward creep with
+> the grip closing in motion — **no pauses, no press-retreat-repress**;
+> (5) every leg is **hover → yaw in place → translate nose-first**, so
+> the heading channel (the measured bottleneck; non-zero in only 13%
+> of v1 frames) is deliberately exercised toward the object and again
+> toward the box. Implemented in `Sim'n'Real/Mujoco/collect_v2.py`
+> (new file; imports, never edits, `collect_airvla.py`; camera3 renders
+> as a free camera so no XML the frozen eval loads is touched; the
+> penguin recolour is applied at model load, not in the v1 XML).
+> Success criterion returns to "object inside the box, weld released"
+> (the box is back). Demo episodes: `Reports/v2_demo.mp4`.
+>
+> **DEMO VERDICT (Sparks job 935, mujoco 3.11)**: all three episodes
+> pass — weight standard 35.3 mm into the box, penguin standard
+> 17.9 mm, penguin corrective 22.7 mm; grasp fired in motion in every
+> episode (closest jaw approach 1.2–1.9 mm) and the parking window
+> measured **1 tick vs v1's 107**. Five defects were found and fixed
+> during demo iteration, each traced in collect_v2.py's comments:
+> ramp-time overshoot on the weight stem, missing trim compensation on
+> every loaded phase (3 m runaway, traced numerically), the release
+> point ignoring the carry offset (193 mm systematic), table-edge leg
+> collisions on diagonal approaches, and a pathological teleported
+> corrective start (replaced by a flown displaced approach). Remaining
+> pre-collection note: the shared Sparks tree's collect_demos.py has
+> forked toward the other agent's study (1,672 lines) — the real
+> collection runs from a clean checkout, not the shared tree.
+
 Everything here requires confirmation **before any collection starts**.
 Each design change is traceable to a measurement; the measurement is named
 next to each. Scripts and images in this folder reproduce every number.
