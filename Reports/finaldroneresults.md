@@ -123,8 +123,16 @@ episodes are retained in the manifest as evidence.
 
 ## Collection
 
-- (pending) Myriad physics validation of both flavours under mujoco
-  3.3.4 — job 257109.
+- **2026-09-02 00:2x — Myriad physics validation PASSED** (job 257109,
+  mujoco 3.3.4): picks 3/3 grasped+placed (18.2/35.0/36.9 mm), nav 6/6
+  crossed+hovered, zero contacts on every gate in all 9 episodes.
+  Distances differ from the Sparks (3.11) validation as expected —
+  cross-version physics drift — but every acceptance gate holds on the
+  collection platform. Collection authorized on Myriad; train physics
+  will equal frozen-eval physics.
+- **2026-09-02 — collection job submitted**: single Myriad GPU job,
+  `collect_v2.py collect hanapasta/airvla_v2 71000 30` (600-episode
+  balanced plan), manifest `v2_manifest_71000.jsonl`.
 
 ## Dataset checks (C/E)
 
