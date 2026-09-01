@@ -44,8 +44,10 @@ CAM3_LOOK = np.array([0.05, 0.08, 0.30])
 CAM3_FOVY = 52.0
 PENGUIN_BLUE = (0.13, 0.33, 0.82, 1.0)     # base/body/head; belly+beak keep
 CLOSE_FIRE_D = 0.015                       # grip fires in motion at 15 mm
-BIN_GAP = 0.24                             # box centre this far off the
-                                           # table edge (clears the legs)
+BIN_GAP = 0.45                             # box centre this far off the
+                                           # table edge: ~22 cm clear gap
+                                           # (Hana: laterally further out;
+                                           # was flush at 0.24)
 
 
 class V2Runner(A.Runner):
@@ -55,13 +57,16 @@ class V2Runner(A.Runner):
         # blue penguin (recolour at load; XML untouched)
         for g in ("penguin_base", "penguin_body", "penguin_head"):
             m.geom(g).rgba = PENGUIN_BLUE
-        # legs shortened 20% (Hana): keep the hip attachment fixed --
-        # top of leg stays at z=+0.020 in the body frame
+        # legs shortened to 60% of original (Hana, two rounds: -20%
+        # then "further"): hip attachment fixed, top of leg stays at
+        # z=+0.020. At 0.6 the legs reach 6.2 cm below the body, less
+        # than the tucked jaws -- fine airborne (episodes never land),
+        # but a grounded airframe would rest on its jaws.
         for g in ("leg_front_left", "leg_front_right",
                   "leg_back_left", "leg_back_right"):
             gm = m.geom(g)
             top = float(gm.pos[2]) + float(gm.size[1])
-            gm.size[1] = gm.size[1] * 0.8
+            gm.size[1] = gm.size[1] * 0.6
             gm.pos[2] = top - float(gm.size[1])
         # geom sets for the table-clip episode gate
         tb = m.body("table").id
@@ -283,6 +288,25 @@ class V2Runner(A.Runner):
         finally:
             A.SP_STEP_FINAL = sp_final0
             ex.slow = False
+        if ok:
+            # POST-GRASP STABILIZATION (Hana): the weld transient plus
+            # residual creep momentum excites a swing. Freeze the goal
+            # at the current setpoint (kill the +12 mm overshoot), then
+            # hold station trim-compensated until BOTH linear and
+            # angular rates are low for 5 consecutive ticks. This is
+            # after the close, so the parking-window metric (which
+            # measures the pre-close command) is untouched.
+            ex.set_goal(xyz=ex.sp.copy())
+            held = [0]
+
+            def calm():
+                still = (float(np.linalg.norm(self.data.qvel[0:3])) < 0.05
+                         and float(np.linalg.norm(
+                             self.data.qvel[3:6])) < 0.12)
+                held[0] = held[0] + 1 if still else 0
+                return held[0] >= 5
+            self.hold_xy_until(frames, task, self.data.qpos[0:2].copy(),
+                               float(ex.sp[2]), calm, timeout_s=5.0)
         return ok
 
     def place_v2(self, frames, task):
@@ -300,11 +324,16 @@ class V2Runner(A.Runner):
         # bolted 3 m during a settle_near lift before the carry began
         here0 = self.data.qpos[0:2].copy()
         lift_z = float(self.data.qpos[2]) + 0.30
-        self.hold_xy_until(
-            frames, task, here0, lift_z,
-            lambda: abs(float(self.data.qpos[2]) - lift_z) < 0.06
-            and float(np.linalg.norm(self.data.qvel[0:3])) < 0.06,
-            timeout_s=10.0)
+        held = [0]
+
+        def lifted_calm():
+            ok_ = (abs(float(self.data.qpos[2]) - lift_z) < 0.06
+                   and float(np.linalg.norm(self.data.qvel[0:3])) < 0.05
+                   and float(np.linalg.norm(self.data.qvel[3:6])) < 0.12)
+            held[0] = held[0] + 1 if ok_ else 0
+            return held[0] >= 5
+        self.hold_xy_until(frames, task, here0, lift_z, lifted_calm,
+                           timeout_s=12.0)
         v = self.bin_xy - self.data.qpos[0:2]
         ex.set_goal(yaw=float(np.arctan2(v[0], -v[1])))
         self.hold_xy_until(
@@ -339,7 +368,25 @@ class V2Runner(A.Runner):
         self.weld_grasp(False)
         ex.set_goal(grip=1.0)
         self.run_until(frames, task, lambda: ex.grip > 0.99, timeout_s=2.0)
-        self.run_until(frames, task, lambda: False, timeout_s=1.5)
+        # POST-RELEASE RECOVERY (Hana: the drone clipped the table and
+        # tumbled after the drop): losing the payload INVERTS the trim
+        # the controller had learned to lean against, and the lurch can
+        # drive the body into the table edge below. Climb immediately
+        # to a safe altitude over the box and station-hold until both
+        # rates are calm for 5 consecutive ticks -- inside the recorded,
+        # table-clip-gated window.
+        safe_z = low_z + 0.30
+        here = self.data.qpos[0:2].copy()
+        held = [0]
+
+        def recovered():
+            ok_ = (abs(float(self.data.qpos[2]) - safe_z) < 0.08
+                   and float(np.linalg.norm(self.data.qvel[0:3])) < 0.06
+                   and float(np.linalg.norm(self.data.qvel[3:6])) < 0.15)
+            held[0] = held[0] + 1 if ok_ else 0
+            return held[0] >= 5
+        self.hold_xy_until(frames, task, here, safe_z, recovered,
+                           timeout_s=8.0)
         adr = self.cur["adr"]
         oxy = self.data.qpos[adr:adr + 2]
         return float(np.linalg.norm(oxy - self.bin_xy))
