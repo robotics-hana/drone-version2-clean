@@ -710,9 +710,101 @@ def parking_window(frames):
     return tg - int(nz[-1]) if len(nz) else tg
 
 
+def collect_main(repo_id, seed, n_units):
+    """The v2 collection: n_units x [9 standard picks + 3 corrective +
+    8 nav] = balanced 27:9:24 mix (30 units = 600 episodes: 270/90/240,
+    Hana's composition 360 pick-and-place + 240 nav). Every attempt --
+    banked or rejected -- is recorded in a jsonl manifest with its
+    kind, object, scene configuration, gate counters and outcome, per
+    the dissertation checklist (sections B and F)."""
+    import json
+    import time
+    from lerobot.datasets.lerobot_dataset import LeRobotDataset
+    features = {f"observation.images.{k}": {
+        "dtype": "video", "shape": (A.IMG, A.IMG, 3),
+        "names": ["height", "width", "channels"]} for k in A.CAMS}
+    features["observation.state"] = {"dtype": "float32",
+                                     "shape": (len(A.STATE_NAMES),),
+                                     "names": A.STATE_NAMES}
+    features["scene_state"] = {"dtype": "float32",
+                               "shape": (len(A.SCENE_NAMES),),
+                               "names": A.SCENE_NAMES}
+    features["action"] = {"dtype": "float32",
+                          "shape": (len(A.ACTION_NAMES),),
+                          "names": A.ACTION_NAMES}
+    enc = A.C.pick_rgb_encoder()
+    enc.crf = 20
+    dataset = LeRobotDataset.create(repo_id=repo_id, fps=A.FPS,
+                                    features=features,
+                                    robot_type="skygrip",
+                                    rgb_encoder=enc)
+    r = V2Runner(seed)
+    unit = (["std"] * 9 + ["corr"] * 3 + ["nav"] * 8)
+    plan = unit * n_units
+    man = open("v2_manifest_%d.jsonl" % seed, "a")
+    saved = attempts = 0
+    t0 = time.time()
+    while saved < len(plan) and attempts < len(plan) * 4:
+        kind = plan[saved]
+        attempts += 1
+        rec = dict(attempt=attempts, slot=saved, kind=kind,
+                   collector_seed=seed)
+        try:
+            if kind == "nav":
+                frames, res = r.episode_nav()
+                ok = bool(res["success"] and res["clean"])
+                reason = (None if ok else
+                          "gate-strike" if res["gate_hits"] else
+                          "table-clip" if res["table_hits"] else
+                          "object-strike" if res["obj_hits"] else
+                          "not-crossed" if not res["crossed"] else
+                          "no-hover")
+            else:
+                frames, res = r.episode_v2(corrective=(kind == "corr"))
+                placed = (res["d_bin_mm"] is not None
+                          and res["d_bin_mm"] <= 150.0)
+                ok = bool(res["grasped"] and placed and res["clean"])
+                reason = (None if ok else
+                          "table-clip" if res["table_hits"] else
+                          "object-strike" if res["obj_hits"] else
+                          "grasp-miss" if not res["grasped"] else
+                          "placed-outside")
+        except Exception as e:            # noqa: BLE001 -- log + retry
+            rec.update(banked=False, reason="exception:%s" % e)
+            man.write(json.dumps(rec) + "\n")
+            man.flush()
+            continue
+        rec.update(res)
+        rec.update(banked=ok, reason=reason,
+                   parking=parking_window(frames))
+        man.write(json.dumps(rec) + "\n")
+        man.flush()
+        if not ok:
+            print("attempt %d [%s] REJECTED: %s" % (attempts, kind,
+                                                    reason), flush=True)
+            continue
+        for f in frames:
+            dataset.add_frame(f)
+        dataset.save_episode(parallel_encoding=False)
+        saved += 1
+        if saved % 10 == 0:
+            el = time.time() - t0
+            print("BANKED %d/%d (%d attempts, %.1f h elapsed, "
+                  "eta %.1f h)" % (saved, len(plan), attempts,
+                                   el / 3600,
+                                   el / 3600 * (len(plan) - saved)
+                                   / max(1, saved)), flush=True)
+    print("COLLECT-DONE %d/%d banked in %d attempts"
+          % (saved, len(plan), attempts), flush=True)
+
+
 if __name__ == "__main__":
     mode, out = sys.argv[1], sys.argv[2]
-    assert mode in ("demo", "demonav")
+    assert mode in ("demo", "demonav", "collect")
+    if mode == "collect":
+        collect_main(out, int(sys.argv[3]),
+                     int(sys.argv[4]) if len(sys.argv) > 4 else 30)
+        sys.exit(0)
     if mode == "demonav":
         # fresh seed, BALANCED targets (Hana: 3 penguin + 3 weight),
         # positions fully randomized across the tabletop
