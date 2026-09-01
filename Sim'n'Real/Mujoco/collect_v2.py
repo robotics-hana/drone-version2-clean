@@ -95,6 +95,11 @@ class V2Runner(A.Runner):
             g for g in self._drone_geoms
             if m.geom_bodyid[g] in grip_bodies)
         self._grip_contact_ok = False    # True only creep -> release
+        gt = m.body("gate").id
+        self._gate_geoms = set(
+            g for g in range(m.ngeom)
+            if m.body_rootid[m.geom_bodyid[g]] == gt)
+        self._gate_hits = 0
         self._obj_hits = 0
         self._table_hits = 0
         self._ff_on = False
@@ -160,6 +165,10 @@ class V2Runner(A.Runner):
                 # strike too (the corrective's turn swept the penguin)
                 self._obj_hits += 1
                 obj_hit = True
+            if ((g1 in self._drone_geoms and g2 in self._gate_geoms)
+                    or (g2 in self._drone_geoms
+                        and g1 in self._gate_geoms)):
+                self._gate_hits += 1
             if table_hit and obj_hit:
                 break
 
@@ -180,16 +189,20 @@ class V2Runner(A.Runner):
     # -- v2 scene ----------------------------------------------------------
     TABLE_C = np.array([0.0, 0.50])    # FIXED table centre (Hana:
                                        # constant framing in camera3)
-    def reset_scene_v2(self, obj=None, corrective=False):
+    def reset_scene_v2(self, obj=None, corrective=False, nav=False):
         rng = self.rng
         # both objects ON the fixed table, positions varied in 2D
         # (x +-0.35 of centre, 6-26 cm inside the front edge),
         # >=0.40 m apart, target assigned by COIN FLIP -- position
         # stays uninformative by construction
         fe = float(self.TABLE_C[1]) + 0.30          # front edge y
+        # nav episodes have no grasp-reach constraint, so their objects
+        # roam the FULL usable table depth (Hana: vary positions so the
+        # model cannot overfit a spot); picks keep the reachable band
+        y_lo = fe - 0.52 if nav else fe - 0.26
         for _ in range(200):
             spots = [np.array([rng.uniform(-0.35, 0.35) + self.TABLE_C[0],
-                               rng.uniform(fe - 0.26, fe - 0.06)])
+                               rng.uniform(y_lo, fe - 0.06)])
                      for _ in range(2)]
             if float(np.linalg.norm(spots[0] - spots[1])) >= 0.40:
                 break
@@ -199,12 +212,26 @@ class V2Runner(A.Runner):
         tgt_xy, dis_xy = spots
         alt = (A.PLATE_TOP + 0.005 + self.objs[obj]["aim_z"]
                - float(self.expert.off_carry[2]))
-        for _ in range(300):
-            start = np.array([rng.uniform(-0.5, 0.5), rng.uniform(1.1, 1.7),
-                              rng.uniform(0.21, 0.60)])
-            if np.linalg.norm(start[0:2] - tgt_xy) >= 0.70:
-                break
-        self.reset_scene(tgt_xy, start, obj=obj)
+        if nav:
+            # nav: spawn SOUTH of the gate facing the room (v1 eval
+            # geometry), gate side coin-flipped
+            gx = -0.7 if rng.random() < 0.5 else 0.7
+            start = np.array([rng.uniform(-0.95, 0.95),
+                              rng.uniform(-1.9, -1.2),
+                              rng.uniform(0.60, 1.00)])
+            yaw0 = np.pi + rng.uniform(-0.26, 0.26)
+            self.reset_scene(tgt_xy, start,
+                             gate_xy=np.array([gx, -0.6]),
+                             yaw=yaw0, obj=obj)
+            self._gate_x = gx
+        else:
+            for _ in range(300):
+                start = np.array([rng.uniform(-0.5, 0.5),
+                                  rng.uniform(1.1, 1.7),
+                                  rng.uniform(0.21, 0.60)])
+                if np.linalg.norm(start[0:2] - tgt_xy) >= 0.70:
+                    break
+            self.reset_scene(tgt_xy, start, obj=obj)
         m = self.model
         # FIXED table (reset_scene slid it under the task spot; put it
         # back): constant framing in camera3, every episode
@@ -229,6 +256,7 @@ class V2Runner(A.Runner):
         self.bin_yaw = 0.0
         self._table_hits = 0
         self._obj_hits = 0
+        self._gate_hits = 0
         mujoco.mj_forward(m, self.data)
         return obj, start, alt, tgt_xy
 
@@ -598,6 +626,77 @@ class V2Runner(A.Runner):
                                    and self._obj_hits == 0))
 
 
+    # -- v2 navigation -----------------------------------------------------
+    def nav_v2(self, frames, task):
+        """Gate crossing then hover over the named object, in the
+        approved leg style: yaw in place, nose-first legs, no pauses
+        except the hover that IS the success criterion."""
+        ex = self.expert
+        gx = self._gate_x
+        # crossing height: gripper at least an ARM LENGTH above the
+        # gate's bottom member (Hana) -- at 0.95 the jaws ride ~0.45 m
+        # over it, and ~0.5 m below the top member
+        cross_z = 0.95
+        p1 = np.array([gx, -1.05, cross_z])
+        self.yaw_then_go(frames, task, p1[0:2])
+        ex.set_goal(xyz=p1)
+        self.run_until(frames, task,
+                       lambda: float(np.linalg.norm(
+                           self.data.qpos[0:3] - p1)) < 0.08,
+                       timeout_s=14.0)
+        p2 = np.array([gx, -0.10, cross_z])
+        self.yaw_then_go(frames, task, p2[0:2])
+        ex.set_goal(xyz=p2)
+        self.run_until(frames, task,
+                       lambda: float(self.data.qpos[1]) > -0.12,
+                       timeout_s=12.0)
+        adr = self.cur["adr"]
+        oxy = self.data.qpos[adr:adr + 2].copy()
+        self.yaw_then_go(frames, task, oxy)
+        hover = np.array([oxy[0], oxy[1], A.PLATE_TOP + 0.40])
+        ex.set_goal(xyz=hover)
+        self.run_until(frames, task,
+                       lambda: float(np.linalg.norm(
+                           self.data.qpos[0:2] - oxy)) < 0.10,
+                       timeout_s=16.0)
+        held = [0]
+
+        def hovered():
+            near = float(np.linalg.norm(
+                self.data.qpos[0:2]
+                - self.data.qpos[adr:adr + 2])) < 0.25
+            held[0] = held[0] + 1 if near else 0
+            return held[0] >= 35
+        return self.hold_xy_v2(frames, task, oxy, hover[2], hovered,
+                               timeout_s=10.0)
+
+    def episode_nav(self, obj=None):
+        obj, start, alt, tgt = self.reset_scene_v2(obj=obj, nav=True)
+        task = A.PROMPT_NAV.format(obj=obj)
+        frames = []
+        hover_ok = self.nav_v2(frames, task)
+        S = np.stack([f["observation.state"] for f in frames])
+        gx = self._gate_x
+        crossed = False
+        for k in range(1, len(S)):
+            if (S[k - 1, 1] < -0.6 <= S[k, 1]
+                    and abs(float(S[k, 0]) - gx) < 0.45
+                    and 0.38 < float(S[k, 2]) < 1.44):
+                crossed = True
+                break
+        return frames, dict(obj=obj, tgt=[round(float(v), 2)
+                                          for v in tgt], crossed=crossed,
+                            hover=hover_ok,
+                            gate_hits=self._gate_hits,
+                            table_hits=self._table_hits,
+                            obj_hits=self._obj_hits,
+                            success=bool(crossed and hover_ok),
+                            ticks=len(frames),
+                            clean=(self._gate_hits == 0
+                                   and self._table_hits == 0
+                                   and self._obj_hits == 0))
+
+
 def parking_window(frames):
     """Self-check: ticks between the last non-zero horizontal command
     and the grip-close crossing. The v2 acceptance number is ~0."""
@@ -613,7 +712,31 @@ def parking_window(frames):
 
 if __name__ == "__main__":
     mode, out = sys.argv[1], sys.argv[2]
-    assert mode == "demo"
+    assert mode in ("demo", "demonav")
+    if mode == "demonav":
+        # fresh seed, BALANCED targets (Hana: 3 penguin + 3 weight),
+        # positions fully randomized across the tabletop
+        r = V2Runner(33000)
+        w = imageio.get_writer(out, fps=10, codec="libx264", quality=8,
+                               macro_block_size=1)
+        for obj in ("plush penguin", "weight", "plush penguin",
+                    "weight", "plush penguin", "weight"):
+            frames, res = r.episode_nav(obj=obj)
+            print("NAV %-14s tgt=%s crossed=%-5s hover=%-5s gate_hits=%d "
+                  "table_hits=%d obj_hits=%d %s (%d ticks)"
+                  % (res["obj"], res["tgt"], res["crossed"], res["hover"],
+                     res["gate_hits"], res["table_hits"], res["obj_hits"],
+                     "CLEAN" if res["clean"] and res["success"]
+                     else "REJECT", res["ticks"]), flush=True)
+            for f in frames[::2]:
+                img = np.concatenate(
+                    [f["observation.images.camera1"],
+                     f["observation.images.camera2"],
+                     f["observation.images.camera3"]], axis=1)
+                w.append_data(img)
+        w.close()
+        print("demo ->", out)
+        sys.exit(0)
     r = V2Runner(31000)
     w = imageio.get_writer(out, fps=10, codec="libx264", quality=8,
                            macro_block_size=1)
