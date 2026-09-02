@@ -741,15 +741,26 @@ def collect_main(repo_id, seed, n_units):
             lst = fh.name
         out = str(output_video_path)
         Path(out).parent.mkdir(parents=True, exist_ok=True)
+        # NEVER write onto an input: appends pass output==input[0], and
+        # stream-copying onto the file being read truncates it silently
+        # (measured: 440 episodes of video reduced to 100 KB). Write to
+        # a temp sibling, verify non-trivial, atomically replace.
+        tmp = out + ".concat.tmp.mp4"
         r = subprocess.run([ff, "-y", "-f", "concat", "-safe", "0",
-                            "-i", lst, "-c", "copy", out],
+                            "-i", lst, "-c", "copy", tmp],
                            capture_output=True)
         Path(lst).unlink(missing_ok=True)
-        if r.returncode != 0:
-            raise RuntimeError("ffmpeg concat failed: %s"
+        if r.returncode != 0 or not Path(tmp).exists()                 or Path(tmp).stat().st_size < max(
+                    1024, sum(Path(p).stat().st_size
+                              for p in input_video_paths) // 2):
+            Path(tmp).unlink(missing_ok=True)
+            raise RuntimeError("ffmpeg concat failed/truncated: %s"
                                % r.stderr[-400:])
+        import os as _os
+        _os.replace(tmp, out)
 
     DW.concatenate_video_files = ffmpeg_concat
+    print("FFMPEG-CONCAT-PATCH-ACTIVE", flush=True)
     features = {f"observation.images.{k}": {
         "dtype": "video", "shape": (A.IMG, A.IMG, 3),
         "names": ["height", "width", "channels"]} for k in A.CAMS}

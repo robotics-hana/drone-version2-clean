@@ -146,6 +146,19 @@ episodes are retained in the manifest as evidence.
 - **2026-09-02 04:0x — MILESTONE: 100/600 banked in 100 attempts — 100%
   banking yield, zero rejections through the first hundred episodes.**
   Job 257145, ETA ~14 h to completion.
+- **2026-09-02 13:1x — RUN 257145 KILLED AT 440/600: video corruption
+  found by a mid-run content check.** The ffmpeg concat patch wrote its
+  output over one of its own inputs (append passes output==input[0]);
+  stream-copy onto a file being read truncates silently — 440 episodes
+  of parquet were perfect while the video chunks held ~100 KB. Caught
+  before training, not after. Fix: concat to a temp sibling, verify
+  size ≥ half the inputs, atomic os.replace; re-validated by a
+  content-probing smoke (75/75 frames, clean decode). Lesson appended
+  to LESSONS territory: **smoke tests must verify content, not exit
+  codes** — the original smoke printed "saved OK" over truncated
+  output. Attempts and rejection stats to this point: 440/440 banked,
+  zero gate rejections (the choreography itself is flawless; every
+  failure this campaign has been infrastructure).
 
 ## Dataset checks (C/E)
 
