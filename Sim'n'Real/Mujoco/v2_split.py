@@ -19,8 +19,9 @@ import sys
 
 import numpy as np
 
-QUOTA_VAL = {"std": None, "corr": 18, "nav": 48}   # std fills the rest
-VAL_PICKS = 72                                      # 54 std + 18 corr
+VAL_FRAC = 0.2   # 20% per flavour -- for the full 600 this reproduces
+                 # Hana's exact quotas (std 54, corr 18, nav 48 = 120)
+                 # and scales to any size (trial runs included)
 
 manifest, out = sys.argv[1], sys.argv[2]
 banked = [json.loads(l) for l in open(manifest)
@@ -33,9 +34,9 @@ print("banked: std %d, corr %d, nav %d, total %d"
 
 rng = np.random.default_rng(424242)
 val = []
-n_corr_val = min(18, len(idx["corr"]) // 5)
-n_std_val = VAL_PICKS - n_corr_val
-n_nav_val = min(48, len(idx["nav"]) // 5)
+n_std_val = round(len(idx["std"]) * VAL_FRAC)
+n_corr_val = round(len(idx["corr"]) * VAL_FRAC)
+n_nav_val = round(len(idx["nav"]) * VAL_FRAC)
 for k, n in (("std", n_std_val), ("corr", n_corr_val), ("nav", n_nav_val)):
     pick = rng.choice(idx[k], size=n, replace=False)
     val += [int(i) for i in pick]
