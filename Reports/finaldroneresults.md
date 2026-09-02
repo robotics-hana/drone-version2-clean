@@ -162,7 +162,21 @@ episodes are retained in the manifest as evidence.
 
 ## Dataset checks (C/E)
 
-- (pending)
+- **2026-09-02 — PIPELINE TRIAL: all five stages verified end-to-end on
+  a 20-episode trial set (seed 72000, `airvla_v2_trial`) before the real
+  data depends on them.** (1) Collection 20/20 banked, zero rejections.
+  (2) Stats + gates: parking window median 1 tick (max 1) PASS;
+  position shortcut 37.4% CV PASS; spatial coverage spans the design
+  bands. (3) Episode-level stratified split 15/5, disjointness asserted.
+  (4) HF push verified by READ-BACK (9 files, revision d74f6c5e9a49) —
+  not by exit code. (5) 50-step training smoke consumed the split's
+  actual train list + camera rename map and saved checkpoint 000050,
+  exit 0. (First smoke attempt was wall-clock killed at 1 h during a
+  contended model load — rerun with 3 h passed; budget lesson applied
+  to the real training job.)
+- **2026-09-02 17:0x — main collection 100/600, 100-for-100, video
+  content spot-check 2.0 GB at 100 episodes** (the corrupt run held
+  100 KB at 440 — the atomic-concat fix is proven on real data).
 
 ## Training
 
