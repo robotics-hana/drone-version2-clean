@@ -133,6 +133,19 @@ episodes are retained in the manifest as evidence.
 - **2026-09-02 — collection job submitted**: single Myriad GPU job,
   `collect_v2.py collect hanapasta/airvla_v2 71000 30` (600-episode
   balanced plan), manifest `v2_manifest_71000.jsonl`.
+- **2026-09-02 — three false starts before the clean run, all
+  infrastructure, zero lost data**: (1) av-library incompatibility in
+  the Myriad writer (glibc ceiling blocks av≥15; av 14/13 each break a
+  different lerobot API — fixed with an ffmpeg-CLI concat patch,
+  smoke-tested before use); (2) LeRobot's default dataset home is the
+  40 GB HOME quota — repointed to Scratch; (3) a stale-log/duplicate-
+  job tangle caused by the job template reusing one log file — the
+  never-reuse-a-log rule now applies to job logs too (per-job
+  filenames), and the watcher verifies the patch marker + exactly one
+  running job at startup.
+- **2026-09-02 04:0x — MILESTONE: 100/600 banked in 100 attempts — 100%
+  banking yield, zero rejections through the first hundred episodes.**
+  Job 257145, ETA ~14 h to completion.
 
 ## Dataset checks (C/E)
 
