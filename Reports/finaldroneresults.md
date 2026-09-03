@@ -178,9 +178,30 @@ episodes are retained in the manifest as evidence.
   content spot-check 2.0 GB at 100 episodes** (the corrupt run held
   100 KB at 440 — the atomic-concat fix is proven on real data).
 
+## Collection — FINAL
+
+- **2026-09-03 07:0x — COLLECTION COMPLETE: 600/600 banked in 600
+  attempts. ZERO rejections across the entire campaign.** 17.8 h, job
+  258624, clean exit. Composition exactly 270 std / 90 corr / 240 nav;
+  objects balanced (std 132 w / 138 p; nav 120/120; corr 57/33 —
+  coin-flip noise). Spatial coverage spans the full design bands with
+  centred means. Episode lengths 144–665 ticks (mean 399).
+- **Both pre-registered gates PASS on the real dataset**: parking
+  window median 1 tick with MAX 1 across all 360 pick episodes (the v1
+  pathology this campaign exists to fix was 107); position shortcut
+  50.2% CV = exact chance (v1's confound, now impossible by
+  construction). Manifest + split banked in `Reports/eval_logs/`.
+- Split: 480 train / 120 validation — exactly the specified 54 std +
+  18 corr + 48 nav quotas, episode-level, disjointness asserted.
+- Dataset pushed to `hanapasta/airvla_v2` (read-back-verified; revision
+  recorded with the push log).
+
 ## Training
 
-- (pending)
+- **2026-09-03 — 30k training SUBMITTED (job 268762)** under the frozen
+  protocol: batch 4, seed 1000, 24 h wall (smoke lesson), train list =
+  the 480-episode split, rename map camera3→base / camera1→left-wrist /
+  camera2→right-wrist, output `pi0_v2_out`.
 
 ## Evaluation
 
