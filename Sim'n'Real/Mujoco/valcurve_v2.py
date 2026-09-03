@@ -81,9 +81,7 @@ for ck in ckpts:
             batch["task"] = [item["task"]]
             batch = pre(batch)
             chunk = policy.predict_action_chunk(
-                batch, noise=nz.to("cuda", policy.config.dtype
-                                   if hasattr(policy.config, "dtype")
-                                   else torch.float32))
+                batch, noise=nz.to("cuda", dtype=torch.bfloat16))
             chunk = post(chunk)[0].float().cpu().numpy()[:HORIZON]
             gt = np.stack([ds[idx + 1 + t]["action"].numpy()
                            for t in range(HORIZON)])
