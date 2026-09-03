@@ -1,0 +1,13 @@
+#$ -l h_rt=1:30:00
+#$ -l gpu=1
+#$ -ac allow=L
+#$ -N airvla_v2val
+#$ -wd /home/ucabhe0/Scratch/airvla
+#$ -o /home/ucabhe0/Scratch/airvla/logs/v2val_my.log
+#$ -j y
+cd ~/Scratch/airvla/sim
+export MUJOCO_GL=egl
+/home/ucabhe0/Scratch/env-pin/bin/python diag2.py
+echo PICK-DIAG-DONE
+/home/ucabhe0/Scratch/env-pin/bin/python collect_v2.py demonav ../evalout/v2_nav_myriad.mp4
+echo V2VAL-EXIT=$?

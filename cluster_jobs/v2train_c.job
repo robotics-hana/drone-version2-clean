@@ -1,0 +1,14 @@
+#$ -l h_rt=24:00:00
+#$ -l gpu=1
+#$ -ac allow=L
+#$ -N airvla_v2trn
+#$ -wd /home/ucabhe0/Scratch/airvla
+#$ -o /home/ucabhe0/Scratch/airvla/logs/v2train_30k_c.log
+#$ -j y
+export HF_HOME=$HOME/Scratch/hf_cache
+export HF_LEROBOT_HOME=/home/ucabhe0/Scratch/hf_cache/lerobot
+export HF_HUB_OFFLINE=1
+nvidia-smi --query-gpu=name --format=csv,noheader
+hostname
+/home/ucabhe0/Scratch/env-pin/bin/python /home/ucabhe0/Scratch/airvla/v2train_wrapper.py
+echo V2TRAIN-EXIT=$?

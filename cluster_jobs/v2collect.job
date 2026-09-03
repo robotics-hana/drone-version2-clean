@@ -1,0 +1,13 @@
+#$ -l h_rt=36:00:00
+#$ -l gpu=1
+#$ -ac allow=L
+#$ -N airvla_v2col
+#$ -wd /home/ucabhe0/Scratch/airvla
+#$ -o /home/ucabhe0/Scratch/airvla/logs/v2collect_$JOB_ID.log
+#$ -j y
+cd ~/Scratch/airvla/sim
+export MUJOCO_GL=egl
+export HF_HUB_OFFLINE=1
+export HF_LEROBOT_HOME=/home/ucabhe0/Scratch/hf_cache/lerobot
+/home/ucabhe0/Scratch/env-pin/bin/python collect_v2.py collect hanapasta/airvla_v2 71000 30
+echo COLLECT-EXIT=$?
