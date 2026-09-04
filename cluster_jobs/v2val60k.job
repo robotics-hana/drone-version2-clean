@@ -1,0 +1,25 @@
+#$ -l h_rt=20:00:00
+#$ -l gpu=1
+#$ -ac allow=L
+#$ -N airvla_v2v60
+#$ -wd /home/ucabhe0/Scratch/airvla/sim
+#$ -o /home/ucabhe0/Scratch/airvla/logs/v2val60k.log
+#$ -j y
+export HF_HOME=$HOME/Scratch/hf_cache
+export HF_LEROBOT_HOME=/home/ucabhe0/Scratch/hf_cache/lerobot
+export HF_HUB_OFFLINE=1
+PY=/home/ucabhe0/Scratch/env-pin/bin/python
+# the 12-checkpoint sweep job owns v2_valcurve.json until it leaves
+# the queue (done OR dead -- valcurve is resumable either way)
+while qstat | grep -q ' 276984 '; do sleep 300; done
+echo SWEEP-JOB-GONE
+# rolling validation: each pass scores only checkpoints not yet in
+# v2_valcurve.json (same pinned noise -> exactly paired with the old
+# curve); a crash on a mid-save checkpoint self-heals on the retry
+while true; do
+  $PY valcurve_v2.py /home/ucabhe0/Scratch/airvla/pi0_v2_out/checkpoints v2_split.json v2_manifest_71000.jsonl v2_valcurve.json
+  echo PASS-EXIT=$?
+  grep -q '"060000"' v2_valcurve.json && break
+  sleep 600
+done
+echo V2VAL60-ALL-DONE

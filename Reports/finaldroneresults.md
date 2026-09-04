@@ -280,3 +280,15 @@ episodes are retained in the manifest as evidence.
   47.9 mm near-miss then continue-to-box; nav01 shows a clean gate
   crossing + target hover). Traj:
   `Reports/eval_logs/eval_v2_traj_mini_20260904.jsonl`.
+- **2026-09-04 15:08 — PROTOCOL AMENDMENT (Hana): training EXTENDED
+  30k → 60k** because the validation curve is still descending at 25k
+  (0.000217 → 0.000061 from 10k to 25k with no sustained upturn — the
+  17.5k bump was noise). T4 selection rule UNCHANGED (lowest val
+  action-MSE), now applied over the full 60k curve; same pinned noise
+  keeps every new point exactly paired with the old curve. Jobs:
+  280833 resumes from checkpoint 030000 (`--resume=true
+  --steps=60000`, janitor active, log v2train60k.log); 280834 is a
+  rolling-validation daemon that waits for sweep 276984 to finish,
+  then scores each new checkpoint as it appears (valcurve_v2.py
+  resumable passes, log v2val60k.log). Full n=60 eval waits for the
+  60k curve's winner.
