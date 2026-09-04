@@ -98,27 +98,24 @@ def obs_batch(task):
 
 
 class V2Platform:
-    """The arm/grasp automaton for v2 evaluation, ported from the
-    fixfit5-validated v1 path (eval_pi0._tick_fixed) with the v2
-    adaptations: the deploy pose is the v2 expert's carry pose (what
-    the policy saw in training), and there is NO tuck -- v2 carries
-    arm-out. Weld: aperture window + pad-object contact debounced
-    2-of-4; release when the policy opens the grip while welded
-    (payload feed-forward handled inside V2Runner.weld_grasp)."""
+    """The arm/grasp automaton for v2 evaluation. Ported from the v1
+    path, then REVALIDATED BY EXPERT-ACTION REPLAY in the v2 world
+    (2026-09-04) which falsified two v1-heritage rules: the arm now
+    deploys on sustained proximity to the target (the expert deploys
+    after settling at the ~0.50 m standoff, never on the ascent), and
+    the weld gate mirrors the collector's verbatim (10 mm/15 mm
+    jaw-to-aim + per-object aperture window; NO pad-contact debounce
+    -- the close-in-motion grasp welds before contact registers).
+    Release when the policy opens the grip while welded (payload
+    feed-forward handled inside V2Runner.weld_grasp)."""
 
     def __init__(self, rr, start, yaw0):
         self.r = rr
         self.sp = np.array(start, dtype=float)
         self.yaw = float(yaw0)
         self.grip = 1.0
-        m = rr.model
-        self.pads = set(g for g in range(m.ngeom)
-                        if (m.geom(g).name or "").startswith("pad"))
-        self.obj = set(g for g in range(m.ngeom)
-                       if m.body_rootid[m.geom_bodyid[g]]
-                       == rr.cur["body"])
-        self.hist = []
         self.deployed = False
+        self.near = 0
         self.cmd = np.array(rr.expert.q_travel, dtype=float)
         self.i = 0
         self.weld_tick = None
@@ -131,30 +128,43 @@ class V2Platform:
         self.grip = float(np.clip(act[6], 0.0, 1.0))
         welded = bool(rr.data.eq_active[rr.weld])
         ap = float(rr.data.qpos[rr.gadr])
-        d = rr.data
-        hit = False
-        for ci in range(d.ncon):
-            g1 = int(d.contact.geom1[ci])
-            g2 = int(d.contact.geom2[ci])
-            if (g1 in self.pads and g2 in self.obj) or                (g2 in self.pads and g1 in self.obj):
-                hit = True
-                break
-        if not nav and not welded and 0.004 < ap < 0.0170:
-            self.hist = (self.hist + [hit])[-4:]
-            if sum(self.hist) >= 2:
+        # weld gate (ground-truth-replay fix #2, 2026-09-04): mirror
+        # the COLLECTOR's weld condition verbatim (collect_v2 pick_v2
+        # creep_tick): jaw-to-aim within 10 mm horizontal / 15 mm
+        # vertical AND aperture inside the PER-OBJECT window (mm).
+        # The old v1-heritage gate (fixed 4-17 mm window + pad-contact
+        # 2-of-4 debounce) is unsatisfiable in the v2 world: the
+        # close-in-motion grasp welds on proximity before the pads
+        # ever register contact, so expert-action replay could never
+        # weld under it.
+        if not nav and not welded:
+            aim, _ = rr.live_target()
+            pc = rr.jaws() - aim
+            if (float(np.linalg.norm(pc[0:2])) < 0.010
+                    and abs(float(pc[2])) < 0.015
+                    and rr.cur["ap_lo"] < ap * 1000 < rr.cur["ap_hi"]):
                 rr.weld_grasp(True)
         elif welded and self.grip > 0.8:
             rr.weld_grasp(False)
-            self.hist = []
             self.released = True
-        else:
-            self.hist = []
         welded = bool(rr.data.eq_active[rr.weld])
         if welded and self.weld_tick is None:
             self.weld_tick = self.i
-        if not self.deployed and not nav and (
-                self.sp[2] >= 0.45 or self.i >= 60):
-            self.deployed = True     # v2 expert deploys on the ascent
+        # deploy rule (ground-truth-replay fix, 2026-09-04): the v2
+        # expert deploys the arm only AFTER settling at the ~0.50 m
+        # standoff and re-aiming (collect_v2 pick_v2) -- never on the
+        # ascent. The old sp_z>=0.45-or-tick-60 rule (v1 heritage)
+        # fired at tick ~5, destabilised the drone with an early arm
+        # swing and left a ~200 mm offset through the grasp window;
+        # expert-action replay could not weld. Proximity + debounce
+        # mirrors the expert's observable cue.
+        if not self.deployed and not nav:
+            aim, _ = rr.live_target()
+            dxy = float(np.linalg.norm(
+                np.asarray(rr.data.qpos[0:2]) - np.asarray(aim[0:2])))
+            self.near = self.near + 1 if dxy < 0.60 else 0
+            if self.near >= 5:
+                self.deployed = True
         tgt = (rr.expert.q_carry if (self.deployed and not nav
                                      and not self.released)
                else rr.expert.q_travel)

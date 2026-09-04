@@ -280,6 +280,31 @@ episodes are retained in the manifest as evidence.
   47.9 mm near-miss then continue-to-box; nav01 shows a clean gate
   crossing + target hover). Traj:
   `Reports/eval_logs/eval_v2_traj_mini_20260904.jsonl`.
+- **2026-09-04 22:0x — GROUND-TRUTH REPLAY falsifies the v2 eval
+  platform; TWO defects fixed and validated; ALL prior v2 closed-loop
+  PICK metrics VOID as policy measurements.** The v1 lesson (replay
+  expert actions through the eval harness before reading policy
+  results) finally ran in the v2 world
+  (`replay_v2_platform_validation.py`, local, seed 97000) and showed
+  the expert's own recorded actions COULD NOT WELD through
+  V2Platform: (1) the v1-heritage arm-deploy rule (sp_z≥0.45 or tick
+  60) fired at tick ~5 vs the expert's ~110 (the expert deploys only
+  after settling at the 0.50 m standoff) — the early swing destroyed
+  the approach (5.8 m excursion, ~200 mm standing offset through the
+  grasp window); (2) the v1-heritage weld gate (fixed 4–17 mm
+  aperture + pad-contact 2-of-4) is UNSATISFIABLE in v2 — the
+  close-in-motion grasp welds on proximity before pads register
+  contact (expert gate: 10 mm horiz / 15 mm vert to aim + PER-OBJECT
+  aperture window, no contact term). Fixes: proximity-debounced
+  deploy (dxy<0.60 for 5 ticks) + collector-verbatim weld gate.
+  Post-fix replay: 3/3 episodes (weight + 2 penguin) weld at the
+  expert's exact tick (292/195/241), lift +223/+475/+262 mm, release
+  cleanly, no cross-episode leak. CONSEQUENCE: mini30k and mini30k_r2
+  pick rows (0 picked, miss medians 215.6/238.4 mm) were measured
+  under a platform that could not weld and flew arm-out from tick ~5
+  — VOID as policy grasp measurements (nav rows unaffected: nav never
+  deploys/welds). Job 282168 re-runs the 30k mini (10+4, tag
+  mini30k_r3, filmed) under the validated harness.
 - **2026-09-04 15:08 — PROTOCOL AMENDMENT (Hana): training EXTENDED
   30k → 60k** because the validation curve is still descending at 25k
   (0.000217 → 0.000061 from 10k to 25k with no sustained upturn — the
