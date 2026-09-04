@@ -262,3 +262,21 @@ episodes are retained in the manifest as evidence.
   new best) made 15k unlikely to be the T4 winner. Job 280417 runs the
   30k-only mini redo (10+4, tag mini30k_r2, filmed, fixed harness);
   the paired mini of the SELECTED checkpoint runs after T4 selection.
+- **2026-09-04 15:0x — mini30k_r2 COMPLETE (job 280417, exit 0), all
+  14 episodes filmed**: PICK n=10 median 238.4 mm, 0 picked, 0 placed
+  (47.9 / 68.7 / 110.0 / 207.4 / 225.5 / 238.4 / 273.9 / 284.1 /
+  410.4 / 589.6); NAV 3/4 (crossed 4/4, one hover miss — same episode
+  pattern as the original). **Original mini30k CERTIFIED leak-free**:
+  every pick ended_welded=false / weld_tick=null, so the payload-FF
+  leak could never have fired in it — its numbers stand (promoted from
+  provisional). **Determinism probe**: early episodes reproduce the
+  original within 1–3 mm, later ones drift by tens of mm (compounded
+  cross-run jitter, onset-consistent with the pre-registered
+  hardware-noise interpretation; medians 215.6 → 238.4). **Contact
+  observations now real and CLEAN**: 0 table hits, 0 object strikes,
+  0 gate hits across all 14 episodes — the 30k policy misses grasps
+  but flies clean. Videos: `Reports/v2_eval_videos/` (14 mp4, cam
+  strips; content spot-checked via contact sheets — pick00 shows the
+  47.9 mm near-miss then continue-to-box; nav01 shows a clean gate
+  crossing + target hover). Traj:
+  `Reports/eval_logs/eval_v2_traj_mini_20260904.jsonl`.
