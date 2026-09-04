@@ -82,10 +82,82 @@ def obs_batch(task):
     return batch
 
 
+class V2Platform:
+    """The arm/grasp automaton for v2 evaluation, ported from the
+    fixfit5-validated v1 path (eval_pi0._tick_fixed) with the v2
+    adaptations: the deploy pose is the v2 expert's carry pose (what
+    the policy saw in training), and there is NO tuck -- v2 carries
+    arm-out. Weld: aperture window + pad-object contact debounced
+    2-of-4; release when the policy opens the grip while welded
+    (payload feed-forward handled inside V2Runner.weld_grasp)."""
+
+    def __init__(self, rr, start, yaw0):
+        self.r = rr
+        self.sp = np.array(start, dtype=float)
+        self.yaw = float(yaw0)
+        self.grip = 1.0
+        m = rr.model
+        self.pads = set(g for g in range(m.ngeom)
+                        if (m.geom(g).name or "").startswith("pad"))
+        self.obj = set(g for g in range(m.ngeom)
+                       if m.body_rootid[m.geom_bodyid[g]]
+                       == rr.cur["body"])
+        self.hist = []
+        self.deployed = False
+        self.cmd = np.array(rr.expert.q_travel, dtype=float)
+        self.i = 0
+        self.weld_tick = None
+        self.released = False
+
+    def tick(self, act, nav=False):
+        rr = self.r
+        self.sp = self.sp + np.clip(act[0:3], -0.035, 0.035)
+        self.yaw += float(np.clip(act[5], -0.06, 0.06))
+        self.grip = float(np.clip(act[6], 0.0, 1.0))
+        welded = bool(rr.data.eq_active[rr.weld])
+        ap = float(rr.data.qpos[rr.gadr])
+        d = rr.data
+        hit = False
+        for ci in range(d.ncon):
+            g1 = int(d.contact.geom1[ci])
+            g2 = int(d.contact.geom2[ci])
+            if (g1 in self.pads and g2 in self.obj) or                (g2 in self.pads and g1 in self.obj):
+                hit = True
+                break
+        if not nav and not welded and 0.004 < ap < 0.0170:
+            self.hist = (self.hist + [hit])[-4:]
+            if sum(self.hist) >= 2:
+                rr.weld_grasp(True)
+        elif welded and self.grip > 0.8:
+            rr.weld_grasp(False)
+            self.hist = []
+            self.released = True
+        else:
+            self.hist = []
+        welded = bool(rr.data.eq_active[rr.weld])
+        if welded and self.weld_tick is None:
+            self.weld_tick = self.i
+        if not self.deployed and not nav and (
+                self.sp[2] >= 0.45 or self.i >= 60):
+            self.deployed = True     # v2 expert deploys on the ascent
+        tgt = (rr.expert.q_carry if (self.deployed and not nav
+                                     and not self.released)
+               else rr.expert.q_travel)
+        self.cmd = self.cmd + np.clip(np.array(tgt) - self.cmd,
+                                      -0.06, 0.06)
+        self.i += 1
+        rr.ctrl.set_targets(self.sp, self.cmd,
+                            A.C.GRIPPER_OPEN * self.grip)
+        rr.ctrl.mppi.target_yaw = self.yaw
+        for _ in range(rr.sub):
+            rr.ctrl.step()
+            mujoco.mj_step(rr.model, rr.data)
+
+
 def run_pick(i):
     obj, start, alt, tgt = r.reset_scene_v2()
     task = A.PROMPT_MANIP.format(obj=obj)
-    ex = r.expert
+    plat = V2Platform(r, start, 0.0)
     adr = r.cur["adr"]
     miss = 1e9
     lifted = False
@@ -97,25 +169,18 @@ def run_pick(i):
             chunk = policy.predict_action_chunk(batch)
             chunk = POST(chunk)[0].float().cpu().numpy()[:HORIZON]
         for a in chunk:
-            ex.sp = ex.sp + np.clip(a[0:3], -0.035, 0.035)
-            ex.yaw = ex.yaw + float(np.clip(a[5], -0.2, 0.2))
-            ex.grip = float(np.clip(a[6], 0.0, 1.0))
-            r.ctrl.set_targets(ex.sp, ex.arm,
-                               A.C.GRIPPER_OPEN * ex.grip)
-            r.ctrl.mppi.target_yaw = ex.yaw
-            for _ in range(r.sub):
-                r.ctrl.step()
-                mujoco.mj_step(r.model, r.data)
+            plat.tick(a)
             frames_n += 1
             aim, _ = r.live_target()
             d = float(np.linalg.norm(r.jaws() - aim))
             miss = min(miss, d)
             oz = float(r.data.qpos[adr + 2])
-            if oz > A.MAT_TOP + 0.12 and d < 0.06:
+            if oz > A.MAT_TOP + 0.12 and bool(
+                    r.data.eq_active[r.weld]):
                 lifted = True
             if frames_n % 3 == 0:
                 traj.append([round(float(x), 3) for x in
-                             (*r.data.qpos[0:3], ex.yaw, *r.jaws())])
+                             (*r.data.qpos[0:3], plat.yaw, *r.jaws())])
     oxy = r.data.qpos[adr:adr + 2]
     d_bin = float(np.linalg.norm(oxy - r.bin_xy))
     placed = bool(d_bin <= 0.15
@@ -138,7 +203,8 @@ def run_pick(i):
 def run_nav(i):
     obj, start, alt, tgt = r.reset_scene_v2(nav=True)
     task = A.PROMPT_NAV.format(obj=obj)
-    ex = r.expert
+    yaw0 = float(2 * np.arctan2(r.data.qpos[6], r.data.qpos[3]))
+    plat = V2Platform(r, start, yaw0)
     adr = r.cur["adr"]
     gx = r._gate_x
     crossed = False
@@ -152,15 +218,7 @@ def run_nav(i):
             chunk = policy.predict_action_chunk(batch)
             chunk = POST(chunk)[0].float().cpu().numpy()[:HORIZON]
         for a in chunk:
-            ex.sp = ex.sp + np.clip(a[0:3], -0.035, 0.035)
-            ex.yaw = ex.yaw + float(np.clip(a[5], -0.2, 0.2))
-            ex.grip = float(np.clip(a[6], 0.0, 1.0))
-            r.ctrl.set_targets(ex.sp, ex.arm,
-                               A.C.GRIPPER_OPEN * ex.grip)
-            r.ctrl.mppi.target_yaw = ex.yaw
-            for _ in range(r.sub):
-                r.ctrl.step()
-                mujoco.mj_step(r.model, r.data)
+            plat.tick(a, nav=True)
             frames_n += 1
             y = float(r.data.qpos[1])
             if (y_prev < -0.6 <= y
@@ -182,7 +240,6 @@ def run_nav(i):
 
 results = []
 for i in range(N_PICK):
-    ex = r.expert
     res = run_pick(i)
     results.append(res)
     print("EVAL " + json.dumps(res), flush=True)
