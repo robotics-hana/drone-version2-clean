@@ -63,8 +63,17 @@ noises = [torch.randn(1, HORIZON, 32, generator=g) for _ in windows]
 
 ckpts = sorted(p for p in Path(CKPT_ROOT).iterdir()
                if p.name.isdigit())
+# RESUMABLE: reload a partial output and skip finished checkpoints
+# (the first full run was wall-clock killed at 5/12); save after EVERY
+# checkpoint, not only at the end
 results = {}
+if Path(OUT).exists():
+    results = json.load(open(OUT)).get("results", {})
+    print("resuming: %d checkpoints already scored" % len(results),
+          flush=True)
 for ck in ckpts:
+    if ck.name in results:
+        continue
     t0 = time.time()
     pm = ck / "pretrained_model"
     policy = PI0Policy.from_pretrained(str(pm)).to("cuda").eval()
@@ -81,10 +90,14 @@ for ck in ckpts:
             batch["task"] = [item["task"]]
             batch = pre(batch)
             chunk = policy.predict_action_chunk(
-                batch, noise=nz.to("cuda", dtype=torch.bfloat16))
+                batch, noise=nz.to("cuda"))
             chunk = post(chunk)[0].float().cpu().numpy()[:HORIZON]
-            gt = np.stack([ds[idx + 1 + t]["action"].numpy()
-                           for t in range(HORIZON)])
+            # actions come from the parquet table directly --
+            # ds[i] would decode 3 video frames per index (150 per
+            # window), measured at ~80 min/checkpoint
+            gt = np.stack([np.asarray(
+                ds.hf_dataset[idx + 1 + t]["action"])
+                for t in range(HORIZON)])
             e = (chunk - gt) ** 2
             errs.append(e.mean())
             dims.append(e.mean(0))
@@ -97,6 +110,8 @@ for ck in ckpts:
     print("ckpt %s: val MSE %.6f (%.0fs)" % (
         ck.name, results[ck.name]["mse"],
         results[ck.name]["sec"]), flush=True)
+    json.dump(dict(partial=True, results=results), open(OUT, "w"),
+              indent=1)
     del policy
     torch.cuda.empty_cache()
 
