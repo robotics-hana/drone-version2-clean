@@ -20,7 +20,8 @@ v2 gates as OBSERVATIONS (table/object/gate contacts are reported, not
 enforced -- the policy is being measured, not curated).
 
 usage:
-  python eval_v2.py <ckpt> <n_pick> <n_nav> --torchseed 1000 --tag TAG
+  python eval_v2.py <ckpt> <n_pick> <n_nav> --torchseed 1000 --tag TAG \
+      [--video]     # film each episode: v2vid_TAG_pick00.mp4 etc.
 """
 import hashlib
 import json
@@ -28,6 +29,7 @@ import sys
 import time
 
 import numpy as np
+import imageio.v2 as imageio
 import mujoco
 import torch
 
@@ -44,6 +46,9 @@ TORCHSEED = int(sys.argv[4][12:]) if "--torchseed=" in " ".join(sys.argv) \
           if "--torchseed" in sys.argv else 1000)
 TAG = (sys.argv[sys.argv.index("--tag") + 1]
        if "--tag" in sys.argv else "v2eval")
+VIDEO = "--video" in sys.argv           # film episodes: cam1|cam2|cam3
+                                        # strip, every 2nd tick, 10 fps
+                                        # (identical to the demo videos)
 SCENE_SEED = 97000                     # NEW family: disjoint from
                                        # collection (71000), v1 eval
                                        # (77000), probes (88000)
@@ -152,6 +157,34 @@ class V2Platform:
         for _ in range(rr.sub):
             rr.ctrl.step()
             mujoco.mj_step(rr.model, rr.data)
+        # contact observations. The collector tallies these inside
+        # V2Runner.step, which eval never calls, so without this block
+        # the reported table/object/gate hits are structurally 0
+        # (dead-metric defect, review 2026-09-04). Same per-tick
+        # cadence and dedupe as collect_v2.step; the collector's
+        # jaws-outside-grasp-phase rule is omitted -- it keys on the
+        # expert's phase flag, and the policy owns its grasp timing.
+        d = rr.data
+        table_hit = obj_hit = False
+        for ci in range(d.ncon):
+            g1 = int(d.contact.geom1[ci])
+            g2 = int(d.contact.geom2[ci])
+            if not table_hit and (
+                    (g1 in rr._drone_geoms and g2 in rr._table_geoms)
+                    or (g2 in rr._drone_geoms
+                        and g1 in rr._table_geoms)):
+                rr._table_hits += 1
+                table_hit = True
+            if not obj_hit and (
+                    (g1 in rr._strike_geoms and g2 in rr._obj_geoms)
+                    or (g2 in rr._strike_geoms
+                        and g1 in rr._obj_geoms)):
+                rr._obj_hits += 1
+                obj_hit = True
+            if ((g1 in rr._drone_geoms and g2 in rr._gate_geoms)
+                    or (g2 in rr._drone_geoms
+                        and g1 in rr._gate_geoms)):
+                rr._gate_hits += 1
 
 
 def run_pick(i):
@@ -163,6 +196,9 @@ def run_pick(i):
     lifted = False
     frames_n = 0
     traj = []
+    vid = (imageio.get_writer("v2vid_%s_pick%02d.mp4" % (TAG, i),
+                              fps=10, codec="libx264", quality=8,
+                              macro_block_size=1) if VIDEO else None)
     for chunk_i in range(24):          # 24 x 50 ticks = 120 s cap
         with torch.no_grad():
             batch = PRE(obs_batch(task))
@@ -171,6 +207,12 @@ def run_pick(i):
         for a in chunk:
             plat.tick(a)
             frames_n += 1
+            if vid is not None and frames_n % 2 == 0:
+                f2 = r.frame(task)
+                vid.append_data(np.concatenate(
+                    [f2["observation.images.camera1"],
+                     f2["observation.images.camera2"],
+                     f2["observation.images.camera3"]], axis=1))
             aim, _ = r.live_target()
             d = float(np.linalg.norm(r.jaws() - aim))
             miss = min(miss, d)
@@ -181,6 +223,8 @@ def run_pick(i):
             if frames_n % 3 == 0:
                 traj.append([round(float(x), 3) for x in
                              (*r.data.qpos[0:3], plat.yaw, *r.jaws())])
+    if vid is not None:
+        vid.close()
     oxy = r.data.qpos[adr:adr + 2]
     d_bin = float(np.linalg.norm(oxy - r.bin_xy))
     placed = bool(d_bin <= 0.15
@@ -212,6 +256,9 @@ def run_nav(i):
     hover_ok = False
     y_prev = float(r.data.qpos[1])
     frames_n = 0
+    vid = (imageio.get_writer("v2vid_%s_nav%02d.mp4" % (TAG, i),
+                              fps=10, codec="libx264", quality=8,
+                              macro_block_size=1) if VIDEO else None)
     for chunk_i in range(10):          # 50 s cap
         with torch.no_grad():
             batch = PRE(obs_batch(task))
@@ -220,6 +267,12 @@ def run_nav(i):
         for a in chunk:
             plat.tick(a, nav=True)
             frames_n += 1
+            if vid is not None and frames_n % 2 == 0:
+                f2 = r.frame(task)
+                vid.append_data(np.concatenate(
+                    [f2["observation.images.camera1"],
+                     f2["observation.images.camera2"],
+                     f2["observation.images.camera3"]], axis=1))
             y = float(r.data.qpos[1])
             if (y_prev < -0.6 <= y
                     and abs(float(r.data.qpos[0]) - gx) < 0.45
@@ -231,6 +284,8 @@ def run_nav(i):
             hover_run = hover_run + 1 if (crossed and near) else 0
             if hover_run >= 30:
                 hover_ok = True
+    if vid is not None:
+        vid.close()
     return dict(kind="nav", ep=i, obj=obj, tag=TAG,
                 crossed=bool(crossed), hover=bool(hover_ok),
                 success=bool(crossed and hover_ok),

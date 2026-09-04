@@ -205,4 +205,34 @@ episodes are retained in the manifest as evidence.
 
 ## Evaluation
 
-- (pending)
+- **2026-09-04 — validation sweep (T3/T4) in progress, job 276984**
+  (resumable rerun after a 4 h wall kill at 5/12): teacher-forced
+  50-step action MSE, 120 val episodes × 6 windows = 720 windows,
+  noise pinned (seed 31415) and reused across checkpoints. Curve so
+  far: 2.5k 0.000590 → 5k 0.000346 → 7.5k 0.000244 → 10k 0.000217 →
+  12.5k 0.000121 → 15k 0.000119 → **17.5k 0.000128 (TURNED UP —
+  overfitting inflection past 15k; training loss still falling)**.
+  Provisional T4 winner 015000, pending the full curve.
+- **2026-09-04 — mini closed-loop test of the LAST checkpoint (030000),
+  job 277519, eval_v2.py, seed family 97000, tag mini30k**: NAV 3/4
+  success (clean gate crossings + hover); PICK n=10 median miss
+  215.6 mm, 0 picked (distribution 47–589 mm) — statistically
+  indistinguishable from v1's 242 mm at n=10. Tiny validation MSE +
+  closed-loop misses = compounding-deviation signature; the full n=60
+  frozen eval of the SELECTED checkpoint is the referendum. (First
+  mini attempt was INVALID — no arm platform, jaws tucked — killed,
+  V2Platform ported from the fixfit5-validated v1 path, rerun.)
+- **2026-09-04 — eval harness defect found by pre-run adversarial
+  review and FIXED**: eval_v2's table/obj/gate contact counters were
+  structurally 0 (the collector tallies them inside V2Runner.step,
+  which eval never calls) — the mini30k rows' contact fields are VOID
+  (primary metrics unaffected); the tally is now replicated per-tick
+  in V2Platform.tick (jaws-in-grasp-phase rule deliberately omitted —
+  the policy owns its grasp timing). Also added `--video` (per-episode
+  cam1|cam2|cam3 strips, the demo-video format).
+- **2026-09-04 — job 279988 submitted**: mini test of checkpoint
+  015000 (10 pick + 4 nav, tag mini15k, SAME scenes/seeds as mini30k →
+  exactly paired checkpoint comparison) + 3 filmed episodes of 030000
+  (tag film30k, scenes 0–2 of the mini30k sequence — should reproduce
+  its per-episode misses exactly, a free determinism check). Both with
+  --video; log v2mini15k_film.log.
