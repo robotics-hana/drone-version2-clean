@@ -236,3 +236,24 @@ episodes are retained in the manifest as evidence.
   (tag film30k, scenes 0–2 of the mini30k sequence — should reproduce
   its per-episode misses exactly, a free determinism check). Both with
   --video; log v2mini15k_film.log.
+- **2026-09-04 — SECOND review-caught harness defect, KILL-FIX-REDO of
+  279988 → job 280071**: cross-episode payload feed-forward leak — an
+  eval episode that ends still CARRYING leaves the payload trim
+  latched on nominal_hover_thrust (weld_grasp adds it at weld, only a
+  release removes it; the collector never exposes this because
+  place_v2 always releases). Every later episode in the process then
+  flies a mis-trimmed plant, keyed to that checkpoint's own behaviour
+  → paired comparison broken from the first carried-to-cap episode.
+  Fixed: episode-end `if r._ff_on: weld_grasp(False)` in run_pick;
+  weld now OBSERVABLE (weld_tick + ended_welded in every pick row —
+  previously unlogged, which is why mini30k cannot be certified
+  leak-free post hoc); nav rows now report obj_hits; PROV extended
+  with dep_sha of collect_airvla/collect_v2/pd_flight/collect_demos
+  (drift audit). 279988 killed before its first episode (nothing
+  lost). Job 280071 redoes BOTH minis under the fixed harness, 10+4
+  each, tags mini15k_r2 / mini30k_r2, both filmed, log v2mini_r2.log.
+  mini30k (277519) is now PROVISIONAL — superseded by mini30k_r2.
+  Determinism probe: mini30k_r2 picks 0–9 re-see mini30k's exact
+  scenes+noise; same-node ⇒ near-exact reproduction expected, cross-
+  node ⇒ small divergence is hardware noise (judge by onset, per the
+  determinism review), contact/weld fields not comparable (were dead).

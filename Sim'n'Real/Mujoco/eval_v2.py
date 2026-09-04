@@ -63,8 +63,18 @@ torch.cuda.manual_seed_all(TORCHSEED)
 PRE, POST = make_pre_post_processors(policy.config, pretrained_path=CKPT)
 policy = policy.to("cuda").eval()
 
+# hash the physics/scene dependencies too, not just this script --
+# pairing across runs depends on them and cluster file drift is a
+# documented hazard (review 2026-09-04)
+DEPS = {}
+for _m in ("collect_airvla", "collect_v2", "pd_flight", "collect_demos"):
+    _mod = sys.modules.get(_m)
+    if _mod is not None and getattr(_mod, "__file__", None):
+        DEPS[_m] = hashlib.sha256(
+            open(_mod.__file__, "rb").read()).hexdigest()[:12]
 print("PROV " + json.dumps(dict(
     script_sha=hashlib.sha256(open(__file__, "rb").read()).hexdigest()[:12],
+    dep_sha=DEPS,
     ckpt=CKPT, argv=sys.argv[1:], torch_seed=TORCHSEED,
     scene_seed=SCENE_SEED, tag=TAG,
     when=time.strftime("%Y-%m-%dT%H:%M:%S"))), flush=True)
@@ -225,6 +235,15 @@ def run_pick(i):
                              (*r.data.qpos[0:3], plat.yaw, *r.jaws())])
     if vid is not None:
         vid.close()
+    ended_welded = bool(r.data.eq_active[r.weld])
+    # episode-end cleanup (review 2026-09-04, pairing lens): an episode
+    # that ends still CARRYING leaves the payload feed-forward latched
+    # on nominal_hover_thrust -- every later episode would fly with a
+    # wrong hover trim, keyed to this checkpoint's behaviour, which
+    # breaks the paired cross-checkpoint comparison. Undo it while
+    # r.cur is still this episode's object.
+    if r._ff_on:
+        r.weld_grasp(False)
     oxy = r.data.qpos[adr:adr + 2]
     d_bin = float(np.linalg.norm(oxy - r.bin_xy))
     placed = bool(d_bin <= 0.15
@@ -234,6 +253,7 @@ def run_pick(i):
                placed=placed, success=placed,
                d_bin_mm=round(d_bin * 1000, 1),
                table_hits=r._table_hits, obj_hits=r._obj_hits,
+               weld_tick=plat.weld_tick, ended_welded=ended_welded,
                frames=frames_n)
     with open("eval_v2_traj.jsonl", "a") as fh:
         fh.write(json.dumps(dict(tag=TAG, kind="pick", ep=i, obj=obj,
@@ -290,7 +310,7 @@ def run_nav(i):
                 crossed=bool(crossed), hover=bool(hover_ok),
                 success=bool(crossed and hover_ok),
                 gate_hits=r._gate_hits, table_hits=r._table_hits,
-                frames=frames_n)
+                obj_hits=r._obj_hits, frames=frames_n)
 
 
 results = []
