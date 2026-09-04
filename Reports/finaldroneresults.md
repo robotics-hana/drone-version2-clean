@@ -305,6 +305,26 @@ episodes are retained in the manifest as evidence.
   — VOID as policy grasp measurements (nav rows unaffected: nav never
   deploys/welds). Job 282168 re-runs the 30k mini (10+4, tag
   mini30k_r3, filmed) under the validated harness.
+- **2026-09-05 00:5x — mini30k_r3 COMPLETE (job 282168, exit 0): the
+  first VALID v2 closed-loop pick measurement.** PICK n=10 median
+  98.8 mm, 0 picked, 0 placed — misses 43.5 / 55.3 / 65.9 / 73.1 /
+  77.9 / 98.8 / 237.8 / 534.4 / 542.0 / 553.3; NAV 3/4 (same episode
+  pattern). Read: under training-matched dynamics the approach
+  improves ~2.4× (median 238→99 mm; 6/10 episodes within 100 mm,
+  distribution bimodal with 3 far misses ~540 mm), but the policy
+  still never enters the 10 mm weld zone — the video of the closest
+  episode (pick03, 43.5 mm) shows the jaws beside the penguin,
+  laterally offset a few cm, before the routine proceeds to the box.
+  Failure is now cleanly the LAST-DECIMETER SERVO, not flight or
+  harness: consistent with the v1 precision-gap finding and the
+  compounding-deviation signature (50-tick open-loop chunks cannot
+  correct terminal misalignment the way the expert's every-tick creep
+  servo does; corrective demos cover displaced starts, not terminal
+  offset). Videos `Reports/v2_eval_videos/v2vid_mini30k_r3_*.mp4`
+  (14), sheet of pick03 banked; traj
+  `Reports/eval_logs/eval_v2_traj_mini_20260905.jsonl`. Next
+  referendum: full frozen n=60+20 eval of the 60k-curve T4 winner
+  under this validated harness.
 - **2026-09-04 15:08 — PROTOCOL AMENDMENT (Hana): training EXTENDED
   30k → 60k** because the validation curve is still descending at 25k
   (0.000217 → 0.000061 from 10k to 25k with no sustained upturn — the
