@@ -257,3 +257,8 @@ episodes are retained in the manifest as evidence.
   scenes+noise; same-node ⇒ near-exact reproduction expected, cross-
   node ⇒ small divergence is hardware noise (judge by onset, per the
   determinism review), contact/weld fields not comparable (were dead).
+- **2026-09-04 13:3x — 15k mini CANCELLED (Hana), 280071 killed in
+  model load (no episodes lost)**: the sweep's 20k point (0.000098,
+  new best) made 15k unlikely to be the T4 winner. Job 280417 runs the
+  30k-only mini redo (10+4, tag mini30k_r2, filmed, fixed harness);
+  the paired mini of the SELECTED checkpoint runs after T4 selection.
