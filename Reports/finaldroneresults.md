@@ -461,6 +461,24 @@ same tag; videos on.
   first; proceed to full n=60+20 (e2full47k5) ONLY IF the mini
   median < 175.5 mm (the naive mini) OR any weld occurs; otherwise
   stop, record, and escalate to E3 (terminal-corrective data).
+
+### E2 MINI RESULT (2026-09-05, job 284485, exit 0) — GATE PASSED
+
+- e2mini47k5 (RTC + exec-10): PICK n=10 median 250.7 mm, **1 picked
+  + 1 PLACED — episode 7: 1.9 mm closest approach (tightest of ANY
+  v2 run), weld at tick 381 (≈2× faster than either naive success),
+  placed at d_bin 14.0 mm.** Scene 7 was never grasped by any other
+  arm (naive ~170 mm, E1 549 mm). Ep8: 34.6 mm where naive managed
+  284–303. NAV 3/4 (crossed 4/4) — best of the exec-10 arms.
+  Distribution stays bimodal (4 far misses >560 mm); median above
+  naive's, but the gate passes on the weld clause. Reading: RTC
+  keeps the reactivity of fast replanning while killing E1's plan
+  churn — conversion when near improves sharply; far-miss episodes
+  are a targeting problem RTC does not address (E3's job).
+- **E2 FULL submitted: job 285735** (60+20, tag e2full47k5, filmed,
+  h_rt 14 h — RTC guidance adds an autograd pass per denoise step).
+  Grasp-moment sheet of ep7 banked; mini videos in
+  `v2_eval_videos/e2mini47k5/`.
 - **2026-09-04 15:08 — PROTOCOL AMENDMENT (Hana): training EXTENDED
   30k → 60k** because the validation curve is still descending at 25k
   (0.000217 → 0.000061 from 10k to 25k with no sustained upturn — the
