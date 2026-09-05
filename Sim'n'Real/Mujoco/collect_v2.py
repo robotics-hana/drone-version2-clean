@@ -305,9 +305,18 @@ class V2Runner(A.Runner):
                            timeout_s=8.0)
         return v / max(1e-9, float(np.linalg.norm(v)))
 
-    def pick_v2(self, frames, task, alt, corrective=False):
+    def pick_v2(self, frames, task, alt, corrective=False,
+                terminal=False):
         """Continuous-terminal pick: no stillness gates, no composure
-        beat, no retry loop. Grip fires IN MOTION at CLOSE_FIRE_D."""
+        beat, no retry loop. Grip fires IN MOTION at CLOSE_FIRE_D.
+
+        terminal=True (E3 flavour, pre-registered 2026-09-05): after
+        the arm deploys, fly to a PERTURBED near-miss hover first --
+        the policy's observed failure distribution (2-4 cm lateral,
+        +3..+13 cm high) -- hesitate 10-20 ticks, then let the normal
+        creep correct it. Supervises 'persist near the object and
+        re-align', which no other flavour contains. Default False =
+        every existing flavour's path is untouched."""
         ex = self.expert
         aim, _ = self.live_target()
         if corrective:
@@ -395,6 +404,28 @@ class V2Runner(A.Runner):
                            lambda: float(np.linalg.norm(
                                self.data.qpos[7:9] - ex.q_carry)) < 0.06,
                            timeout_s=10.0)
+        if terminal:
+            # E3 perturbed terminal hover: place the JAWS at a
+            # near-miss state, hesitate, then fall through to the
+            # normal creep, whose frozen axis becomes the correction
+            # direction. Above-only vertical offsets: a below-aim
+            # hover parks the open jaws beside the object body with
+            # the strike gate still armed (the grasp phase has not
+            # begun), which mostly discards episodes.
+            aim_t, _ = self.live_target()
+            th = float(self.rng.uniform(0.0, 2.0 * np.pi))
+            r_lat = float(self.rng.uniform(0.02, 0.04))
+            dz = float(self.rng.uniform(0.03, 0.13))
+            delta = np.array([r_lat * np.cos(th), r_lat * np.sin(th),
+                              dz])
+            cyw, syw = np.cos(ex.yaw), np.sin(ex.yaw)
+            offw = np.array([cyw * ex.off_carry[0] - syw * ex.off_carry[1],
+                             syw * ex.off_carry[0] + cyw * ex.off_carry[1],
+                             ex.off_carry[2]])
+            ex.set_goal(xyz=aim_t + delta - offw)
+            self.settle_near(frames, task, tol=0.03, timeout_s=8.0)
+            for _ in range(int(self.rng.integers(10, 21))):
+                self.step(frames, task)     # hesitation dwell
         # continuous creep at 3 mm/tick: goal slightly PAST dead-centre
         # so the setpoint is still moving when the grip fires. The fire
         # distance covers the travel DURING the close ramp (the first
@@ -448,13 +479,28 @@ class V2Runner(A.Runner):
             # high-start descent over-lowered the body and the legs
             # grazed the table edge (164 contacts)
             goal[2] -= min(z_corr[0], 0.0)
-            goal[0:2] += 0.012 * u_fix[0]   # overshoot: frozen axis
+            # overshoot: frozen axis. In terminal mode the overshoot
+            # waits until the jaws are nearly z-aligned -- during the
+            # long vertical correction from a high perturbed hover,
+            # parking 12 mm past-centre leaves only 6 mm of wobble
+            # margin before the 18 mm pass-through abort (measured:
+            # 4/6 demo episodes aborted before this gate was added)
+            os_ok = (not terminal
+                     or abs(float((self.jaws() - aim_l)[2])) < 0.03)
+            goal[0:2] += (0.012 if os_ok else 0.0) * u_fix[0]
             ga = float(goal[0:2] @ u_fix[0])
             if fwd_max[0] is not None and ga < fwd_max[0]:
                 goal[0:2] += (fwd_max[0] - ga) * u_fix[0]
             fwd_max[0] = ga if fwd_max[0] is None else max(fwd_max[0], ga)
             ex.set_goal(xyz=goal)
-            if not fired[0] and d < fire_d:
+            # terminal mode: d is HORIZONTAL-only, so from a high
+            # perturbed hover the grip would fire 3-13 cm above the
+            # object and the 30-tick close-abort would kill the
+            # episode during the slow descent -- gate the fire on
+            # near-z-alignment first (terminal episodes only)
+            z_ok = (not terminal
+                    or abs(float((self.jaws() - aim_l)[2])) < 0.02)
+            if not fired[0] and d < fire_d and z_ok:
                 fired[0] = True
                 fire_tick[0] = tick_n[0]
                 ex.set_goal(grip=close)
@@ -610,14 +656,16 @@ class V2Runner(A.Runner):
         oxy = self.data.qpos[adr:adr + 2]
         return float(np.linalg.norm(oxy - self.bin_xy))
 
-    def episode_v2(self, corrective=False, obj=None):
+    def episode_v2(self, corrective=False, obj=None, terminal=False):
         obj, start, alt, tgt = self.reset_scene_v2(obj=obj,
                                                    corrective=corrective)
         task = A.PROMPT_MANIP.format(obj=obj)
         frames = []
-        grasped = self.pick_v2(frames, task, alt, corrective=corrective)
+        grasped = self.pick_v2(frames, task, alt, corrective=corrective,
+                               terminal=terminal)
         d_bin = self.place_v2(frames, task) if grasped else float("nan")
         return frames, dict(obj=obj, corrective=corrective,
+                            terminal=terminal,
                             grasped=grasped, d_bin_mm=round(1000 * d_bin, 1)
                             if grasped else None, ticks=len(frames),
                             table_hits=self._table_hits,
@@ -851,7 +899,30 @@ def collect_main(repo_id, seed, n_units):
 
 if __name__ == "__main__":
     mode, out = sys.argv[1], sys.argv[2]
-    assert mode in ("demo", "demonav", "collect")
+    assert mode in ("demo", "demonav", "demoterm", "collect")
+    if mode == "demoterm":
+        # E3 terminal-corrective flavour demo (6 eps, coin-flip
+        # objects) for sign-off before any collection
+        r = V2Runner(34000)
+        w = imageio.get_writer(out, fps=10, codec="libx264", quality=8,
+                               macro_block_size=1)
+        for _ in range(6):
+            frames, res = r.episode_v2(terminal=True)
+            print("TERM %-14s grasped=%-5s d_bin=%s mm  table_hits=%d "
+                  "obj_hits=%d %s (%d ticks)"
+                  % (res["obj"], res["grasped"], res["d_bin_mm"],
+                     res["table_hits"], res["obj_hits"],
+                     "CLEAN" if res["clean"] else "REJECT",
+                     res["ticks"]), flush=True)
+            for f in frames[::2]:
+                img = np.concatenate(
+                    [f["observation.images.camera1"],
+                     f["observation.images.camera2"],
+                     f["observation.images.camera3"]], axis=1)
+                w.append_data(img)
+        w.close()
+        print("demo ->", out)
+        sys.exit(0)
     if mode == "collect":
         collect_main(out, int(sys.argv[3]),
                      int(sys.argv[4]) if len(sys.argv) > 4 else 30)

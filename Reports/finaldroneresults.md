@@ -479,6 +479,39 @@ same tag; videos on.
   h_rt 14 h — RTC guidance adds an autograd pass per denoise step).
   Grasp-moment sheet of ep7 banked; mini videos in
   `v2_eval_videos/e2mini47k5/`.
+
+### E3 pre-registration draft (declared 2026-09-05, BEFORE
+### implementation; collection requires Hana's demo sign-off)
+
+- **Motivation (from the full47k5 trajectory diagnosis + E1/E2):**
+  failures hover 2–4 cm lateral / 4–13 cm vertical off the target
+  for only ~4–5 s then leave; no training episode contains a
+  perturbed terminal state or a correction out of one, so the
+  policy has never seen "hesitate near the object, then re-align
+  and grasp". RTC (E2) improves conversion when near; E3 supplies
+  the missing supervision for GETTING from near-miss to grasp.
+- **New flavour `terminal` (additive to collect_v2, default-off —
+  the collection/eval code paths for existing flavours stay
+  byte-identical; harness re-validated by expert replay after the
+  edit):** normal flown approach → standoff → deploy → creep
+  toward a PERTURBED aim (lateral 2–4 cm uniform direction;
+  vertical +3 to +13 cm, ABOVE-ONLY — amended 2026-09-05 before
+  implementation: any below-aim hover parks open jaws beside the
+  object body with the strike gate armed, so low perturbations
+  would mostly burn discarded episodes; above-states cover the
+  dominant observed failure modes and correction-from-above
+  supervises the same vertical-alignment behaviour) → hesitation
+  dwell 10–20 ticks at the perturbed hover → re-target the TRUE
+  aim → creep in → fire → weld → stabilize → place. All existing
+  safety gates apply; banked only if clean, like every other
+  flavour.
+- **Plan:** demo (6 eps) for Hana's sign-off → collect ~150
+  episodes (seed family 74000) → split extension (episode-level,
+  same VAL_FRAC) → fine-tune FROM 047500 (~10k steps, same frozen
+  T-protocol otherwise) → validation curve over the new
+  checkpoints with the SAME pinned-noise protocol on the extended
+  val set → mini gate (beat 175.5 mm or weld) → full n=60+20 under
+  naive AND RTC execution (E3 composes with E2).
 - **2026-09-04 15:08 — PROTOCOL AMENDMENT (Hana): training EXTENDED
   30k → 60k** because the validation curve is still descending at 25k
   (0.000217 → 0.000061 from 10k to 25k with no sustained upturn — the
