@@ -480,6 +480,30 @@ same tag; videos on.
   Grasp-moment sheet of ep7 banked; mini videos in
   `v2_eval_videos/e2mini47k5/`.
 
+### E2 FULL RESULT (2026-09-05, job 285735, exit 0)
+
+- e2full47k5 (RTC + exec-10, n=60+20): PICK median 215.8 mm,
+  **1 picked + 1 placed — the SAME rate as the naive baseline
+  (1/60)**; NAV 6/20 (crossed 20/20; naive 9/20 — fast replanning
+  degrades steady hovering). The success (ep24) is the project's
+  best-executed grasp: 4.6 mm, weld tick 222 (≈3× faster than
+  naive's), placed 28.9 mm. Distribution: near zone DENSIFIED
+  (14 episodes <60 mm vs naive's 11) but the sub-30 mm terminal
+  cone THINNED (3+1 vs 7) — RTC brings the policy near more often
+  and grasps decisively when it converts, yet enters the final
+  3 cm less often, and the mini's two conversions did not
+  reproduce (marginal conversions flip under replan-compounded
+  variance).
+- **VERDICT, inference-time rung of the ladder COMPLETE: naive
+  1/60 · E1(exec-10) falsified · E2(RTC) 1/60.** Inference-time
+  execution changes alone do NOT move the success rate for this
+  checkpoint; they redistribute where it fails. The rate must come
+  from data (E3) and/or policy improvement (E5). Naive-50 remains
+  the best overall configuration (median + nav) with E2 the best
+  grasp-execution quality. Success video + traj banked
+  (`e2full47k5/v2vid_e2full47k5_pick24.mp4`,
+  `eval_v2_traj_e2full47k5.jsonl`).
+
 ### E3 pre-registration draft (declared 2026-09-05, BEFORE
 ### implementation; collection requires Hana's demo sign-off)
 
