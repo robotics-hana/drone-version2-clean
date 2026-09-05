@@ -20,11 +20,11 @@ asserted without a file behind it.
 
 | Evidence | Status | Where / dependency |
 |---|---|---|
-| Training loss curve | ⬜ | from the 30k run log (job in progress) — plotted at completion |
-| Validation loss curve | ⬜ | teacher-forced action-MSE on the 120 val episodes at every 2,500-step checkpoint (13 points) — script runs after training |
-| Final checkpoint-selection criterion | ✅ declared | lowest validation action-MSE; frozen in `finaldroneresults.md` BEFORE results; never revised against test |
-| Validation action error | ⬜ | same sweep, selected checkpoint's number |
-| Optional: action-dimension breakdown | ⬜ | same sweep reports all 7 dims separately + per flavour (std/corr/nav) |
+| Training loss curve | 🔶 | raw data in `v2train_resume.log` + `v2train60k.log` (tqdm loss per step) — plot pending |
+| Validation loss curve | ✅ | `eval_logs/v2_valcurve_60k.json` — 24 checkpoints (2.5k–60k), 720 pinned-noise windows each, paired across checkpoints |
+| Final checkpoint-selection criterion | ✅ applied | lowest validation action-MSE, frozen BEFORE results; selected **047500** (0.0000455) over the full 60k curve; never revised against test |
+| Validation action error | ✅ | 047500: overall MSE 0.0000455 (`v2_valcurve_60k.json`) |
+| Optional: action-dimension breakdown | ✅ | per_dim (7) + per_flavour (std/corr/nav) for every checkpoint from 15k on, incl. the winner |
 | Optional: episode scaling experiment | ⬜ | 120/240/480-episode trainings, same protocol, `--dataset.episodes` sublists — queued after the main run |
 
 ## Appendix material (granular)

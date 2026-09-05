@@ -356,6 +356,37 @@ episodes are retained in the manifest as evidence.
   `eval_logs/eval_v2_traj_mini47k5.jsonl`. Mini is clean → FULL
   FROZEN EVAL of 047500 submitted: n=60 pick + 20 nav, filmed, tag
   full47k5 — the ledger's headline number.
+
+## v2 HEADLINE — frozen evaluation of the selected checkpoint
+
+- **2026-09-05 — FULL FROZEN EVAL COMPLETE (job 283261, exit 0):
+  π₀ fine-tuned on airvla_v2, checkpoint 047500 (T4 winner), v2
+  world, validated harness, seed family 97000, tag full47k5, all 80
+  episodes filmed.**
+  - **PICK n=60: median closest-approach 170.8 mm; 1 picked; 1
+    PLACED (episode 9: 9.8 mm approach, weld tick 699, carried to
+    the box and released inside, d_bin 29.8 mm — the first complete
+    pick-and-place success of the project, on film:
+    `v2vid_full47k5_pick09.mp4`).** Near-miss profile: 7/60 episodes
+    within 30 mm (9.8✓ 17.8 20.1 24.9 25.3 25.9 27.6), 20/60 within
+    ~100 mm. Contact observations (now real): 55/60 episodes fully
+    clean; worst offenders ep10 (31 table-tick contacts, 22 object
+    strikes) and ep35 (22/3); success ep9 was contact-clean.
+  - **NAV n=20: 9/20 success — gate crossing 20/20 (100%), clean
+    (0 gate contacts across all 20); failures are all the
+    hover-over-target criterion.**
+  - **v1 vs v2 (two studies, side by side): median miss 242 →
+    170.8 mm (−29%); placed 0/60 → 1/60; v1's 3 'picked' carried
+    the latched-lift caveat, v2's single pick is a complete
+    task success under a replay-validated gate.** The last-centimeter
+    conversion bottleneck is now the sharpest quantified finding:
+    11.7% of episodes reach <30 mm but only 1 converts — the
+    open-loop-chunk vs every-tick-servo gap (RTC/PAG track is the
+    designed answer).
+  - Artifacts: videos `Reports/v2_eval_videos/full47k5/` (80),
+    success sheet banked; traj `eval_logs/eval_v2_traj_full47k5.jsonl`;
+    curve `eval_logs/v2_valcurve_60k.json`; PROV in
+    `v2full47k5.log` (script e5ed513b62d5, dep hashes recorded).
 - **2026-09-04 15:08 — PROTOCOL AMENDMENT (Hana): training EXTENDED
   30k → 60k** because the validation curve is still descending at 25k
   (0.000217 → 0.000061 from 10k to 25k with no sustained upturn — the
