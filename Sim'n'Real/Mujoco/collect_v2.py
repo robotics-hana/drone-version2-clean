@@ -424,8 +424,13 @@ class V2Runner(A.Runner):
                              ex.off_carry[2]])
             ex.set_goal(xyz=aim_t + delta - offw)
             self.settle_near(frames, task, tol=0.03, timeout_s=8.0)
-            for _ in range(int(self.rng.integers(10, 21))):
-                self.step(frames, task)     # hesitation dwell
+            # brief dwell only (3-10 ticks, was 10-20): the failure
+            # STATE is covered by the perturbed position; lingering
+            # there would teach the pause itself (the no-pauses rule
+            # -- 'a dwell is exactly the class of behaviour the
+            # policy copies as a pause')
+            for _ in range(int(self.rng.integers(3, 11))):
+                self.step(frames, task)
         # continuous creep at 3 mm/tick: goal slightly PAST dead-centre
         # so the setpoint is still moving when the grip fires. The fire
         # distance covers the travel DURING the close ramp (the first
