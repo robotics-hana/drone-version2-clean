@@ -572,6 +572,43 @@ same tag; videos on.
   grounding rate** — which object's terminal zone (<60 mm lateral)
   the jaws approached: correct / wrong / neither, computed from
   trajectories + regenerated scene positions.
+
+### E3 TRAINING protocol (pre-registered 2026-09-06 ~22:3x, BEFORE
+### the merge/training jobs run; overnight chain 286531 → 287020
+### (merge+split+push) → 287021 (fine-tune) + 287022 (validation))
+
+- **Data:** `hanapasta/airvla_v21` = aggregate(airvla_v2 600 +
+  airvla_v2_e3 ~310, source order preserved). Split: the ORIGINAL
+  480/120 verbatim (old episodes never move); terminal 80/20
+  episode-level; pairs split AS UNITS (both members one side; a
+  split pair would leak its layout); seed 424243.
+- **Fine-tune:** FROM 047500 (policy.path init, fresh optimizer),
+  batch 4, seed 1000, bf16, grad ckpt, vision unfrozen, steps
+  15,000, save every 2,500, cosine schedule COMPRESSED to the run
+  (decay_steps 15,000 — documented deviation from the 30k-decay
+  recipe so the fine-tune completes a full warmup→decay cycle).
+- **Validation:** same pinned-noise paired protocol (seed 31415) on
+  the extended val set via the generalized valcurve (repo arg);
+  per_flavour now separates old kinds (std/corr/nav) from new
+  (term/pairA/pairB) = the forgetting-vs-learning drift detector.
+  The UNMODIFIED 047500 is scored on the same windows as
+  pseudo-checkpoint 000000 (the baseline row).
+- **Selection rule (T4-E3, frozen now):** among fine-tune
+  checkpoints, the LOWEST combined val MSE **subject to** the
+  original-flavour val MSE (std+corr+nav pooled) not exceeding
+  1.10 × the 000000 baseline row. If no checkpoint satisfies the
+  constraint, E3 training is judged harmful and 047500 stays the
+  policy.
+- **Grounding probe (pre-registered):** on val PAIR episodes:
+  frame-0 observation, policy queried with BOTH commands (same
+  pinned noise), 50-step integrated xy displacement classified
+  toward correct/wrong object by cosine against the layout's object
+  directions; report correct-heading rate and swap-flip rate for
+  the winner AND the 047500 baseline.
+- **Eval ladder after selection:** mini gate (10+4, naive-50,
+  videos; gate = any weld OR median < 175.5 mm) → full frozen
+  n=60+20 naive with grounding rate; an +RTC composition arm may
+  follow as its own tagged condition.
 - **2026-09-04 15:08 — PROTOCOL AMENDMENT (Hana): training EXTENDED
   30k → 60k** because the validation curve is still descending at 25k
   (0.000217 → 0.000061 from 10k to 25k with no sustained upturn — the

@@ -14,7 +14,12 @@ Outputs (json): per checkpoint -- overall MSE, per-dimension MSE (7),
 per-flavour MSE (std/corr/nav) -- plus the T4 selection (lowest overall
 validation MSE) printed last. Never sees any test data.
 
-usage: python valcurve_v2.py <ckpt_root> <split.json> <manifest.jsonl> <out.json>
+usage: python valcurve_v2.py <ckpt_root> <split.json> <manifest.jsonl> \
+           <out.json> [repo_id]
+(repo_id defaults to hanapasta/airvla_v2 -- the original sweep; the E3
+fine-tune sweep passes hanapasta/airvla_v21 with the combined manifest,
+whose per_flavour keys then split old kinds (std/corr/nav) from new
+ones (term/pairA/pairB) = the forgetting-vs-learning drift detector.)
 """
 import json
 import sys
@@ -29,6 +34,7 @@ from lerobot.policies.factory import make_pre_post_processors
 from lerobot.policies.pi0.modeling_pi0 import PI0Policy
 
 CKPT_ROOT, SPLIT, MANIFEST, OUT = sys.argv[1:5]
+REPO_ID = sys.argv[5] if len(sys.argv) > 5 else "hanapasta/airvla_v2"
 HORIZON = 50
 WINDOWS_PER_EP = 6                    # evenly spaced eval windows
 NOISE_SEED = 31415
@@ -39,7 +45,7 @@ banked = [json.loads(l) for l in open(MANIFEST)
           if json.loads(l).get("banked")]
 kind_of = {i: banked[i]["kind"] for i in range(len(banked))}
 
-ds = LeRobotDataset("hanapasta/airvla_v2", episodes=val)
+ds = LeRobotDataset(REPO_ID, episodes=val)
 print("val episodes:", len(val), "frames:", ds.num_frames, flush=True)
 
 # build the evaluation windows once: (dataset_index, episode, kind)

@@ -1,0 +1,16 @@
+#$ -l h_rt=10:00:00
+#$ -N airvla_e3mrg
+#$ -wd /home/ucabhe0/Scratch/airvla/sim
+#$ -o /home/ucabhe0/Scratch/airvla/logs/v2e3merge.log
+#$ -j y
+export HF_HOME=$HOME/Scratch/hf_cache
+export HF_LEROBOT_HOME=/home/ucabhe0/Scratch/hf_cache/lerobot
+export HF_TOKEN_PATH=/home/ucabhe0/.cache/huggingface/token
+# ONLINE on purpose: this stage pushes to the hub
+PY=/home/ucabhe0/Scratch/env-pin/bin/python
+if ! grep -q 'E3COLLECT-EXIT=0' /home/ucabhe0/Scratch/airvla/logs/v2e3collect.log; then
+  echo MERGE-GATE-FAILED
+  exit 1
+fi
+$PY v2_merge_e3.py e3_manifest_74000.jsonl e3_split.json e3_manifest_combined.jsonl
+echo E3MERGE-EXIT=$?

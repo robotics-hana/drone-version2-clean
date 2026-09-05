@@ -1,0 +1,29 @@
+#$ -l h_rt=16:00:00
+#$ -l gpu=1
+#$ -ac allow=L
+#$ -N airvla_e3col
+#$ -wd /home/ucabhe0/Scratch/airvla/sim
+#$ -o /home/ucabhe0/Scratch/airvla/logs/v2e3collect.log
+#$ -j y
+export HF_HOME=$HOME/Scratch/hf_cache
+export HF_LEROBOT_HOME=/home/ucabhe0/Scratch/hf_cache/lerobot
+export HF_HUB_OFFLINE=1
+export MUJOCO_GL=egl
+PY=/home/ucabhe0/Scratch/env-pin/bin/python
+# stage 1: micro plumbing test (1 terminal + 1 pair = 3 episodes)
+# into a throwaway dataset home; the full run starts ONLY on 3/3
+rm -rf /home/ucabhe0/Scratch/airvla/micro_lerobot
+HF_LEROBOT_HOME=/home/ucabhe0/Scratch/airvla/micro_lerobot \
+  $PY collect_v2.py collecte3 microtest/e3micro 36000 1 1 > micro_e3.out 2>&1
+cat micro_e3.out
+if ! grep -q 'COLLECT-E3-DONE 3/3' micro_e3.out; then
+  echo E3-MICRO-FAILED
+  exit 1
+fi
+echo E3-MICRO-PASSED
+rm -rf /home/ucabhe0/Scratch/airvla/micro_lerobot
+# stage 2: the real E3 collection (150 terminal + 80 paired units),
+# seed family 74000 (pre-registered)
+$PY collect_v2.py collecte3 hanapasta/airvla_v2_e3 74000 150 80
+echo E3COLLECT-EXIT=$?
+echo V2E3COL-ALL-DONE
