@@ -189,27 +189,43 @@ class V2Runner(A.Runner):
     # -- v2 scene ----------------------------------------------------------
     TABLE_C = np.array([0.0, 0.50])    # FIXED table centre (Hana:
                                        # constant framing in camera3)
-    def reset_scene_v2(self, obj=None, corrective=False, nav=False):
+    def reset_scene_v2(self, obj=None, corrective=False, nav=False,
+                       layout=None):
         rng = self.rng
-        # both objects ON the fixed table, positions varied in 2D
-        # (x +-0.35 of centre, 6-26 cm inside the front edge),
-        # >=0.40 m apart, target assigned by COIN FLIP -- position
-        # stays uninformative by construction
         fe = float(self.TABLE_C[1]) + 0.30          # front edge y
-        # nav episodes have no grasp-reach constraint, so their objects
-        # roam the FULL usable table depth (Hana: vary positions so the
-        # model cannot overfit a spot); picks keep the reachable band
-        y_lo = fe - 0.52 if nav else fe - 0.26
-        for _ in range(200):
-            spots = [np.array([rng.uniform(-0.35, 0.35) + self.TABLE_C[0],
-                               rng.uniform(y_lo, fe - 0.06)])
-                     for _ in range(2)]
-            if float(np.linalg.norm(spots[0] - spots[1])) >= 0.40:
-                break
-        rng.shuffle(spots)
-        if obj is None:
-            obj = "weight" if rng.random() < 0.5 else "plush penguin"
-        tgt_xy, dis_xy = spots
+        if layout is not None:
+            # PAIRED-COMMAND replay (E3 grounding component, Hana
+            # 2026-09-05): re-create a previous episode's scene
+            # EXACTLY -- object positions, spawn, box side -- with
+            # only the commanded object changed, so the instruction
+            # is the sole signal distinguishing the two trajectories.
+            assert obj is not None and not nav and not corrective
+            other_n = [k for k in self.objs if k != obj][0]
+            tgt_xy = np.array(layout["pos"][obj], dtype=float)
+            dis_xy = np.array(layout["pos"][other_n], dtype=float)
+            start = np.array(layout["start"], dtype=float)
+            side = float(layout["side"])
+        else:
+            # both objects ON the fixed table, positions varied in 2D
+            # (x +-0.35 of centre, 6-26 cm inside the front edge),
+            # >=0.40 m apart, target assigned by COIN FLIP -- position
+            # stays uninformative by construction.
+            # nav episodes have no grasp-reach constraint, so their
+            # objects roam the FULL usable table depth (Hana: vary
+            # positions so the model cannot overfit a spot); picks
+            # keep the reachable band
+            y_lo = fe - 0.52 if nav else fe - 0.26
+            for _ in range(200):
+                spots = [np.array([rng.uniform(-0.35, 0.35)
+                                   + self.TABLE_C[0],
+                                   rng.uniform(y_lo, fe - 0.06)])
+                         for _ in range(2)]
+                if float(np.linalg.norm(spots[0] - spots[1])) >= 0.40:
+                    break
+            rng.shuffle(spots)
+            if obj is None:
+                obj = "weight" if rng.random() < 0.5 else "plush penguin"
+            tgt_xy, dis_xy = spots
         alt = (A.PLATE_TOP + 0.005 + self.objs[obj]["aim_z"]
                - float(self.expert.off_carry[2]))
         if nav:
@@ -225,12 +241,13 @@ class V2Runner(A.Runner):
                              yaw=yaw0, obj=obj)
             self._gate_x = gx
         else:
-            for _ in range(300):
-                start = np.array([rng.uniform(-0.5, 0.5),
-                                  rng.uniform(1.1, 1.7),
-                                  rng.uniform(0.21, 0.60)])
-                if np.linalg.norm(start[0:2] - tgt_xy) >= 0.70:
-                    break
+            if layout is None:
+                for _ in range(300):
+                    start = np.array([rng.uniform(-0.5, 0.5),
+                                      rng.uniform(1.1, 1.7),
+                                      rng.uniform(0.21, 0.60)])
+                    if np.linalg.norm(start[0:2] - tgt_xy) >= 0.70:
+                        break
             self.reset_scene(tgt_xy, start, obj=obj)
         m = self.model
         # FIXED table (reset_scene slid it under the task spot; put it
@@ -243,8 +260,10 @@ class V2Runner(A.Runner):
         other = [o for k, o in self.objs.items() if k != obj][0]
         self.data.qpos[other["adr"]:other["adr"] + 2] = dis_xy
         # the BOX beside the fixed table, side coin-flipped, both sides
-        # inside the measured camera3 frame
-        side = -1.0 if rng.random() < 0.5 else 1.0
+        # inside the measured camera3 frame (pinned when replaying a
+        # paired layout)
+        if layout is None:
+            side = -1.0 if rng.random() < 0.5 else 1.0
         bxy = np.array([self.TABLE_C[0] + side * (0.45 + BIN_GAP),
                         float(self.TABLE_C[1])])
         self.bin_xy = bxy
@@ -257,6 +276,14 @@ class V2Runner(A.Runner):
         self._table_hits = 0
         self._obj_hits = 0
         self._gate_hits = 0
+        if not nav:
+            # record the layout so a paired episode can replay it
+            # with the other command (E3 grounding component)
+            other_n = [k for k in self.objs if k != obj][0]
+            self.last_layout = dict(
+                pos={obj: [float(tgt_xy[0]), float(tgt_xy[1])],
+                     other_n: [float(dis_xy[0]), float(dis_xy[1])]},
+                start=[float(x) for x in start], side=float(side))
         mujoco.mj_forward(m, self.data)
         return obj, start, alt, tgt_xy
 
@@ -404,33 +431,44 @@ class V2Runner(A.Runner):
                            lambda: float(np.linalg.norm(
                                self.data.qpos[7:9] - ex.q_carry)) < 0.06,
                            timeout_s=10.0)
+        # E3 terminal-corrective stage (design: Hana, 2026-09-05
+        # review). The episode drifts off the object line the way the
+        # POLICY does -- a level nose-first leg toward a FALSE point
+        # laterally offset by the MEASURED failure distribution
+        # (near-cluster lateral median 32 mm, range ~20-55 mm) and
+        # 6-10 cm short of the object -- then corrects with the
+        # standard v2 vocabulary: yaw-in-place to re-point the
+        # gripper at the object, then the untouched normal creep,
+        # fire and grasp. No settle wait, no dwell, no vertical
+        # plunge, no non-standard motion primitive; the stock creep
+        # below is byte-identical for every flavour.
         if terminal:
-            # E3 perturbed terminal hover: place the JAWS at a
-            # near-miss state, hesitate, then fall through to the
-            # normal creep, whose frozen axis becomes the correction
-            # direction. Above-only vertical offsets: a below-aim
-            # hover parks the open jaws beside the object body with
-            # the strike gate still armed (the grasp phase has not
-            # begun), which mostly discards episodes.
             aim_t, _ = self.live_target()
-            th = float(self.rng.uniform(0.0, 2.0 * np.pi))
-            r_lat = float(self.rng.uniform(0.02, 0.04))
-            dz = float(self.rng.uniform(0.03, 0.13))
-            delta = np.array([r_lat * np.cos(th), r_lat * np.sin(th),
-                              dz])
+            u_app = aim_t[0:2] - self.jaws()[0:2]
+            u_app = u_app / max(1e-9, float(np.linalg.norm(u_app)))
+            perp = np.array([-u_app[1], u_app[0]])
+            side = 1.0 if float(self.rng.uniform()) < 0.5 else -1.0
+            lat = float(self.rng.uniform(0.02, 0.055))
+            short = float(self.rng.uniform(0.06, 0.10))
+            false_xy = (aim_t[0:2] + side * lat * perp
+                        - short * u_app)
+            # jaws to the false point, level at the current altitude
             cyw, syw = np.cos(ex.yaw), np.sin(ex.yaw)
             offw = np.array([cyw * ex.off_carry[0] - syw * ex.off_carry[1],
                              syw * ex.off_carry[0] + cyw * ex.off_carry[1],
                              ex.off_carry[2]])
-            ex.set_goal(xyz=aim_t + delta - offw)
-            self.settle_near(frames, task, tol=0.03, timeout_s=8.0)
-            # brief dwell only (3-10 ticks, was 10-20): the failure
-            # STATE is covered by the perturbed position; lingering
-            # there would teach the pause itself (the no-pauses rule
-            # -- 'a dwell is exactly the class of behaviour the
-            # policy copies as a pause')
-            for _ in range(int(self.rng.integers(3, 11))):
-                self.step(frames, task)
+            false_goal = np.array([*false_xy, float(ex.sp[2])]) \
+                - np.array([offw[0], offw[1], 0.0])
+            ex.set_goal(xyz=false_goal)
+            self.run_until(frames, task,
+                           lambda: float(np.linalg.norm(
+                               self.jaws()[0:2] - false_xy)) < 0.03,
+                           timeout_s=10.0)
+            # the corrective re-yaw: point the gripper back at the
+            # object (standard yaw-in-place primitive), then fall
+            # through to the normal creep -> approach and grasp as
+            # in every standard episode
+            self.yaw_then_go(frames, task, aim_t[0:2])
         # continuous creep at 3 mm/tick: goal slightly PAST dead-centre
         # so the setpoint is still moving when the grip fires. The fire
         # distance covers the travel DURING the close ramp (the first
@@ -484,28 +522,13 @@ class V2Runner(A.Runner):
             # high-start descent over-lowered the body and the legs
             # grazed the table edge (164 contacts)
             goal[2] -= min(z_corr[0], 0.0)
-            # overshoot: frozen axis. In terminal mode the overshoot
-            # waits until the jaws are nearly z-aligned -- during the
-            # long vertical correction from a high perturbed hover,
-            # parking 12 mm past-centre leaves only 6 mm of wobble
-            # margin before the 18 mm pass-through abort (measured:
-            # 4/6 demo episodes aborted before this gate was added)
-            os_ok = (not terminal
-                     or abs(float((self.jaws() - aim_l)[2])) < 0.03)
-            goal[0:2] += (0.012 if os_ok else 0.0) * u_fix[0]
+            goal[0:2] += 0.012 * u_fix[0]   # overshoot: frozen axis
             ga = float(goal[0:2] @ u_fix[0])
             if fwd_max[0] is not None and ga < fwd_max[0]:
                 goal[0:2] += (fwd_max[0] - ga) * u_fix[0]
             fwd_max[0] = ga if fwd_max[0] is None else max(fwd_max[0], ga)
             ex.set_goal(xyz=goal)
-            # terminal mode: d is HORIZONTAL-only, so from a high
-            # perturbed hover the grip would fire 3-13 cm above the
-            # object and the 30-tick close-abort would kill the
-            # episode during the slow descent -- gate the fire on
-            # near-z-alignment first (terminal episodes only)
-            z_ok = (not terminal
-                    or abs(float((self.jaws() - aim_l)[2])) < 0.02)
-            if not fired[0] and d < fire_d and z_ok:
+            if not fired[0] and d < fire_d:
                 fired[0] = True
                 fire_tick[0] = tick_n[0]
                 ex.set_goal(grip=close)
@@ -661,9 +684,11 @@ class V2Runner(A.Runner):
         oxy = self.data.qpos[adr:adr + 2]
         return float(np.linalg.norm(oxy - self.bin_xy))
 
-    def episode_v2(self, corrective=False, obj=None, terminal=False):
+    def episode_v2(self, corrective=False, obj=None, terminal=False,
+                   layout=None):
         obj, start, alt, tgt = self.reset_scene_v2(obj=obj,
-                                                   corrective=corrective)
+                                                   corrective=corrective,
+                                                   layout=layout)
         task = A.PROMPT_MANIP.format(obj=obj)
         frames = []
         grasped = self.pick_v2(frames, task, alt, corrective=corrective,

@@ -536,6 +536,42 @@ same tag; videos on.
   checkpoints with the SAME pinned-noise protocol on the extended
   val set → mini gate (beat 175.5 mm or weld) → full n=60+20 under
   naive AND RTC execution (E3 composes with E2).
+
+### E3 amendments (2026-09-05/06, Hana's review + failure taxonomy)
+
+- **Baseline failure taxonomy (all 60 frozen-eval episodes, from
+  trajectories + regenerated scenes):** 27 reached the RIGHT
+  object's terminal zone (<60 mm lateral; conversion failures), 7
+  near-parked (60–150 mm), **16 flew to the WRONG object (12 of
+  them into ITS terminal zone, some at 2–8 mm) — language-grounding
+  failures**, 10 drifted. 39/60 fly a terminal-zone approach to
+  SOME object: control is largely solved; conversion + grounding
+  are the two remaining failure families. Confusions are
+  asymmetric (10/16 commanded-weight→went-to-penguin — salience +
+  nameability bias toward the blue penguin).
+- **Terminal flavour REDESIGNED (Hana):** the perturbed-hover and
+  lateral-dogleg versions are replaced by drift-then-yaw-correct,
+  built only from standard primitives: level nose-first leg to a
+  false point (lateral 2–5.5 cm = the MEASURED near-cluster
+  distribution, median 32 mm; 6–10 cm short), then the standard
+  yaw-in-place re-pointing the gripper at the object, then the
+  UNTOUCHED normal creep/fire/grasp (stock creep byte-identical
+  for all flavours). Injected misalignment never exceeds the
+  measured policy misalignment (Hana: don't teach more drift than
+  π exhibits). Status: debugging (local logic check weak; the
+  close-range re-yaw swings the 0.2 m jaw lever — being tuned
+  before any demo).
+- **NEW grounding component — paired-command episodes:** for each
+  standard-scene layout, TWO episodes with identical object
+  positions/spawn/box side and only the instruction changed
+  (runner support: `reset_scene_v2(layout=…)` replay +
+  `last_layout`). Rationale: action-only supervision leaves
+  instruction-target binding to cross-episode statistics; pairs
+  make the sentence the only distinguishing signal.
+- **NEW pre-registered secondary metric for ALL future evals:
+  grounding rate** — which object's terminal zone (<60 mm lateral)
+  the jaws approached: correct / wrong / neither, computed from
+  trajectories + regenerated scene positions.
 - **2026-09-04 15:08 — PROTOCOL AMENDMENT (Hana): training EXTENDED
   30k → 60k** because the validation curve is still descending at 25k
   (0.000217 → 0.000061 from 10k to 25k with no sustained upturn — the
