@@ -449,7 +449,12 @@ class V2Runner(A.Runner):
             perp = np.array([-u_app[1], u_app[0]])
             side = 1.0 if float(self.rng.uniform()) < 0.5 else -1.0
             lat = float(self.rng.uniform(0.02, 0.055))
-            short = float(self.rng.uniform(0.06, 0.10))
+            # 10-16 cm short (was 6-10): the post-yaw creep needs
+            # runway for the lateral offset to converge before the
+            # jaws pass the object -- at 6-10 cm the pass-through
+            # guard correctly aborted (~65-79 mm stalls, diag
+            # 2026-09-06); the standard creep gets 45 cm
+            short = float(self.rng.uniform(0.10, 0.16))
             false_xy = (aim_t[0:2] + side * lat * perp
                         - short * u_app)
             # jaws to the false point, level at the current altitude
@@ -938,9 +943,11 @@ if __name__ == "__main__":
                                macro_block_size=1)
         for _ in range(6):
             frames, res = r.episode_v2(terminal=True)
-            print("TERM %-14s grasped=%-5s d_bin=%s mm  table_hits=%d "
-                  "obj_hits=%d %s (%d ticks)"
+            print("TERM %-14s grasped=%-5s d_bin=%s mm  dmin=%.1fmm "
+                  "fired=%s table_hits=%d obj_hits=%d %s (%d ticks)"
                   % (res["obj"], res["grasped"], res["d_bin_mm"],
+                     1000 * r._creep_diag["dmin"],
+                     r._creep_diag["fired"],
                      res["table_hits"], res["obj_hits"],
                      "CLEAN" if res["clean"] else "REJECT",
                      res["ticks"]), flush=True)
