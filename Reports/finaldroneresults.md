@@ -393,6 +393,42 @@ episodes are retained in the manifest as evidence.
     401 — job's HF_HOME redirect hid the token; fixed with
     HF_TOKEN_PATH pointing at the standard token file, never read
     or moved).
+
+## E-track — pre-registration (declared 2026-09-05, BEFORE any E run)
+
+Goal (Hana): grasp success ≥60%. Baseline forever: full47k5
+(naive-50, 1/60 picked, 1/60 placed, median 170.8 mm). All E
+conditions use checkpoint 047500, scene seed 97000, torch seed 1000,
+the SAME tick budgets (1200 pick / 500 nav), and the
+replay-validated harness — only the declared knob changes. Primary
+metric: picked rate on n=60; secondary: placed rate, median miss_mm,
+nav success. Each condition gets its own tag; no re-runs under the
+same tag; videos on.
+
+- **E1 — execution horizon 10:** execute the first 10 actions of
+  each 50-step chunk, then re-infer (replan at 1 Hz instead of
+  0.2 Hz). Implemented as `eval_v2.py --exec 10`; `--exec` defaults
+  to 50 = EXACTLY the frozen baseline behaviour (flag absent ⇒
+  byte-identical code path). Evidence: π0.5-LIBERO 75%→90% from the
+  same change. Protocol: one mini (10+4, tag e1mini47k5) to measure
+  wall-clock ONLY (no selection on its results), then the full
+  n=60+20 (tag e1full47k5) regardless of the mini's numbers.
+- **E2 — Real-Time Chunking:** prefix-frozen inpainting during flow
+  sampling (Black et al. 2506.07339). Availability of the LeRobot
+  implementation on the pinned cluster env to be CHECKED (never
+  assumed); if absent, implement prefix guidance in eval-side code
+  against the pinned pi0 sampling loop, validated by expert replay
+  + a paired mini before any full run.
+- **E3 — terminal-corrective flavour + fine-tune:** new collection
+  flavour spawning the expert at near-miss hover states (3–10 cm
+  offsets around the target, the policy's actual failure
+  distribution), ~150 episodes, fine-tune FROM 047500; re-select on
+  the existing validation protocol extended with the new episodes'
+  val split.
+- **E4 — test-time sampling (best-of-N chunks)** and **E5 —
+  residual RL fine-tune**: escalation reserves; specified in detail
+  only if E1–E3 leave the target unmet (details pre-registered
+  before running).
 - **2026-09-04 15:08 — PROTOCOL AMENDMENT (Hana): training EXTENDED
   30k → 60k** because the validation curve is still descending at 25k
   (0.000217 → 0.000061 from 10k to 25k with no sustained upturn — the
