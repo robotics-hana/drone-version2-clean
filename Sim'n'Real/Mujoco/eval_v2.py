@@ -22,6 +22,8 @@ enforced -- the policy is being measured, not curated).
 usage:
   python eval_v2.py <ckpt> <n_pick> <n_nav> --torchseed 1000 --tag TAG \
       [--video]     # film each episode: v2vid_TAG_pick00.mp4 etc.
+      [--exec N]    # execute N of 50 actions per chunk then replan
+                    # (default 50 = the frozen naive baseline; E1=10)
 """
 import hashlib
 import json
@@ -53,6 +55,22 @@ SCENE_SEED = 97000                     # NEW family: disjoint from
                                        # collection (71000), v1 eval
                                        # (77000), probes (88000)
 HORIZON = 50
+# E1 (pre-registered 2026-09-05): actions EXECUTED per 50-step chunk
+# before re-inferring. Default 50 = the frozen naive baseline -- with
+# the flag absent the loop counts and executed actions are identical
+# to every prior run. --exec 10 replans at 1 Hz instead of 0.2 Hz;
+# the per-episode tick budgets are enforced exactly (divisibility
+# asserted). NOTE: this block must sit BELOW the HORIZON definition
+# (review 2026-09-05 caught a NameError from the original placement).
+assert not any(a.startswith("--exec=") for a in sys.argv), \
+    "use the space form '--exec N' ('--exec=N' would be silently ignored)"
+EXEC = (int(sys.argv[sys.argv.index("--exec") + 1])
+        if "--exec" in sys.argv else HORIZON)
+assert 1 <= EXEC <= HORIZON, "exec horizon must be in [1, %d]" % HORIZON
+PICK_TICKS = 1200                       # 24 x 50 in the baseline
+NAV_TICKS = 500                         # 10 x 50 in the baseline
+assert PICK_TICKS % EXEC == 0 and NAV_TICKS % EXEC == 0, \
+    "exec horizon must divide both tick budgets (use 1/2/4/5/10/20/25/50)"
 KEY = {"observation.images.camera3": "observation.images.base_0_rgb",
        "observation.images.camera1": "observation.images.left_wrist_0_rgb",
        "observation.images.camera2": "observation.images.right_wrist_0_rgb"}
@@ -74,7 +92,7 @@ for _m in ("collect_airvla", "collect_v2", "pd_flight", "collect_demos"):
             open(_mod.__file__, "rb").read()).hexdigest()[:12]
 print("PROV " + json.dumps(dict(
     script_sha=hashlib.sha256(open(__file__, "rb").read()).hexdigest()[:12],
-    dep_sha=DEPS,
+    dep_sha=DEPS, exec_horizon=EXEC,
     ckpt=CKPT, argv=sys.argv[1:], torch_seed=TORCHSEED,
     scene_seed=SCENE_SEED, tag=TAG,
     when=time.strftime("%Y-%m-%dT%H:%M:%S"))), flush=True)
@@ -219,12 +237,12 @@ def run_pick(i):
     vid = (imageio.get_writer("v2vid_%s_pick%02d.mp4" % (TAG, i),
                               fps=10, codec="libx264", quality=8,
                               macro_block_size=1) if VIDEO else None)
-    for chunk_i in range(24):          # 24 x 50 ticks = 120 s cap
-        with torch.no_grad():
+    for chunk_i in range(PICK_TICKS // EXEC):   # 120 s cap regardless
+        with torch.no_grad():                   # of exec horizon
             batch = PRE(obs_batch(task))
             chunk = policy.predict_action_chunk(batch)
             chunk = POST(chunk)[0].float().cpu().numpy()[:HORIZON]
-        for a in chunk:
+        for a in chunk[:EXEC]:
             plat.tick(a)
             frames_n += 1
             if vid is not None and frames_n % 2 == 0:
@@ -289,12 +307,12 @@ def run_nav(i):
     vid = (imageio.get_writer("v2vid_%s_nav%02d.mp4" % (TAG, i),
                               fps=10, codec="libx264", quality=8,
                               macro_block_size=1) if VIDEO else None)
-    for chunk_i in range(10):          # 50 s cap
-        with torch.no_grad():
+    for chunk_i in range(NAV_TICKS // EXEC):    # 50 s cap regardless
+        with torch.no_grad():                   # of exec horizon
             batch = PRE(obs_batch(task))
             chunk = policy.predict_action_chunk(batch)
             chunk = POST(chunk)[0].float().cpu().numpy()[:HORIZON]
-        for a in chunk:
+        for a in chunk[:EXEC]:
             plat.tick(a, nav=True)
             frames_n += 1
             if vid is not None and frames_n % 2 == 0:
