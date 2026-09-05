@@ -325,6 +325,21 @@ episodes are retained in the manifest as evidence.
   `Reports/eval_logs/eval_v2_traj_mini_20260905.jsonl`. Next
   referendum: full frozen n=60+20 eval of the 60k-curve T4 winner
   under this validated harness.
+- **2026-09-05 04:5x — 60k TRAINING + FULL VALIDATION CURVE COMPLETE;
+  T4 SELECTION: checkpoint 047500, val action-MSE 0.0000455.**
+  Training (job 280833) exited 0 at step 60,000; rolling daemon (job
+  280834) scored every checkpoint with the pinned-noise paired
+  protocol and self-terminated. Full curve (24 points,
+  `eval_logs/v2_valcurve_60k.json`): 0.000590 (2.5k) → 0.000119
+  (15k) → 0.0000594 (27.5k) → 0.0000528 (40k) → **0.0000455
+  (47.5k, minimum)** → 0.000048–0.000055 (50k–60k, mild upturn).
+  The extension verdict: 30k→47.5k bought a further −23% validation
+  error at floor LR; past 47.5k the curve turns gently up — a
+  genuine, well-bracketed minimum. Winner has full per-dim +
+  per-flavour data (T5). Job 283113 runs the winner's mini (10+4,
+  tag mini47k5, filmed, validated harness) as the pre-eval smoke;
+  the full frozen n=60 pick + 20 nav evaluation of 047500 follows a
+  clean mini.
 - **2026-09-04 15:08 — PROTOCOL AMENDMENT (Hana): training EXTENDED
   30k → 60k** because the validation curve is still descending at 25k
   (0.000217 → 0.000061 from 10k to 25k with no sustained upturn — the
