@@ -793,15 +793,12 @@ def parking_window(frames):
     return tg - int(nz[-1]) if len(nz) else tg
 
 
-def collect_main(repo_id, seed, n_units):
-    """The v2 collection: n_units x [9 standard picks + 3 corrective +
-    8 nav] = balanced 27:9:24 mix (30 units = 600 episodes: 270/90/240,
-    Hana's composition 360 pick-and-place + 240 nav). Every attempt --
-    banked or rejected -- is recorded in a jsonl manifest with its
-    kind, object, scene configuration, gate counters and outcome, per
-    the dissertation checklist (sections B and F)."""
-    import json
-    import time
+def _make_v2_dataset(repo_id):
+    """Shared writer setup for every v2-family collection: installs the
+    version-proof ffmpeg concat patch (atomic, truncation-guarded) and
+    creates the LeRobotDataset with the v2 feature schema. Extracted
+    verbatim from collect_main (2026-09-06) so the E3 collection cannot
+    drift from the 600-episode-proven path."""
     import subprocess
     import tempfile
     from pathlib import Path
@@ -858,10 +855,35 @@ def collect_main(repo_id, seed, n_units):
                           "names": A.ACTION_NAMES}
     enc = A.C.pick_rgb_encoder()
     enc.crf = 20
-    dataset = LeRobotDataset.create(repo_id=repo_id, fps=A.FPS,
-                                    features=features,
-                                    robot_type="skygrip",
-                                    rgb_encoder=enc)
+    return LeRobotDataset.create(repo_id=repo_id, fps=A.FPS,
+                                 features=features,
+                                 robot_type="skygrip",
+                                 rgb_encoder=enc)
+
+
+def _bank_episode(dataset, frames):
+    """Write one accepted episode; True on success. A writer failure
+    must not kill a long job (the av crash of job 257126)."""
+    try:
+        for f in frames:
+            dataset.add_frame(f)
+        dataset.save_episode(parallel_encoding=False)
+        return True
+    except Exception as e:                # noqa: BLE001
+        print("WRITER-ERROR: %s" % e, flush=True)
+        return False
+
+
+def collect_main(repo_id, seed, n_units):
+    """The v2 collection: n_units x [9 standard picks + 3 corrective +
+    8 nav] = balanced 27:9:24 mix (30 units = 600 episodes: 270/90/240,
+    Hana's composition 360 pick-and-place + 240 nav). Every attempt --
+    banked or rejected -- is recorded in a jsonl manifest with its
+    kind, object, scene configuration, gate counters and outcome, per
+    the dissertation checklist (sections B and F)."""
+    import json
+    import time
+    dataset = _make_v2_dataset(repo_id)
     r = V2Runner(seed)
     unit = (["std"] * 9 + ["corr"] * 3 + ["nav"] * 8)
     plan = unit * n_units
@@ -907,16 +929,8 @@ def collect_main(repo_id, seed, n_units):
             print("attempt %d [%s] REJECTED: %s" % (attempts, kind,
                                                     reason), flush=True)
             continue
-        try:
-            for f in frames:
-                dataset.add_frame(f)
-            dataset.save_episode(parallel_encoding=False)
-        except Exception as e:            # noqa: BLE001 -- a writer
-            # failure on one episode must not kill a 15 h job (the av
-            # incompatibility crash of job 257126); log and continue
-            print("attempt %d [%s] WRITER-ERROR: %s" % (attempts, kind,
-                                                        e), flush=True)
-            rec.update(banked=False, reason="writer:%s" % e)
+        if not _bank_episode(dataset, frames):
+            rec.update(banked=False, reason="writer-error")
             man.write(json.dumps(rec) + "\n")
             man.flush()
             continue
@@ -932,9 +946,115 @@ def collect_main(repo_id, seed, n_units):
           % (saved, len(plan), attempts), flush=True)
 
 
+def _judge_pick(res):
+    """Shared accept/reject verdict for pick-family episodes (same
+    rules as collect_main): grasped + placed inside the box + clean."""
+    placed = (res["d_bin_mm"] is not None and res["d_bin_mm"] <= 150.0)
+    ok = bool(res["grasped"] and placed and res["clean"])
+    reason = (None if ok else
+              "table-clip" if res["table_hits"] else
+              "object-strike" if res["obj_hits"] else
+              "grasp-miss" if not res["grasped"] else
+              "placed-outside")
+    return ok, reason
+
+
+def collect_e3_main(repo_id, seed, n_term=150, n_pair=80):
+    """The E3 collection (pre-registered; Hana's demo sign-off
+    2026-09-06): n_term terminal-corrective episodes (drift-then-yaw-
+    correct) + n_pair PAIRED-COMMAND units. A pair = two episodes on
+    an identical layout (positions, spawn, box side) differing only in
+    the commanded object -- the grounding contrast. Each slot retries
+    up to 6 attempts; a pair member retries on ITS OWN layout (member
+    A defines it). If B never banks, A stands alone and the pair is
+    recorded incomplete. Manifest: e3_manifest_<seed>.jsonl."""
+    import json
+    import time
+    dataset = _make_v2_dataset(repo_id)
+    r = V2Runner(seed)
+    man = open("e3_manifest_%d.jsonl" % seed, "a")
+    saved = attempts = 0
+    total = n_term + 2 * n_pair
+    t0 = time.time()
+
+    def attempt(kind, slot, pair_id=None, obj=None, layout=None,
+                terminal=False):
+        nonlocal attempts, saved
+        attempts += 1
+        rec = dict(attempt=attempts, slot=slot, kind=kind,
+                   pair_id=pair_id, collector_seed=seed)
+        try:
+            frames, res = r.episode_v2(obj=obj, layout=layout,
+                                       terminal=terminal)
+        except Exception as e:            # noqa: BLE001 -- log + retry
+            rec.update(banked=False, reason="exception:%s" % e)
+            man.write(json.dumps(rec) + "\n")
+            man.flush()
+            return False, None
+        ok, reason = _judge_pick(res)
+        rec.update(res)
+        rec.update(banked=ok, reason=reason,
+                   parking=parking_window(frames),
+                   layout=r.last_layout)
+        man.write(json.dumps(rec) + "\n")
+        man.flush()
+        if not ok:
+            print("attempt %d [%s] REJECTED: %s" % (attempts, kind,
+                                                    reason), flush=True)
+            return False, None
+        if not _bank_episode(dataset, frames):
+            rec2 = dict(rec, banked=False, reason="writer-error")
+            man.write(json.dumps(rec2) + "\n")
+            man.flush()
+            return False, None
+        saved += 1
+        if saved % 10 == 0:
+            el = time.time() - t0
+            print("BANKED %d/%d (%d attempts, %.1f h, eta %.1f h)"
+                  % (saved, total, attempts, el / 3600,
+                     el / 3600 * (total - saved) / max(1, saved)),
+                  flush=True)
+        return True, res
+
+    for slot in range(n_term):
+        for _ in range(6):
+            ok, _res = attempt("term", slot, terminal=True)
+            if ok:
+                break
+    for p in range(n_pair):
+        slot = n_term + p
+        okA = False
+        for _ in range(6):
+            okA, resA = attempt("pairA", slot, pair_id=p)
+            if okA:
+                break
+        if not okA:
+            continue
+        layout = dict(r.last_layout)
+        objB = [k for k in r.objs if k != resA["obj"]][0]
+        okB = False
+        for _ in range(6):
+            okB, _resB = attempt("pairB", slot, pair_id=p, obj=objB,
+                                 layout=layout)
+            if okB:
+                break
+        if not okB:
+            print("pair %d INCOMPLETE (A banked alone)" % p,
+                  flush=True)
+    print("COLLECT-E3-DONE %d/%d banked in %d attempts"
+          % (saved, total, attempts), flush=True)
+
+
 if __name__ == "__main__":
     mode, out = sys.argv[1], sys.argv[2]
-    assert mode in ("demo", "demonav", "demoterm", "collect")
+    assert mode in ("demo", "demonav", "demoterm", "collect",
+                    "collecte3")
+    if mode == "collecte3":
+        # usage: collecte3 <repo_id> <seed> [n_term n_pair]
+        collect_e3_main(out, int(sys.argv[3]),
+                        int(sys.argv[4]) if len(sys.argv) > 4 else 150,
+                        int(sys.argv[5]) if len(sys.argv) > 5 else 80)
+        sys.exit(0)
     if mode == "demoterm":
         # E3 terminal-corrective flavour demo (6 eps, coin-flip
         # objects) for sign-off before any collection
