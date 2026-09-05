@@ -340,6 +340,22 @@ episodes are retained in the manifest as evidence.
   tag mini47k5, filmed, validated harness) as the pre-eval smoke;
   the full frozen n=60 pick + 20 nav evaluation of 047500 follows a
   clean mini.
+- **2026-09-05 06:1x — mini47k5 COMPLETE (job 283113, exit 0):
+  FIRST CLOSED-LOOP GRASP OF THE v2 CAMPAIGN.** Episode 9: miss
+  9.3 mm, weld at tick 732, object lifted and carried to episode end
+  (picked=true; not placed — carried away from the bin). On film:
+  `v2vid_mini47k5_pick09.mp4` (grasp-moment sheet banked). Full
+  results: PICK n=10 median 175.5 mm, 1 picked, 0 placed (9.3 /
+  63.6 / 66.1 / 110.8 / 161.7 / 175.5 / 303.5 / 435.4 / 482.2 /
+  613.9); NAV 2/4 (crossed 4/4, two hover misses). Paired read vs
+  30k (same scenes/noise/harness): 047500 converts one near-miss
+  scene into a grasp; per-scene misses track 30k's pattern
+  otherwise; median higher (175.5 vs 98.8) but medians at n=10 are
+  noisy — the grasp is the qualitative difference. Videos
+  `v2vid_mini47k5_*.mp4` (14); traj
+  `eval_logs/eval_v2_traj_mini47k5.jsonl`. Mini is clean → FULL
+  FROZEN EVAL of 047500 submitted: n=60 pick + 20 nav, filmed, tag
+  full47k5 — the ledger's headline number.
 - **2026-09-04 15:08 — PROTOCOL AMENDMENT (Hana): training EXTENDED
   30k → 60k** because the validation curve is still descending at 25k
   (0.000217 → 0.000061 from 10k to 25k with no sustained upturn — the
