@@ -387,6 +387,12 @@ episodes are retained in the manifest as evidence.
     success sheet banked; traj `eval_logs/eval_v2_traj_full47k5.jsonl`;
     curve `eval_logs/v2_valcurve_60k.json`; PROV in
     `v2full47k5.log` (script e5ed513b62d5, dep hashes recorded).
+  - Selected checkpoint PUBLISHED:
+    `hanapasta/airvla_v2_pi0_047500` (private), read-back-verified
+    revision `a405a487f891`, 8 files (first upload attempt failed
+    401 — job's HF_HOME redirect hid the token; fixed with
+    HF_TOKEN_PATH pointing at the standard token file, never read
+    or moved).
 - **2026-09-04 15:08 — PROTOCOL AMENDMENT (Hana): training EXTENDED
   30k → 60k** because the validation curve is still descending at 25k
   (0.000217 → 0.000061 from 10k to 25k with no sustained upturn — the
