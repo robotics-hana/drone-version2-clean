@@ -24,6 +24,8 @@ usage:
       [--video]     # film each episode: v2vid_TAG_pick00.mp4 etc.
       [--exec N]    # execute N of 50 actions per chunk then replan
                     # (default 50 = the frozen naive baseline; E1=10)
+      [--rtc]       # E2: RTC prefix guidance across chunks (needs
+                    # --exec < 50); default off = baseline sampling
 """
 import hashlib
 import json
@@ -71,15 +73,54 @@ PICK_TICKS = 1200                       # 24 x 50 in the baseline
 NAV_TICKS = 500                         # 10 x 50 in the baseline
 assert PICK_TICKS % EXEC == 0 and NAV_TICKS % EXEC == 0, \
     "exec horizon must divide both tick budgets (use 1/2/4/5/10/20/25/50)"
+# E2 (pre-registered 2026-09-05): Real-Time Chunking prefix guidance
+# during flow sampling (LeRobot's built-in RTCProcessor). E1 showed
+# naive fast replanning is harmful (plan churn from fresh noise per
+# inference); RTC conditions each new chunk on the previous chunk's
+# unexecuted tail so consecutive plans stay consistent. Synchronous
+# harness => inference_delay=0 (soft consistency over the overlap,
+# nothing hard-frozen). Default off => every non-RTC path untouched.
+RTC = "--rtc" in sys.argv
+if RTC:
+    assert EXEC < HORIZON, "--rtc needs --exec < %d (chunk overlap)" % HORIZON
 KEY = {"observation.images.camera3": "observation.images.base_0_rgb",
        "observation.images.camera1": "observation.images.left_wrist_0_rgb",
        "observation.images.camera2": "observation.images.right_wrist_0_rgb"}
 
 policy = PI0Policy.from_pretrained(CKPT)
+if RTC:
+    from lerobot.policies.rtc.configuration_rtc import RTCConfig
+    policy.config.rtc_config = RTCConfig(enabled=True,
+                                         execution_horizon=EXEC)
+    policy.init_rtc_processor()         # wires processor into model
 torch.manual_seed(TORCHSEED)
 torch.cuda.manual_seed_all(TORCHSEED)
 PRE, POST = make_pre_post_processors(policy.config, pretrained_path=CKPT)
 policy = policy.to("cuda").eval()
+
+
+def infer_chunk(batch, prev_tail):
+    """One policy inference. Returns (denormalized 50x7 numpy chunk,
+    next prev_tail). Without --rtc this is EXACTLY the baseline call
+    chain; with it, the previous chunk's unexecuted tail guides the
+    flow sampling (prefix consistency). The tail is kept in the
+    model's NORMALIZED action space and zero-padded to
+    max_action_dim -- the space RTCProcessor compares against x_t.
+    (Zero-padding matches LeRobot's own reference RTC rollout, which
+    passes the unpadded normalized tail and lets the processor
+    zero-pad identically; the pad dims are unsupervised at training,
+    review 2026-09-05, so guidance there is a benign nudge to 0.)"""
+    if RTC:
+        raw = policy.predict_action_chunk(
+            batch, prev_chunk_left_over=prev_tail,
+            inference_delay=0, execution_horizon=EXEC)
+        tail = raw[:, EXEC:HORIZON, :].detach()
+        pad = policy.config.max_action_dim - tail.shape[-1]
+        prev_tail = torch.nn.functional.pad(tail, (0, pad))
+    else:
+        raw = policy.predict_action_chunk(batch)
+    chunk = POST(raw)[0].float().cpu().numpy()[:HORIZON]
+    return chunk, prev_tail
 
 # hash the physics/scene dependencies too, not just this script --
 # pairing across runs depends on them and cluster file drift is a
@@ -92,7 +133,7 @@ for _m in ("collect_airvla", "collect_v2", "pd_flight", "collect_demos"):
             open(_mod.__file__, "rb").read()).hexdigest()[:12]
 print("PROV " + json.dumps(dict(
     script_sha=hashlib.sha256(open(__file__, "rb").read()).hexdigest()[:12],
-    dep_sha=DEPS, exec_horizon=EXEC,
+    dep_sha=DEPS, exec_horizon=EXEC, rtc=RTC,
     ckpt=CKPT, argv=sys.argv[1:], torch_seed=TORCHSEED,
     scene_seed=SCENE_SEED, tag=TAG,
     when=time.strftime("%Y-%m-%dT%H:%M:%S"))), flush=True)
@@ -237,11 +278,11 @@ def run_pick(i):
     vid = (imageio.get_writer("v2vid_%s_pick%02d.mp4" % (TAG, i),
                               fps=10, codec="libx264", quality=8,
                               macro_block_size=1) if VIDEO else None)
+    prev_tail = None                    # RTC: previous chunk's tail
     for chunk_i in range(PICK_TICKS // EXEC):   # 120 s cap regardless
         with torch.no_grad():                   # of exec horizon
             batch = PRE(obs_batch(task))
-            chunk = policy.predict_action_chunk(batch)
-            chunk = POST(chunk)[0].float().cpu().numpy()[:HORIZON]
+            chunk, prev_tail = infer_chunk(batch, prev_tail)
         for a in chunk[:EXEC]:
             plat.tick(a)
             frames_n += 1
@@ -307,11 +348,11 @@ def run_nav(i):
     vid = (imageio.get_writer("v2vid_%s_nav%02d.mp4" % (TAG, i),
                               fps=10, codec="libx264", quality=8,
                               macro_block_size=1) if VIDEO else None)
+    prev_tail = None                    # RTC: previous chunk's tail
     for chunk_i in range(NAV_TICKS // EXEC):    # 50 s cap regardless
         with torch.no_grad():                   # of exec horizon
             batch = PRE(obs_batch(task))
-            chunk = policy.predict_action_chunk(batch)
-            chunk = POST(chunk)[0].float().cpu().numpy()[:HORIZON]
+            chunk, prev_tail = infer_chunk(batch, prev_tail)
         for a in chunk[:EXEC]:
             plat.tick(a, nav=True)
             frames_n += 1

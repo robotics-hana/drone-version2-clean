@@ -429,6 +429,38 @@ same tag; videos on.
   residual RL fine-tune**: escalation reserves; specified in detail
   only if E1–E3 leave the target unmet (details pre-registered
   before running).
+
+### E1 RESULT (2026-09-05, job 284127, exit 0) — FALSIFIED
+
+- e1mini47k5 (exec-10, 10+4, same scenes): PICK median **337.6 mm
+  (naive mini: 175.5), 0 welds**; NAV 1/4 (crossed 4/4). The
+  reliable grasp scene (ep9: 9.3–9.8 mm + weld in BOTH naive runs)
+  collapsed to 486.6 mm. Verdict: naive 1 Hz replanning is
+  HARMFUL for this policy — π₀ draws fresh noise per inference, so
+  5× replans inject 5× plan-resampling churn with no cross-chunk
+  consistency; the policy dithers between approach plans instead of
+  committing (the LIBERO 75→90% transfer does NOT hold here).
+- **DOCUMENTED DEVIATION:** the pre-registered "E1 full n=60
+  regardless of the mini" is DEFERRED for futility (10–12 GPU-h on
+  a decisively harmful arm); Hana can overrule. The mini stands as
+  the E1 record.
+
+### E2 pre-registration (declared BEFORE implementation/run)
+
+- **E2 = RTC + exec-10**: LeRobot 0.6's built-in RTCProcessor
+  (`RTCConfig(enabled=True, execution_horizon=10)`, LINEAR prefix
+  schedule, max_guidance_weight 10 = defaults), `inference_delay=0`
+  (synchronous harness — physics pauses during inference; RTC here
+  provides cross-chunk prefix consistency, the designed cure for
+  E1's churn). Leftover = the previous chunk's unexecuted tail in
+  the model's normalized action space, zero-padded to
+  max_action_dim (π₀ pads actions with zeros by construction).
+  `--rtc` flag; PROV records rtc + guidance params; default-off ⇒
+  baseline path untouched.
+- **Futility gate (learned from E1):** mini (10+4, tag e2mini47k5)
+  first; proceed to full n=60+20 (e2full47k5) ONLY IF the mini
+  median < 175.5 mm (the naive mini) OR any weld occurs; otherwise
+  stop, record, and escalate to E3 (terminal-corrective data).
 - **2026-09-04 15:08 — PROTOCOL AMENDMENT (Hana): training EXTENDED
   30k → 60k** because the validation curve is still descending at 25k
   (0.000217 → 0.000061 from 10k to 25k with no sustained upturn — the
