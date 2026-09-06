@@ -96,9 +96,15 @@ def heading(disp, d_own, d_oth):
 
 
 results = {}
+if Path(OUT).exists():
+    results = json.load(open(OUT)).get("results", {})
+    print("resuming: %d checkpoints already probed" % len(results),
+          flush=True)
 ckpts = sorted(p for p in Path(CKPT_ROOT).iterdir()
                if p.name.isdigit())
 for ck in ckpts:
+    if ck.name in results:
+        continue
     pm = ck / "pretrained_model"
     policy = PI0Policy.from_pretrained(str(pm)).to("cuda").eval()
     pre, post = make_pre_post_processors(policy.config,
@@ -141,6 +147,10 @@ for ck in ckpts:
     print("ckpt %s: correct %.2f wrong %.2f null %.2f FLIP %.2f"
           % (ck.name, correct / n, wrong / n, null / n, flips / n),
           flush=True)
+    # incremental save (2026-09-06: a node requeue truncated the
+    # first probe run mid-sweep and end-only saving lost the rows)
+    json.dump(dict(partial=True, noise_seed=NOISE_SEED,
+                   results=results), open(OUT, "w"), indent=1)
     del policy
     torch.cuda.empty_cache()
 
