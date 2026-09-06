@@ -609,6 +609,34 @@ same tag; videos on.
   videos; gate = any weld OR median < 175.5 mm) → full frozen
   n=60+20 naive with grounding rate; an +RTC composition arm may
   follow as its own tagged condition.
+
+### E3 RESULTS — collection & first fine-tune (2026-09-06)
+
+- **Collection PERFECT: 310/310 banked in 310 attempts, zero
+  rejections** (150 term, 76w/74p; 80 complete pairs; ticks
+  345–655, mean 491). Merge: `airvla_v21` = 910 eps / 391,750
+  frames (rev 3337e1a5c28d; e3 repo rev 17f06af15c6f); split
+  728/182, original verbatim, pairs as units, integrity asserted.
+  Manifests/split banked in `eval_logs/`.
+- **Fine-tune run A (jobs 287021/287022, full-recipe LR): FAILED
+  the pre-registered T4-E3 constraint — 047500 REMAINS THE
+  POLICY.** Combined-val curve (baseline 047500 = 0.000062):
+  2.5k 0.000187 · 5k 0.000198 · 7.5k 0.000117 · 10k 0.000120 ·
+  12.5k 0.000091 · 15k 0.000099. No checkpoint beat baseline; the
+  per-flavour splits show GLOBAL churn (old flavours 1.4–3× worse
+  AND term/pair flavours above even the baseline's scores) — the
+  2.5e-5 peak LR was too aggressive for a 4B fine-tune on a 30%
+  data delta; the low-LR tail recovered too late and ticked up at
+  15k. Curve banked: `eval_logs/e3_valcurve.json`.
+- **Plan B (recipe amendment, staged BEFORE the verdict, submitted
+  on it): fine-tune run B = identical except peak LR 5e-6 (5×
+  gentler), decay to 5e-7 over 10,000 = steps, output
+  pi0_e3b_out.** Jobs 290276 (train) + 290277 (validation daemon,
+  same protocol, out e3b_valcurve.json). Same selection rule.
+- **Grounding probe submitted on run A's checkpoints anyway (job
+  290275)**: if even the churned fine-tune shows a flip-rate rise
+  over baseline, the paired-command mechanism is confirmed
+  independent of the LR mishap.
 - **2026-09-04 15:08 — PROTOCOL AMENDMENT (Hana): training EXTENDED
   30k → 60k** because the validation curve is still descending at 25k
   (0.000217 → 0.000061 from 10k to 25k with no sustained upturn — the

@@ -1,0 +1,13 @@
+#$ -l h_rt=2:00:00
+#$ -l gpu=1
+#$ -ac allow=L
+#$ -N airvla_gprb
+#$ -wd /home/ucabhe0/Scratch/airvla/sim
+#$ -o /home/ucabhe0/Scratch/airvla/logs/v2gprobe.log
+#$ -j y
+export HF_HOME=$HOME/Scratch/hf_cache
+export HF_LEROBOT_HOME=/home/ucabhe0/Scratch/hf_cache/lerobot
+export HF_HUB_OFFLINE=1
+PY=/home/ucabhe0/Scratch/env-pin/bin/python
+$PY groundprobe.py /home/ucabhe0/Scratch/airvla/pi0_e3_out/checkpoints e3_split.json e3_manifest_combined.jsonl gprobe_e3.json hanapasta/airvla_v21
+echo GPROBE-EXIT=$?

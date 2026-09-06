@@ -1,0 +1,29 @@
+#$ -l h_rt=10:00:00
+#$ -l gpu=1
+#$ -ac allow=L
+#$ -N airvla_e3btr
+#$ -wd /home/ucabhe0/Scratch/airvla
+#$ -o /home/ucabhe0/Scratch/airvla/logs/v2e3btrain.log
+#$ -j y
+export HF_HOME=$HOME/Scratch/hf_cache
+export HF_LEROBOT_HOME=/home/ucabhe0/Scratch/hf_cache/lerobot
+export HF_HUB_OFFLINE=1
+if ! grep -q 'MERGE-DONE' /home/ucabhe0/Scratch/airvla/logs/v2e3merge.log; then
+  echo TRAIN-GATE-FAILED
+  exit 1
+fi
+# JANITOR (quota lesson): optimizer states ~14 GB, keep newest two
+(
+  while true; do
+    sleep 900
+    cd /home/ucabhe0/Scratch/airvla/pi0_e3b_out/checkpoints 2>/dev/null || continue
+    for d in $(ls -d [0-9]* 2>/dev/null | sort -n | head -n -2); do
+      rm -rf $d/training_state
+    done
+  done
+) &
+JANITOR=$!
+/home/ucabhe0/Scratch/env-pin/bin/python /home/ucabhe0/Scratch/airvla/e3btrain_wrapper.py
+RC=$?
+kill $JANITOR 2>/dev/null
+echo E3BTRAIN-EXIT=$RC
