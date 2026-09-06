@@ -1,0 +1,31 @@
+#$ -l h_rt=16:00:00
+#$ -l gpu=1
+#$ -ac allow=L
+#$ -N airvla_e3cvl
+#$ -wd /home/ucabhe0/Scratch/airvla/sim
+#$ -o /home/ucabhe0/Scratch/airvla/logs/v2e3cval.log
+#$ -j y
+export HF_HOME=$HOME/Scratch/hf_cache
+export HF_LEROBOT_HOME=/home/ucabhe0/Scratch/hf_cache/lerobot
+export HF_HUB_OFFLINE=1
+PY=/home/ucabhe0/Scratch/env-pin/bin/python
+if ! grep -q 'MERGE-DONE' /home/ucabhe0/Scratch/airvla/logs/v2e3merge.log; then
+  echo VAL-GATE-FAILED
+  exit 1
+fi
+mkdir -p /home/ucabhe0/Scratch/airvla/pi0_e3c_out/checkpoints
+# baseline row: the UNMODIFIED 047500 scored on the combined val set
+# (drift reference), included in the sweep as pseudo-checkpoint 000000
+ln -sfn /home/ucabhe0/Scratch/airvla/pi0_v2_out/checkpoints/047500 \
+       /home/ucabhe0/Scratch/airvla/pi0_e3c_out/checkpoints/000000
+# rolling daemon: resumable passes; done when the final fine-tune
+# checkpoint (015000) is scored
+while true; do
+  $PY valcurve_v2.py /home/ucabhe0/Scratch/airvla/pi0_e3c_out/checkpoints \
+      e3_split.json e3_manifest_combined.jsonl e3c_valcurve.json \
+      hanapasta/airvla_v21
+  echo PASS-EXIT=$?
+  grep -q '"020000"' e3c_valcurve.json && break
+  sleep 600
+done
+echo E3CVAL-ALL-DONE
