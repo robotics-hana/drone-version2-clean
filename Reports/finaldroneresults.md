@@ -636,7 +636,27 @@ same tag; videos on.
 - **Grounding probe submitted on run A's checkpoints anyway (job
   290275)**: if even the churned fine-tune shows a flip-rate rise
   over baseline, the paired-command mechanism is confirmed
-  independent of the LR mishap.
+  independent of the LR mishap. (First attempt crashed on a real
+  probe bug — parquet rows carry task_index, not the task string —
+  fixed and resubmitted as 290283.)
+- **Fine-tune run B (jobs 290276/290277, peak 5e-6): FAILED
+  selection — the opposite failure to run A.** Curve: 2.5k
+  0.000070 · 5k 0.000073 · 7.5k 0.000075 · 10k 0.000078 (baseline
+  0.000062). No churn (old-pooled only 5–15% over the ≤5.0e-5
+  constraint) but ALSO no learning — the term flavour never
+  improved past the baseline's own 1.5e-4. Diagnosis: EXPOSURE —
+  at batch 4 × 10k steps the model samples ~10% of the combined
+  frames, seeing each new-flavour frame ~0.3× in expectation.
+  Curve banked (`e3b_valcurve.json`).
+- **Plan C submitted (jobs 291164 train / 291165 val)**: fresh
+  fine-tune from 047500 with the training LIST rebalanced — all
+  248 new-flavour training episodes + a stratified HALF of the
+  original ones (~50% of each batch is new behaviour) — 20k steps
+  at the proven-gentle peak 5e-6 ⇒ ≈10× run B's new-frame
+  exposure, using no unverified sampler mechanics (episode-list
+  rebalancing only). Same selection rule; note the old-flavour
+  drift constraint is now the live risk (halved old exposure), so
+  the 1.10× guard is doing real work.
 - **2026-09-04 15:08 — PROTOCOL AMENDMENT (Hana): training EXTENDED
   30k → 60k** because the validation curve is still descending at 25k
   (0.000217 → 0.000061 from 10k to 25k with no sustained upturn — the
