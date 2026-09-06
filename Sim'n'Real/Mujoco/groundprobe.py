@@ -65,7 +65,10 @@ specs = []
 for pid, members in sorted(pairs.items()):
     if len(members) != 2:
         continue
-    tasks = {i: ds.hf_dataset[first[i]]["task"] for i in members}
+    # full __getitem__ (not raw parquet): the parquet rows store only
+    # task_index; the task STRING is joined in by the dataset's
+    # getitem (probe-crash fix 2026-09-06)
+    tasks = {i: ds[first[i]]["task"] for i in members}
     for i in members:
         r = by_idx[i]
         own = r["obj"]
