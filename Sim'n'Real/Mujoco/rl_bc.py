@@ -22,8 +22,10 @@ import torch.nn as nn
 
 import collect_v2 as V
 from rl_env import TerminalEnv, DXYZ_MAX, DGRIP_MAX
-from rl_train import ActorCritic, _NoRenderer  # noqa: F401 (renderer
-                                               # stub applied on import)
+from rl_nets import ActorCritic, _NoRenderer
+
+import mujoco as _mj
+_mj.Renderer = _NoRenderer
 
 OUT = sys.argv[1]
 SEED = (int(sys.argv[sys.argv.index("--seed") + 1])

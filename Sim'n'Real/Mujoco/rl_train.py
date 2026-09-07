@@ -26,6 +26,7 @@ import torch.nn as nn
 
 import collect_v2 as V
 from rl_env import TerminalEnv, DXYZ_MAX, DGRIP_MAX
+from rl_nets import ActorCritic, _NoRenderer
 
 OUT = Path(sys.argv[1])
 
@@ -64,37 +65,8 @@ V.V2Runner.frame = lambda self, task: {
     "action": None, "task": task}
 
 
-class _NoRenderer:
-    def __init__(self, *a, **k):
-        pass
-
-    def update_scene(self, *a, **k):
-        pass
-
-    def render(self, *a, **k):
-        return None
-
-    def close(self):
-        pass
-
-
 import mujoco as _mj                    # noqa: E402
 _mj.Renderer = _NoRenderer
-
-
-class ActorCritic(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.body = nn.Sequential(nn.Linear(12, 128), nn.Tanh(),
-                                  nn.Linear(128, 128), nn.Tanh())
-        self.mu = nn.Linear(128, 4)
-        self.logstd = nn.Parameter(torch.full((4,), -0.7))
-        self.v = nn.Linear(128, 1)
-
-    def dist(self, obs):
-        h = self.body(obs)
-        return torch.distributions.Normal(
-            torch.tanh(self.mu(h)), self.logstd.exp()), self.v(h)
 
 
 def act_scale(a):
