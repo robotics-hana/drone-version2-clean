@@ -25,9 +25,9 @@ class _NoRenderer:
 
 
 class ActorCritic(nn.Module):
-    def __init__(self):
+    def __init__(self, obs_dim=18):
         super().__init__()
-        self.body = nn.Sequential(nn.Linear(12, 128), nn.Tanh(),
+        self.body = nn.Sequential(nn.Linear(obs_dim, 128), nn.Tanh(),
                                   nn.Linear(128, 128), nn.Tanh())
         self.mu = nn.Linear(128, 4)
         self.logstd = nn.Parameter(torch.full((4,), -0.7))

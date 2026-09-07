@@ -704,6 +704,42 @@ same tag; videos on.
      rl_nets.py.
   Gate before resubmission: local 20-episode Markov-teacher BC +
   closed-loop weld test at std 0.0 and 0.22 (PPO's init noise).
+- **E5 GATE CAMPAIGN (2026-09-08, five local gates before the chain
+  was allowed back on the cluster; each failure diagnosed on
+  instrumented traces, not theory):**
+  - *Gate 2 (Markov teacher alone): 0/8.* Still-unobservable
+    inputs: the SETPOINT the creep law steers from, the
+    object-specific grasp params, and world-frame components baking
+    the approach heading into the data → 18-dim BODY-frame obs
+    (aim-jaw, sp-jaw, vel body; angvel; ap/yerr/grip; ap_lo/ap_hi/
+    close) + DART noise injection (teacher-under-noise weld 1.00).
+  - *Gate 3 (obs+DART): 0/8 — but the trace flipped the story.* The
+    clone tracks the teacher nearly perfectly and closes 379→42 mm;
+    it then NEVER STOPS (stop/fire is ~2-5% of ticks; uniform and
+    even 20×-weighted MSE both learn "creep always") and flies
+    through the object at 3 mm/tick — the 256-800 mm "divergence"
+    distances are exactly 300-tick fly-through, not instability.
+  - *Gate 4 (DAgger, 3 rounds): 0/4, poisoned labels.* Rolling the
+    clone and labeling with the teacher flooded the dataset with
+    fire labels (41 → 5,817 of 9,178): the teacher's fire latch
+    (a_fired) latches on the clone's fly-past and labels every
+    subsequent far-away tick "close", where a closed-empty gripper
+    can weld nothing and no reopen label exists.
+  - *Gate 5 (state-inferred latch + reopen recovery): the real
+    result.* Fire latch inferred from the grip (in the obs);
+    closed-empty-far states labeled REOPEN (a recovery the scripted
+    teacher never needs, a learner recovering from its own miss
+    does). Weld count still 0/4 — but the instrumented eval shows
+    the clone now APPROACHES, STOPS, AND HOVERS AT THE OBJECT:
+    dmin 5/6/30/33 mm, end-hover 14-103 mm, no fly-through. Only
+    the decisive grip close is missing (drifts 1.00→0.82; weld
+    needs ~0.5).
+  - **Reframed go/no-go (documented deviation):** the BC stage's
+    job is DELIVERY INTO THE WELD BALL, not welding — the decisive
+    close is a 1-D discovery PPO makes from dense hover states
+    (±0.045/tick grip noise over 100+ in-ball ticks, +10 weld
+    bonus). Chain resubmitted as job 301570 (DAgger BC 120+3×60 →
+    PPO 9 h from the best round's actor).
 
 - **H1C composition arm (pre-registered 2026-09-07, Hana's
   question "why not the plan-C model?"): H1 servo on C-15000** —
