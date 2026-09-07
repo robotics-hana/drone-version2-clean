@@ -94,7 +94,16 @@ class TerminalEnv:
         d_xyz = np.clip(res[0:3], -DXYZ_MAX, DXYZ_MAX)
         d_grip = float(np.clip(res[3], -DGRIP_MAX, DGRIP_MAX))
         if base_act is None:
-            base_act = np.array([0, 0, 0, 0, 0, 0, 1.0])
+            # grip channel is ABSOLUTE in this action space, so the
+            # base must carry the CURRENT grip for dgrip to act as a
+            # rate; the original 1.0 (open) base clamped the command
+            # to >=0.8 and made the weld unreachable by construction
+            # (found 2026-09-08: BC clone welded 1.00 in collection
+            # with base[6]=plat.grip but 0/8 closed-loop on the
+            # default base -- and retro-explains the 1,092-episode
+            # zero-weld "exploration cliff", which was not
+            # exploration at all)
+            base_act = np.array([0, 0, 0, 0, 0, 0, self.plat.grip])
         act = np.asarray(base_act, dtype=float).copy()
         act[0:3] = np.clip(act[0:3] + d_xyz, -0.035, 0.035)
         act[6] = float(np.clip(act[6] + d_grip, 0.0, 1.0))

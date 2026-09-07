@@ -675,6 +675,35 @@ same tag; videos on.
   12-obs proprio+privileged-target, 4-act bounded, dense −distance
   + weld bonus reward; smoke-tested). Ladder rungs stay separable:
   H1 = scripted servo, E5 = learned servo, both policy-triggered.
+- **E5 AMENDMENTS (2026-09-07/08, three defects found and fixed
+  before any result was read):**
+  1. *Zero-weld run misdiagnosed:* PPO ran 1,092 episodes with 0
+     welds; first read as a hard-exploration cliff and a BC warm
+     start was added (job 299255→299529). Post-mortem falsified the
+     cliff story: `rl_env`'s zero base held the ABSOLUTE grip
+     channel at 1.0 (open) and the |Δgrip| ≤ 0.2 residual clamps at
+     0.8 — the weld was **unreachable by construction**, not
+     hard to explore. Fix: base grip = current grip (Δgrip becomes
+     a rate; closed reachable in ~5 ticks). Job 299529 killed —
+     trained against the broken env.
+  2. *Verbatim servo clone diverges closed-loop:* BC on
+     `_servo_tick` hit MSE 0.0033 / cos 0.94 to the teacher yet
+     welded 0/8 closed-loop, drifting to 330–650 mm. Cause: the
+     servo's frozen approach axis (a_ufix) + forward ratchet
+     (a_fwd) are internal latches NOT in the 12-dim obs — the
+     teacher is not a function of the observation, so the clone
+     regresses the unresolvable x-component to a smeared mean
+     (measured mean |err|: x 0.106 vs y 0.002; ~1 mm/tick lateral
+     bias, compounding). Fix: **Markovian teacher** in rl_bc.py —
+     same law, axis re-derived from the CURRENT bearing each tick
+     (body-heading fallback inside 8 mm where bearing is unstable),
+     no ratchet. Validated 6/6 welds in TerminalEnv (t=115–148)
+     before adoption. platform_v2.py untouched (frozen-eval dep).
+  3. *rl_bc imported rl_train, executing the whole PPO trainer at
+     import* (no __main__ guard): shared classes extracted to
+     rl_nets.py.
+  Gate before resubmission: local 20-episode Markov-teacher BC +
+  closed-loop weld test at std 0.0 and 0.22 (PPO's init noise).
 
 - **H1C composition arm (pre-registered 2026-09-07, Hana's
   question "why not the plan-C model?"): H1 servo on C-15000** —
