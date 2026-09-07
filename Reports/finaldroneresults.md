@@ -648,6 +648,22 @@ same tag; videos on.
   at batch 4 × 10k steps the model samples ~10% of the combined
   frames, seeing each new-flavour frame ~0.3× in expectation.
   Curve banked (`e3b_valcurve.json`).
+- **Plan C RESULT (2026-09-07 morning): first run to LEARN — and
+  a DOCUMENTED AMENDMENT (approved by Hana).** Curve (baseline
+  0.000062): 2.5k 0.000118 → 5k 0.000117 → 7.5k 0.000081 → 10k
+  0.000081 → 12.5k 0.000077 → 15k 0.000077 → 17.5k 0.000078. The
+  terminal flavour dropped BELOW baseline from 10k on (1.43–1.46e-4
+  vs 1.49e-4 — the first genuine new-behaviour learning in any
+  run), but old-flavour drift plateaued at ~1.44× baseline
+  (6.55e-5 vs the ≤5.0e-5 limit) ⇒ fails the strict pre-registered
+  constraint. AMENDMENT (Hana, "look at B then maybe circle back"):
+  the constraint is a forgetting PROXY and this project has
+  repeatedly measured that teacher-forced magnitudes do not predict
+  closed-loop behaviour — so C-015000 (lowest drift + learned term)
+  goes to the pre-registered MINI GATE, letting closed-loop reality
+  adjudicate. Mini = job 292739 (10+4, filmed, tag e3cmini); the
+  weld-or-median gate still protects the full eval. Strict-rule
+  outcome recorded regardless.
 - **Plan C submitted (jobs 291164 train / 291165 val)**: fresh
   fine-tune from 047500 with the training LIST rebalanced — all
   248 new-flavour training episodes + a stratified HALF of the
