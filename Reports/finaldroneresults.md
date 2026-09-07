@@ -684,6 +684,25 @@ same tag; videos on.
   H1-on-047500 so the servo's marginal contribution to the BASELINE
   stays cleanly attributed. Mini = job 296131, tag h1cmini.
 
+### H1 MINI RESULT (2026-09-07, job 296054, exit 0) — THE JUMP
+
+- h1mini (047500 + terminal servo, R=0.15): **PICK n=10 median
+  20.8 mm, 4 picked, 4 PLACED (40% complete task success — 24× the
+  best pure policy)**; NAV 2/4 (assist inert on nav, matches
+  047500's own nav). Trigger accounting: servo engaged 6/10,
+  converted 4/6, every conversion a full pick-AND-place (74.1 /
+  14.2 / 62.8 / 38.0 mm from bin centre; welds at ticks
+  279/246/209/736, ~50 assist ticks each). The two servo misses
+  (10.2 / 20.8 mm stalls, both penguins) trace to the servo not
+  commanding HEADING — penguin grasps need pads-on-head-sides;
+  fix identified (slew yaw toward the live-target heading during
+  takeover) and reserved as servo-v2 (H1.1) so the pre-registered
+  R=0.15 primary runs unmodified first. The 4 non-triggers are the
+  familiar far-miss scenes — the policy's arrival rate remains the
+  binding factor, which is exactly what the H1C composition arm
+  (queued) tests. Videos banked (`v2_eval_videos/h1mini/`).
+  **H1 FULL (n=60+20) dispatched: job 296350, tag h1full.**
+
 ### C-mini RESULT (2026-09-07, job 292739, exit 0) — GATE PASSED,
 ### AMENDMENT VINDICATED
 
