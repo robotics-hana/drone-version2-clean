@@ -1,0 +1,68 @@
+{
+ "noise_seed": 27182,
+ "results": {
+  "000000": {
+   "n": 32,
+   "correct_rate": 0.1875,
+   "wrong_rate": 0.53125,
+   "null_rate": 0.28125,
+   "flip_rate": 0.03125
+  },
+  "002500": {
+   "n": 32,
+   "correct_rate": 0.34375,
+   "wrong_rate": 0.53125,
+   "null_rate": 0.125,
+   "flip_rate": 0.09375
+  },
+  "005000": {
+   "n": 32,
+   "correct_rate": 0.25,
+   "wrong_rate": 0.5,
+   "null_rate": 0.25,
+   "flip_rate": 0.03125
+  },
+  "007500": {
+   "n": 32,
+   "correct_rate": 0.375,
+   "wrong_rate": 0.4375,
+   "null_rate": 0.1875,
+   "flip_rate": 0.09375
+  },
+  "010000": {
+   "n": 32,
+   "correct_rate": 0.25,
+   "wrong_rate": 0.5,
+   "null_rate": 0.25,
+   "flip_rate": 0.03125
+  },
+  "012500": {
+   "n": 32,
+   "correct_rate": 0.21875,
+   "wrong_rate": 0.5,
+   "null_rate": 0.28125,
+   "flip_rate": 0.0
+  },
+  "015000": {
+   "n": 32,
+   "correct_rate": 0.25,
+   "wrong_rate": 0.4375,
+   "null_rate": 0.3125,
+   "flip_rate": 0.03125
+  },
+  "017500": {
+   "n": 32,
+   "correct_rate": 0.21875,
+   "wrong_rate": 0.46875,
+   "null_rate": 0.3125,
+   "flip_rate": 0.0
+  },
+  "020000": {
+   "n": 32,
+   "correct_rate": 0.28125,
+   "wrong_rate": 0.40625,
+   "null_rate": 0.3125,
+   "flip_rate": 0.03125
+  }
+ }
+}
