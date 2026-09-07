@@ -610,6 +610,22 @@ same tag; videos on.
   n=60+20 naive with grounding rate; an +RTC composition arm may
   follow as its own tagged condition.
 
+### PAG PRECONDITION (recorded 2026-09-07 after Hana's dissertation
+### check; flagged in conversation 2026-09-05 but not yet in the
+### ledger — her red note caught the gap)
+
+- **The eval platform currently INHERITS the collector's payload
+  feed-forward** (V2Platform welds via V2Runner.weld_grasp, whose
+  override applies the thrust bookkeeping). Before ANY
+  Payload-Aware-Guidance run, eval_v2 needs a `--naive-payload`
+  switch routing the weld through the base Runner.weld_grasp (weld
+  only, no FF), or PAG's disturbance is absent at test time by
+  construction. Impact on banked results: negligible (FF acts only
+  while welded; two welds exist across all pure-policy evals; all
+  arms share it). For hybrid/E5 FULL evals with frequent carries,
+  the FF-on condition must be stated in the results, and any
+  PAG-rung comparison must use the naive switch on BOTH sides.
+
 ### H1 + E5 pre-registration (2026-09-07, Hana's directive: "we can
 ### try the hybrid handoff and also the residual RL against dense
 ### weld")
