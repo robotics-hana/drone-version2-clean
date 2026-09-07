@@ -660,6 +660,14 @@ same tag; videos on.
   + weld bonus reward; smoke-tested). Ladder rungs stay separable:
   H1 = scripted servo, E5 = learned servo, both policy-triggered.
 
+- **H1C composition arm (pre-registered 2026-09-07, Hana's
+  question "why not the plan-C model?"): H1 servo on C-15000** —
+  the strongest assemblable system: C's mini put 8/10 episodes
+  inside the 0.15 m assist radius (047500: ~5/10), so the servo
+  triggers far more often on C's approaches. Kept separate from
+  H1-on-047500 so the servo's marginal contribution to the BASELINE
+  stays cleanly attributed. Mini = job 296131, tag h1cmini.
+
 ### C-mini RESULT (2026-09-07, job 292739, exit 0) — GATE PASSED,
 ### AMENDMENT VINDICATED
 
