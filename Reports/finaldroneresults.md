@@ -684,6 +684,20 @@ same tag; videos on.
   H1-on-047500 so the servo's marginal contribution to the BASELINE
   stays cleanly attributed. Mini = job 296131, tag h1cmini.
 
+### H1 FULL RESULT (2026-09-07, job 296350, exit 0) — THE FROZEN
+### n=60 HYBRID NUMBER
+
+- h1full (**047500 + terminal servo, R=0.15, n=60+20**): PICK
+  median **18.2 mm, 21 picked, 19 PLACED — 31.7% complete
+  pick-and-place** (35.0% grasp rate) vs the pure baseline's 1/60
+  on the identical frozen protocol: a 19× jump at full scale. NAV
+  10/20 (crossed 20/20). Welds cluster at ticks ~206–287 with ~50
+  servo ticks each (plus one late 736). New category to review on
+  film: 2 grasped-but-not-placed episodes (carry/place losses).
+  This is the dissertation's hybrid-rung headline pending the
+  H1C-full confirmation (job 298457, running next), whose mini
+  read 60%.
+
 ### H1C MINI RESULT (2026-09-07, job 296131, exit 0) — 60% REACHED
 
 - h1cmini (**C-15000 + terminal servo, R=0.15**): PICK n=10
