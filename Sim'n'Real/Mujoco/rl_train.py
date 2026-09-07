@@ -105,6 +105,13 @@ def act_scale(a):
 
 env = TerminalEnv(SEED)
 net = ActorCritic()
+# BC warm start (E5 amendment 2026-09-07: random exploration found 0
+# welds in 1,092 episodes; the actor is initialized from a clone of
+# the scripted servo so the weld bonus is reachable from iteration 1)
+if "--init" in sys.argv:
+    init_path = sys.argv[sys.argv.index("--init") + 1]
+    net.load_state_dict(torch.load(init_path, weights_only=True))
+    print("BC-INIT loaded from %s" % init_path, flush=True)
 opt = torch.optim.Adam(net.parameters(), lr=LR)
 ep_count = 0
 scoreboard = []                          # last-100 weld outcomes
