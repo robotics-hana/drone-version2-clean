@@ -684,6 +684,19 @@ same tag; videos on.
   H1-on-047500 so the servo's marginal contribution to the BASELINE
   stays cleanly attributed. Mini = job 296131, tag h1cmini.
 
+### C-FULL RESULT (2026-09-07, job 296066, exit 0) — NEW BEST PURE
+### POLICY
+
+- e3cfull (C-15000, naive-50, n=60+20): PICK median **145.8 mm**
+  (047500 baseline: 170.8), **1 picked + 1 placed** (ep30: 10.2 mm,
+  weld tick 285 — expert-fast — placed 13.2 mm); NAV **12/20**
+  (047500: 9/20; crossed 20/20). Plan C beats the baseline on
+  every metric except success rate (equal), confirming the C-mini
+  read at n=60: the terminal-corrective + paired data made a
+  better-flying, better-grounded policy whose pure conversion
+  remains the bottleneck. C-15000 is now the preferred BASE for
+  hybrid composition (H1C mini running).
+
 ### H1 MINI RESULT (2026-09-07, job 296054, exit 0) — THE JUMP
 
 - h1mini (047500 + terminal servo, R=0.15): **PICK n=10 median
