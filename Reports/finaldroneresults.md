@@ -684,6 +684,24 @@ same tag; videos on.
   H1-on-047500 so the servo's marginal contribution to the BASELINE
   stays cleanly attributed. Mini = job 296131, tag h1cmini.
 
+### H1C FULL RESULT (2026-09-07, job 298457, exit 0) — BEST SYSTEM
+### AT FROZEN n=60
+
+- h1cfull (**C-15000 + terminal servo, R=0.15, n=60+20**): PICK
+  median **19.2 mm, 24 picked, 22 PLACED — 36.7% complete task,
+  40.0% grasp rate**; NAV 11/20 (crossed 20/20). The mini's 60%
+  regressed at scale (n=10 optimism) but H1C remains the best
+  measured system on every pick metric. Includes the tightest
+  approach ever recorded (ep41: 1.4 mm) and streaks of 5+
+  consecutive successes; 2 grasp-but-no-place losses (one with
+  carry table-contact) — same category as H1's, review on film.
+- **THE FROZEN n=60 LADDER (complete pick-and-place):** pure
+  047500 1/60 (1.7%) · pure C-15000 1/60 (best flier: median
+  145.8, nav 12/20) · 047500+servo **19/60 (31.7%)** · C-15000+servo
+  **22/60 (36.7%)**. Remaining headroom: policy arrival rate
+  (~55-60% of episodes never enter the radius), servo heading
+  (H1.1), carry/place losses, grounding (~quarter of far misses).
+
 ### H1 FULL RESULT (2026-09-07, job 296350, exit 0) — THE FROZEN
 ### n=60 HYBRID NUMBER
 
