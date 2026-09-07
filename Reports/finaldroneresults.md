@@ -649,6 +649,16 @@ same tag; videos on.
   Deliverables: rl_residual.py (env + PPO), smoke run, overnight
   training, then the SAME gated mini/full ladder with the residual
   active only inside its trained radius.
+- **E5 design refinement (2026-09-07, after env smoke):** with the
+  zero base the agent is a LEARNED TERMINAL CONTROLLER, not a
+  residual — the exact learned mirror of H1's scripted servo. This
+  is adopted: training needs NO π₀ inference (pure MuJoCo, CPU-only
+  jobs, ~10⁴ episodes/night), and eval integration reuses H1's
+  takeover machinery with the learned policy in place of the
+  script. Env: `rl_env.py` (expert-delivered standoff starts,
+  12-obs proprio+privileged-target, 4-act bounded, dense −distance
+  + weld bonus reward; smoke-tested). Ladder rungs stay separable:
+  H1 = scripted servo, E5 = learned servo, both policy-triggered.
 
 ### E3 RESULTS — collection & first fine-tune (2026-09-06)
 

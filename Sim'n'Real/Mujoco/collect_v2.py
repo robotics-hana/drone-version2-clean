@@ -333,7 +333,7 @@ class V2Runner(A.Runner):
         return v / max(1e-9, float(np.linalg.norm(v)))
 
     def pick_v2(self, frames, task, alt, corrective=False,
-                terminal=False):
+                terminal=False, approach_only=False):
         """Continuous-terminal pick: no stillness gates, no composure
         beat, no retry loop. Grip fires IN MOTION at CLOSE_FIRE_D.
 
@@ -431,6 +431,14 @@ class V2Runner(A.Runner):
                            lambda: float(np.linalg.norm(
                                self.data.qpos[7:9] - ex.q_carry)) < 0.06,
                            timeout_s=10.0)
+        if approach_only:
+            # E5 RL-env hook (pre-registered 2026-09-07): stop right
+            # after the arm deploys at the standoff -- the expert has
+            # delivered the drone to a policy-realistic pre-grasp
+            # state and the caller (the RL environment) takes over.
+            # Additive and default-off: no collection/eval flavour
+            # ever sets it.
+            return False
         # E3 terminal-corrective stage (design: Hana, 2026-09-05
         # review). The episode drifts off the object line the way the
         # POLICY does -- a level nose-first leg toward a FALSE point
