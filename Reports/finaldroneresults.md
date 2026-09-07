@@ -703,12 +703,21 @@ same tag; videos on.
   0.76 m from bin — a carry-altitude loss). Neither is a servo
   grasp failure; fixes live in carry height and arrival speed,
   not the terminal controller.
-- **THE FROZEN n=60 LADDER (complete pick-and-place):** pure
-  047500 1/60 (1.7%) · pure C-15000 1/60 (best flier: median
-  145.8, nav 12/20) · 047500+servo **19/60 (31.7%)** · C-15000+servo
-  **22/60 (36.7%)**. Remaining headroom: policy arrival rate
-  (~55-60% of episodes never enter the radius), servo heading
-  (H1.1), carry/place losses, grounding (~quarter of far misses).
+### THE FROZEN n=60 LADDER (canonical table — all four systems,
+### identical frozen protocol: seed family 97000, paired scenes,
+### v2 world, validated harness, n=60 pick + 20 nav)
+
+| System (frozen n=60) | Job, tag | Grasped (picked) | Placed (complete task) | Median approach | Nav |
+|---|---|---|---|---|---|
+| Pure π₀ 047500 | 283261, full47k5 | 1/60 (1.7%) | 1/60 (1.7%) | 170.8 mm | 9/20 |
+| Pure Plan-C fine-tune (C-15000) | 296066, e3cfull | 1/60 (1.7%) | 1/60 (1.7%) | 145.8 mm | 12/20 |
+| Hybrid: 047500 + terminal servo (R=0.15) | 296350, h1full | 21/60 (35.0%) | 19/60 (31.7%) | 18.2 mm | 10/20 |
+| **Hybrid: Plan-C + terminal servo (H1C)** | **298457, h1cfull** | **24/60 (40.0%)** | **22/60 (36.7%)** | **19.2 mm** | **11/20** |
+
+  Remaining headroom: policy arrival rate (~55-60% of episodes
+  never enter the radius), servo heading (H1.1), carry/place
+  losses (time-budget + carry altitude, see film diagnosis above),
+  grounding (~quarter of far misses).
 
 ### H1 FULL RESULT (2026-09-07, job 296350, exit 0) — THE FROZEN
 ### n=60 HYBRID NUMBER

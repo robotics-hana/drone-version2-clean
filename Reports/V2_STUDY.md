@@ -241,6 +241,27 @@ Full miss distribution (full47k5, mm, sorted): 9.8✓ 17.8 20.1 24.9
 161.6 169.6 | 170.7 170.8 175.5* … up to 613.9 (3 episodes >550).
 (*script median convention mm[n//2] = 170.8.)
 
+### 9b. The frozen n=60 ladder (E-track + hybrid outcome, 2026-09-07)
+
+All four systems under the identical frozen protocol (seed family
+97000, paired scenes, v2 world, validated harness; n=60 pick + 20
+nav). Full narrative + film diagnosis in finaldroneresults.md.
+
+| System (frozen n=60) | Job, tag | Grasped (picked) | Placed (complete task) | Median approach | Nav |
+|---|---|---|---|---|---|
+| Pure π₀ 047500 | 283261, full47k5 | 1/60 (1.7%) | 1/60 (1.7%) | 170.8 mm | 9/20 |
+| Pure Plan-C fine-tune (C-15000) | 296066, e3cfull | 1/60 (1.7%) | 1/60 (1.7%) | 145.8 mm | 12/20 |
+| Hybrid: 047500 + terminal servo (R=0.15) | 296350, h1full | 21/60 (35.0%) | 19/60 (31.7%) | 18.2 mm | 10/20 |
+| **Hybrid: Plan-C + terminal servo (H1C)** | **298457, h1cfull** | **24/60 (40.0%)** | **22/60 (36.7%)** | **19.2 mm** | **11/20** |
+
+Reading: inference-time tricks (E1/E2) moved nothing; data (E3/Plan
+C) made the best pure flier (median 145.8, nav 12/20) but not more
+conversions; the scripted terminal servo converts arrivals at
+~100% (every engagement in h1cfull grasped), so hybrid rate ≈
+policy arrival rate. The two h1cfull grasp-no-place losses are
+flight-phase (timeout mid-carry; carry-altitude table drag), not
+servo failures — contact sheets in Reports/v2_eval_videos/h1cfull/.
+
 ## 10. Seed registry
 
 collection 71000 · trial 72000 · split 424242 · training 1000 ·
