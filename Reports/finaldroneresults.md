@@ -684,6 +684,19 @@ same tag; videos on.
   H1-on-047500 so the servo's marginal contribution to the BASELINE
   stays cleanly attributed. Mini = job 296131, tag h1cmini.
 
+### H1C MINI RESULT (2026-09-07, job 296131, exit 0) — 60% REACHED
+
+- h1cmini (**C-15000 + terminal servo, R=0.15**): PICK n=10
+  **median 8.9 mm, 6 picked, 6 PLACED — 60% complete
+  pick-and-place, Hana's target, on the composition arm she
+  proposed** ("why not the plan-C model?"). NAV 2/4. One servo
+  stall recorded (ep9: engaged, 15.6 mm, no weld — heading again).
+  The ladder at mini scale now reads: pure 047500 ~10% picked /
+  0-10% placed → pure C 0/10 picked but tightest approaches →
+  047500+servo 40% → **C+servo 60%**. n=60 CONFIRMATION dispatched:
+  job 298457, tag h1cfull. H1-full (047500+servo) mid-run and
+  pacing ~40%.
+
 ### C-FULL RESULT (2026-09-07, job 296066, exit 0) — NEW BEST PURE
 ### POLICY
 
