@@ -26,6 +26,8 @@ usage:
                     # (default 50 = the frozen naive baseline; E1=10)
       [--rtc]       # E2: RTC prefix guidance across chunks (needs
                     # --exec < 50); default off = baseline sampling
+      [--assist R]  # H1 hybrid: scripted terminal servo takes the
+                    # last R metres to the weld (default 0 = off)
 """
 import hashlib
 import json
@@ -39,6 +41,7 @@ import torch
 
 import collect_airvla as A
 import collect_v2 as V
+from platform_v2 import V2Platform
 from lerobot.policies.factory import make_pre_post_processors
 from lerobot.policies.pi0.modeling_pi0 import PI0Policy
 
@@ -80,6 +83,14 @@ assert PICK_TICKS % EXEC == 0 and NAV_TICKS % EXEC == 0, \
 # unexecuted tail so consecutive plans stay consistent. Synchronous
 # harness => inference_delay=0 (soft consistency over the overlap,
 # nothing hard-frozen). Default off => every non-RTC path untouched.
+# H1 (pre-registered 2026-09-07): terminal-servo handoff radius in
+# metres -- when the POLICY brings the jaws this close to the target,
+# the platform's scripted servo (collector-validated creep law) flies
+# the final leg to the weld, then returns control. 0 = off; hybrid
+# results are ALWAYS reported as their own rung, never as pure policy.
+ASSIST = (float(sys.argv[sys.argv.index("--assist") + 1])
+          if "--assist" in sys.argv else 0.0)
+assert 0.0 <= ASSIST <= 0.30, "assist radius sanity bound"
 RTC = "--rtc" in sys.argv
 if RTC:
     assert EXEC < HORIZON, "--rtc needs --exec < %d (chunk overlap)" % HORIZON
@@ -126,7 +137,8 @@ def infer_chunk(batch, prev_tail):
 # pairing across runs depends on them and cluster file drift is a
 # documented hazard (review 2026-09-04)
 DEPS = {}
-for _m in ("collect_airvla", "collect_v2", "pd_flight", "collect_demos"):
+for _m in ("collect_airvla", "collect_v2", "pd_flight",
+           "collect_demos", "platform_v2"):
     _mod = sys.modules.get(_m)
     if _mod is not None and getattr(_mod, "__file__", None):
         DEPS[_m] = hashlib.sha256(
@@ -134,6 +146,7 @@ for _m in ("collect_airvla", "collect_v2", "pd_flight", "collect_demos"):
 print("PROV " + json.dumps(dict(
     script_sha=hashlib.sha256(open(__file__, "rb").read()).hexdigest()[:12],
     dep_sha=DEPS, exec_horizon=EXEC, rtc=RTC,
+    assist_r=ASSIST,
     ckpt=CKPT, argv=sys.argv[1:], torch_seed=TORCHSEED,
     scene_seed=SCENE_SEED, tag=TAG,
     when=time.strftime("%Y-%m-%dT%H:%M:%S"))), flush=True)
@@ -156,120 +169,10 @@ def obs_batch(task):
     return batch
 
 
-class V2Platform:
-    """The arm/grasp automaton for v2 evaluation. Ported from the v1
-    path, then REVALIDATED BY EXPERT-ACTION REPLAY in the v2 world
-    (2026-09-04) which falsified two v1-heritage rules: the arm now
-    deploys on sustained proximity to the target (the expert deploys
-    after settling at the ~0.50 m standoff, never on the ascent), and
-    the weld gate mirrors the collector's verbatim (10 mm/15 mm
-    jaw-to-aim + per-object aperture window; NO pad-contact debounce
-    -- the close-in-motion grasp welds before contact registers).
-    Release when the policy opens the grip while welded (payload
-    feed-forward handled inside V2Runner.weld_grasp)."""
-
-    def __init__(self, rr, start, yaw0):
-        self.r = rr
-        self.sp = np.array(start, dtype=float)
-        self.yaw = float(yaw0)
-        self.grip = 1.0
-        self.deployed = False
-        self.near = 0
-        self.cmd = np.array(rr.expert.q_travel, dtype=float)
-        self.i = 0
-        self.weld_tick = None
-        self.released = False
-
-    def tick(self, act, nav=False):
-        rr = self.r
-        self.sp = self.sp + np.clip(act[0:3], -0.035, 0.035)
-        self.yaw += float(np.clip(act[5], -0.06, 0.06))
-        self.grip = float(np.clip(act[6], 0.0, 1.0))
-        welded = bool(rr.data.eq_active[rr.weld])
-        ap = float(rr.data.qpos[rr.gadr])
-        # weld gate (ground-truth-replay fix #2, 2026-09-04): mirror
-        # the COLLECTOR's weld condition verbatim (collect_v2 pick_v2
-        # creep_tick): jaw-to-aim within 10 mm horizontal / 15 mm
-        # vertical AND aperture inside the PER-OBJECT window (mm).
-        # The old v1-heritage gate (fixed 4-17 mm window + pad-contact
-        # 2-of-4 debounce) is unsatisfiable in the v2 world: the
-        # close-in-motion grasp welds on proximity before the pads
-        # ever register contact, so expert-action replay could never
-        # weld under it.
-        if not nav and not welded:
-            aim, _ = rr.live_target()
-            pc = rr.jaws() - aim
-            if (float(np.linalg.norm(pc[0:2])) < 0.010
-                    and abs(float(pc[2])) < 0.015
-                    and rr.cur["ap_lo"] < ap * 1000 < rr.cur["ap_hi"]):
-                rr.weld_grasp(True)
-        elif welded and self.grip > 0.8:
-            rr.weld_grasp(False)
-            self.released = True
-        welded = bool(rr.data.eq_active[rr.weld])
-        if welded and self.weld_tick is None:
-            self.weld_tick = self.i
-        # deploy rule (ground-truth-replay fix, 2026-09-04): the v2
-        # expert deploys the arm only AFTER settling at the ~0.50 m
-        # standoff and re-aiming (collect_v2 pick_v2) -- never on the
-        # ascent. The old sp_z>=0.45-or-tick-60 rule (v1 heritage)
-        # fired at tick ~5, destabilised the drone with an early arm
-        # swing and left a ~200 mm offset through the grasp window;
-        # expert-action replay could not weld. Proximity + debounce
-        # mirrors the expert's observable cue.
-        if not self.deployed and not nav:
-            aim, _ = rr.live_target()
-            dxy = float(np.linalg.norm(
-                np.asarray(rr.data.qpos[0:2]) - np.asarray(aim[0:2])))
-            self.near = self.near + 1 if dxy < 0.60 else 0
-            if self.near >= 5:
-                self.deployed = True
-        tgt = (rr.expert.q_carry if (self.deployed and not nav
-                                     and not self.released)
-               else rr.expert.q_travel)
-        self.cmd = self.cmd + np.clip(np.array(tgt) - self.cmd,
-                                      -0.06, 0.06)
-        self.i += 1
-        rr.ctrl.set_targets(self.sp, self.cmd,
-                            A.C.GRIPPER_OPEN * self.grip)
-        rr.ctrl.mppi.target_yaw = self.yaw
-        for _ in range(rr.sub):
-            rr.ctrl.step()
-            mujoco.mj_step(rr.model, rr.data)
-        # contact observations. The collector tallies these inside
-        # V2Runner.step, which eval never calls, so without this block
-        # the reported table/object/gate hits are structurally 0
-        # (dead-metric defect, review 2026-09-04). Same per-tick
-        # cadence and dedupe as collect_v2.step; the collector's
-        # jaws-outside-grasp-phase rule is omitted -- it keys on the
-        # expert's phase flag, and the policy owns its grasp timing.
-        d = rr.data
-        table_hit = obj_hit = False
-        for ci in range(d.ncon):
-            g1 = int(d.contact.geom1[ci])
-            g2 = int(d.contact.geom2[ci])
-            if not table_hit and (
-                    (g1 in rr._drone_geoms and g2 in rr._table_geoms)
-                    or (g2 in rr._drone_geoms
-                        and g1 in rr._table_geoms)):
-                rr._table_hits += 1
-                table_hit = True
-            if not obj_hit and (
-                    (g1 in rr._strike_geoms and g2 in rr._obj_geoms)
-                    or (g2 in rr._strike_geoms
-                        and g1 in rr._obj_geoms)):
-                rr._obj_hits += 1
-                obj_hit = True
-            if ((g1 in rr._drone_geoms and g2 in rr._gate_geoms)
-                    or (g2 in rr._drone_geoms
-                        and g1 in rr._gate_geoms)):
-                rr._gate_hits += 1
-
-
 def run_pick(i):
     obj, start, alt, tgt = r.reset_scene_v2()
     task = A.PROMPT_MANIP.format(obj=obj)
-    plat = V2Platform(r, start, 0.0)
+    plat = V2Platform(r, start, 0.0, assist_r=ASSIST)
     adr = r.cur["adr"]
     miss = 1e9
     lifted = False
@@ -323,6 +226,9 @@ def run_pick(i):
                d_bin_mm=round(d_bin * 1000, 1),
                table_hits=r._table_hits, obj_hits=r._obj_hits,
                weld_tick=plat.weld_tick, ended_welded=ended_welded,
+               assisted=bool(plat.took_tick is not None),
+               assist_tick=plat.took_tick,
+               assist_ticks=plat.assist_ticks,
                frames=frames_n)
     with open("eval_v2_traj.jsonl", "a") as fh:
         fh.write(json.dumps(dict(tag=TAG, kind="pick", ep=i, obj=obj,

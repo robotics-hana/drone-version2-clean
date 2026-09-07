@@ -610,6 +610,46 @@ same tag; videos on.
   n=60+20 naive with grounding rate; an +RTC composition arm may
   follow as its own tagged condition.
 
+### H1 + E5 pre-registration (2026-09-07, Hana's directive: "we can
+### try the hybrid handoff and also the residual RL against dense
+### weld")
+
+- **H1 — terminal-servo handoff (hybrid rung):** `eval_v2.py
+  --assist R`. When the POLICY brings the jaws within R (horizontal)
+  of the commanded object with the arm deployed, the platform's
+  scripted terminal servo — the collector's own creep law (3 mm/tick
+  frozen-axis creep, +12 mm overshoot, raise-only sag comp,
+  measured-rate fire, existing weld gate), 600/600 + 310/310
+  validated — flies the final leg; on weld (or a bounded-close /
+  300-tick give-back) control returns to the policy for carry and
+  place. Engagement is recorded per episode (assisted /
+  assist_tick / assist_ticks) and in PROV (assist_r), so hybrid
+  numbers are ALWAYS a separate ladder rung, never conflated with
+  pure policy. Primary condition R=0.15 on ckpt 047500;
+  R-sensitivity (0.10/0.20) as secondaries. V2Platform extracted to
+  `platform_v2.py` (shared by eval + validators; assist_r=0 is
+  bit-identical to the inline class). Validation gate before any
+  GPU eval: replay case A (assist off ⇒ EXACT historical weld ticks
+  292/195/241), case B (assist + expert actions ⇒ weld), case C
+  (STALLING pilot: expert to 0.20 m then zero actions ⇒ the servo
+  alone must complete the weld).
+- **E5 — terminal-phase residual RL (learned servo):** the ladder
+  mirror of H1 — same activation region, but the last leg is a
+  LEARNED residual instead of a script. Design: frozen π₀ (047500)
+  serves base actions at the naive cadence; a small residual MLP
+  (proprio + sim-privileged jaw-to-target vector; privilege is
+  training-time-only and documented) adds bounded per-tick deltas
+  (|Δxyz| ≤ 0.01, |Δyaw| ≤ 0.02, |Δgrip| ≤ 0.2). Training episodes
+  START at scripted near-miss states (the E3 terminal choreography
+  places the drone there) so every sample is decision-relevant and
+  episodes are short (~200 ticks ⇒ ~500+ eps/GPU-hour). Reward:
+  −jaw-to-aim distance per tick, +weld bonus (episode end), contact
+  penalties, small action penalty. Algorithm: compact PPO
+  implemented against the pinned env (no new dependencies).
+  Deliverables: rl_residual.py (env + PPO), smoke run, overnight
+  training, then the SAME gated mini/full ladder with the residual
+  active only inside its trained radius.
+
 ### E3 RESULTS — collection & first fine-tune (2026-09-06)
 
 - **Collection PERFECT: 310/310 banked in 310 attempts, zero
