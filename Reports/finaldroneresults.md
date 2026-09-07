@@ -693,8 +693,16 @@ same tag; videos on.
   regressed at scale (n=10 optimism) but H1C remains the best
   measured system on every pick metric. Includes the tightest
   approach ever recorded (ep41: 1.4 mm) and streaks of 5+
-  consecutive successes; 2 grasp-but-no-place losses (one with
-  carry table-contact) — same category as H1's, review on film.
+  consecutive successes; 2 grasp-but-no-place losses, both plush
+  penguin, DIAGNOSED ON FILM (contact sheets in
+  Reports/v2_eval_videos/h1cfull/): ep02 = late arrival (policy
+  wandered ~900 ticks; servo grasped cleanly at weld_tick 936 of
+  1200; episode timed out mid-carry 1.2 m from bin — a time-budget
+  loss, not a drop) · ep46 = low carry (weld_tick 487, then 45
+  table hits dragging the plush along the table until it was lost
+  0.76 m from bin — a carry-altitude loss). Neither is a servo
+  grasp failure; fixes live in carry height and arrival speed,
+  not the terminal controller.
 - **THE FROZEN n=60 LADDER (complete pick-and-place):** pure
   047500 1/60 (1.7%) · pure C-15000 1/60 (best flier: median
   145.8, nav 12/20) · 047500+servo **19/60 (31.7%)** · C-15000+servo
