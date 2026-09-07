@@ -660,6 +660,24 @@ same tag; videos on.
   + weld bonus reward; smoke-tested). Ladder rungs stay separable:
   H1 = scripted servo, E5 = learned servo, both policy-triggered.
 
+### C-mini RESULT (2026-09-07, job 292739, exit 0) — GATE PASSED,
+### AMENDMENT VINDICATED
+
+- e3cmini (C-15000, naive-50): PICK n=10 **median 109.3 mm** (19.4 /
+  49.0 / 53.5 / 75.8 / 108.8 / 109.3 / 129.1 / 143.5 / 411.9 /
+  517.9), 0 welds; NAV **3/4** (crossed 4/4); zero contacts in all
+  14 episodes. The 1.44× teacher-forced "old-flavour drift" produced
+  NO closed-loop degradation — nav BEAT 047500's own mini (2/4) and
+  the approach distribution is the tightest of any pure policy
+  (7/10 under 145 mm; ep0's 19.4 mm = closest pure-policy approach
+  ever on that scene). Mini gate passes on the median clause
+  (109.3 < 175.5). Conversion remains zero — the terminal
+  behaviour improved approaches but still does not close the last
+  centimetres alone. DISPATCHED per the amendment path: full frozen
+  eval of C-15000 (job 296066, tag e3cfull) + grounding probe on
+  C's checkpoints (job 296067), both queued behind the H1 mini
+  (296054).
+
 ### E3 RESULTS — collection & first fine-tune (2026-09-06)
 
 - **Collection PERFECT: 310/310 banked in 310 attempts, zero
