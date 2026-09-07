@@ -55,10 +55,31 @@ torch.manual_seed(SEED)
 np.random.seed(SEED)
 OUT.mkdir(parents=True, exist_ok=True)
 
-# render-free simulator
+# render-free simulator: stub BOTH the frame() calls and the
+# Renderer construction itself -- on a GPU-less CPU node the EGL
+# context cannot exist and V2Runner's constructor crashes trying to
+# build one (measured: job 296099)
 V.V2Runner.frame = lambda self, task: {
     "observation.state": None, "scene_state": None,
     "action": None, "task": task}
+
+
+class _NoRenderer:
+    def __init__(self, *a, **k):
+        pass
+
+    def update_scene(self, *a, **k):
+        pass
+
+    def render(self, *a, **k):
+        return None
+
+    def close(self):
+        pass
+
+
+import mujoco as _mj                    # noqa: E402
+_mj.Renderer = _NoRenderer
 
 
 class ActorCritic(nn.Module):
