@@ -833,10 +833,16 @@ same tag; videos on.
 | Hybrid: 047500 + terminal servo (R=0.15) | 296350, h1full | 21/60 (35.0%) | 19/60 (31.7%) | 18.2 mm | 10/20 |
 | **Hybrid: Plan-C + terminal servo (H1C)** | **298457, h1cfull** | **24/60 (40.0%)** | **22/60 (36.7%)** | **19.2 mm** | **11/20** |
 
-  Remaining headroom: policy arrival rate (~55-60% of episodes
-  never enter the radius), servo heading (H1.1), carry/place
-  losses (time-budget + carry altitude, see film diagnosis above),
-  grounding (~quarter of far misses).
+  Remaining headroom (corrected 2026-09-08, per-episode analysis
+  of h1cfull): **wrong-object flights 14/60** (miss in the
+  300–700 mm separation band, 9/14 on "weight" commands —
+  grounding; the servo never triggers at the wrong object) ·
+  drift 7/60 (150–300 mm) · **servo conversion 24/39 engagements
+  (62%)** — the engaged-but-not-grasped remainder is the servo's
+  heading-stall weakness (H1.1) · carry/place losses 2 (time
+  budget + carry altitude, film diagnosis above). Hana's video
+  observation (drone heading to the wrong target) is the first
+  item, quantified.
 
 ### H1 FULL RESULT (2026-09-07, job 296350, exit 0) — THE FROZEN
 ### n=60 HYBRID NUMBER

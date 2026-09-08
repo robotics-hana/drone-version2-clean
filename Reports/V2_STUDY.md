@@ -256,11 +256,15 @@ nav). Full narrative + film diagnosis in finaldroneresults.md.
 
 Reading: inference-time tricks (E1/E2) moved nothing; data (E3/Plan
 C) made the best pure flier (median 145.8, nav 12/20) but not more
-conversions; the scripted terminal servo converts arrivals at
-~100% (every engagement in h1cfull grasped), so hybrid rate ≈
-policy arrival rate. The two h1cfull grasp-no-place losses are
-flight-phase (timeout mid-carry; carry-altitude table drag), not
-servo failures — contact sheets in Reports/v2_eval_videos/h1cfull/.
+conversions. h1cfull loss stack (corrected 2026-09-08 after
+per-episode analysis): 14/60 wrong-object flights (miss in the
+300–700 mm separation band; 9 of 14 when commanded "weight" —
+grounding, the servo never triggers at the wrong object), 7/60
+drift (150–300 mm), and 39/60 engagements converting 24 (62% —
+the servo's heading stalls, mostly penguin, account for the
+engaged-but-not-grasped remainder). The two grasp-no-place losses
+are flight-phase (timeout mid-carry; carry-altitude table drag) —
+contact sheets in Reports/v2_eval_videos/h1cfull/.
 
 ## 10. Seed registry
 
