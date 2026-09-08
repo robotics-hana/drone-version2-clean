@@ -840,7 +840,8 @@ same tag; videos on.
 | Pure π₀ 047500 | 283261, full47k5 | 1/60 (1.7%) | 1/60 (1.7%) | 170.8 mm | 9/20 |
 | Pure Plan-C fine-tune (C-15000) | 296066, e3cfull | 1/60 (1.7%) | 1/60 (1.7%) | 145.8 mm | 12/20 |
 | Hybrid: 047500 + terminal servo (R=0.15) | 296350, h1full | 21/60 (35.0%) | 19/60 (31.7%) | 18.2 mm | 10/20 |
-| **Hybrid: Plan-C + terminal servo (H1C)** | **298457, h1cfull** | **24/60 (40.0%)** | **22/60 (36.7%)** | **19.2 mm** | **11/20** |
+| Hybrid: Plan-C + scripted servo (H1C) | 298457, h1cfull | 24/60 (40.0%) | 22/60 (36.7%) | 19.2 mm | 11/20 |
+| **Hybrid: Plan-C + LEARNED servo (E5C)** | **305965, e5cfull** | **36/60 (60.0%)** | **27/60 (45.0%)** | **12.8 mm** | **11/20** |
 
   Remaining headroom (corrected 2026-09-08, per-episode analysis
   of h1cfull): **wrong-object flights 14/60** (miss in the
@@ -880,6 +881,30 @@ same tag; videos on.
   vs C's 13–14) and D + scripted servo (headline), n=60+20, seed
   family 97000, paired scenes as all prior rungs. Existing rungs
   are NOT re-run — new rows only.
+
+### E5C FULL RESULT (2026-09-08, job 305965, exit 0) — NEW BEST
+### SYSTEM: THE LEARNED SERVO BEATS ITS SCRIPTED TEACHER
+
+- e5cfull (**C-15000 + LEARNED terminal servo, R=0.15, n=60+20**):
+  PICK median **12.8 mm, 36 picked, 27 PLACED — 45.0% complete
+  task, 60.0% grasp rate** (Hana's original 60% target, now at
+  full n=60 scale); NAV 11/20. Same paired scenes as every rung.
+- **Mechanism of the win — engagement conversion 36/40 (90%) vs
+  the scripted servo's 24/39 (62%)**: DAgger training on
+  off-trajectory states (the tube, the come-back labels) cured the
+  heading brittleness that stalls the frozen-axis script. The
+  student beats the teacher on exactly the axis the teacher's
+  latched design cannot handle.
+- Costs, honestly: the learned servo is slower (median 71 assist
+  ticks on conversions, max 302, vs the script's ~50) and that
+  clock pressure yields **9 grasp-no-place losses** (vs scripted
+  2) — several late welds (tick 620-1000) timing out mid-carry,
+  plus penguin carries dropped near the start point. Wrong-target
+  band 15/60 (same policy, consistent with C's 13-14).
+- **THE FROZEN n=60 LADDER, FINAL FORM:** pure 1.7% → +scripted
+  servo 31.7% → C+scripted 36.7% → **C+learned servo 45.0% (60%
+  grasp)**. Both terminal-controller designs (H1 scripted, E5
+  learned) are complete rungs; the learned one is the headline.
 
 ### PAG FALSIFICATION (2026-09-08): THE PAYLOAD FEED-FORWARD IS
 ### INERT IN THE PD-ERA STACK

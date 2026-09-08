@@ -252,7 +252,16 @@ nav). Full narrative + film diagnosis in finaldroneresults.md.
 | Pure π₀ 047500 | 283261, full47k5 | 1/60 (1.7%) | 1/60 (1.7%) | 170.8 mm | 9/20 |
 | Pure Plan-C fine-tune (C-15000) | 296066, e3cfull | 1/60 (1.7%) | 1/60 (1.7%) | 145.8 mm | 12/20 |
 | Hybrid: 047500 + terminal servo (R=0.15) | 296350, h1full | 21/60 (35.0%) | 19/60 (31.7%) | 18.2 mm | 10/20 |
-| **Hybrid: Plan-C + terminal servo (H1C)** | **298457, h1cfull** | **24/60 (40.0%)** | **22/60 (36.7%)** | **19.2 mm** | **11/20** |
+| Hybrid: Plan-C + scripted servo (H1C) | 298457, h1cfull | 24/60 (40.0%) | 22/60 (36.7%) | 19.2 mm | 11/20 |
+| **Hybrid: Plan-C + LEARNED servo (E5C)** | **305965, e5cfull** | **36/60 (60.0%)** | **27/60 (45.0%)** | **12.8 mm** | **11/20** |
+
+E5C addendum (2026-09-08): the learned servo (DAgger clone of a
+Markovianized scripted teacher + PPO speed polish, frozen actor
+e5_actor_final.pt) converts 36/40 engagements (90%) vs the script's
+24/39 (62%) — training on off-trajectory states cured the frozen-
+axis heading brittleness. Costs: slower conversions (median 71
+assist ticks) → 9 grasp-no-place clock losses (script: 2). Full
+narrative + six-defect debugging record in finaldroneresults.md.
 
 Reading: inference-time tricks (E1/E2) moved nothing; data (E3/Plan
 C) made the best pure flier (median 145.8, nav 12/20) but not more
