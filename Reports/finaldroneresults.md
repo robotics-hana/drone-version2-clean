@@ -853,6 +853,34 @@ same tag; videos on.
   observation (drone heading to the wrong target) is the first
   item, quantified.
 
+### PLAN D PRE-REGISTRATION (2026-09-08, Hana's approval: "we can
+### do it" + hybrid arm confirmed + "check the learning rate")
+
+- **Hypothesis:** scaling the paired-command grounding contrast
+  (E3's 80 pairs → 300) reduces wrong-target flights (currently
+  13–14/60 for Plan C) and thereby lifts the hybrid rate.
+- **Collection:** pairs ONLY, 300 units (600 eps), seed 75000 (next
+  in the 7x000 family), existing collecte3 machinery with n_term=0.
+  Job 305829, repo hanapasta/airvla_v2_d.
+- **Merge:** airvla_v21 + airvla_v2_d → airvla_v22; v21 split
+  VERBATIM, D pairs split as units, split seed 424245
+  (v2_merge_d.py).
+- **Training:** from C-15000, PLAN C'S RECIPE VERBATIM (peak 5e-6,
+  cosine → 5e-7, 20,000 steps, batch 4, seed 1000) — the LR is
+  deliberately NOT retuned (A churned at 2.5e-5, B under-learned, C
+  passed on this schedule; identical recipe ⇒ any grounding
+  movement is attributable to the data). Episode list = C's own
+  list rebuilt deterministically (seed 424244) + all D train pairs
+  (d_train_wrapper.py, output pi0_d_out).
+- **Gates (unchanged machinery):** validation curve every 2,500
+  steps with flavour split; old-flavour churn alarm at 1.10×;
+  closed-loop mini (n=10, beat C's 145.8 mm median or weld) before
+  any full eval.
+- **Frozen evals on pass:** pure D (attribution: wrong-target count
+  vs C's 13–14) and D + scripted servo (headline), n=60+20, seed
+  family 97000, paired scenes as all prior rungs. Existing rungs
+  are NOT re-run — new rows only.
+
 ### CONDITIONAL LADDER — success GIVEN correct-target heading
 ### (right-target = episode ended <300 mm of the commanded object)
 
