@@ -896,11 +896,20 @@ same tag; videos on.
   student beats the teacher on exactly the axis the teacher's
   latched design cannot handle.
 - Costs, honestly: the learned servo is slower (median 71 assist
-  ticks on conversions, max 302, vs the script's ~50) and that
-  clock pressure yields **9 grasp-no-place losses** (vs scripted
-  2) — several late welds (tick 620-1000) timing out mid-carry,
-  plus penguin carries dropped near the start point. Wrong-target
-  band 15/60 (same policy, consistent with C's 13-14).
+  ticks on conversions, max 302, vs the script's ~50), yielding
+  **9 grasp-no-place losses** (vs scripted 2), FILM-VERIFIED
+  (contact sheets in Reports/v2_eval_videos/e5cfull/) as two
+  categories: (1) clock losses at the finish line — eps 4/49
+  carried the object TO THE BIN MOUTH (d_bin 156-159 mm) and ran
+  out of episode after late welds (~tick 886); (2) mid-carry
+  DROPS — eps 23/29/33/50 (d_bin ~1.1-1.25 m) grasped cleanly
+  (ep29 weld tick 221) then lost the object en route: the weld
+  releases only when the grip command re-opens past 0.8, and
+  post-weld control is handed back to the POLICY, whose post-grasp
+  grip behaviour is essentially untrained (pure C almost never
+  welded). Candidate fix reserved (H1.2/E5.1): latch grip closed
+  during carry until bin proximity. Wrong-target band 15/60 (same
+  policy, consistent with C's 13-14).
 - **THE FROZEN n=60 LADDER, FINAL FORM:** pure 1.7% → +scripted
   servo 31.7% → C+scripted 36.7% → **C+learned servo 45.0% (60%
   grasp)**. Both terminal-controller designs (H1 scripted, E5
