@@ -115,6 +115,47 @@ and a *learned* terminal controller trained overnight by
 reinforcement against the dense weld reward, so the ladder can
 compare a scripted closer and a learned one on equal terms.
 
+## 8. The learned closer: the student surpasses the teacher
+
+Both extensions landed. The servo on the fine-tuned policy (H1C)
+confirmed the composition logic at full scale — 36.7% complete
+pick-and-place, 40% grasp — and exposed, by per-episode analysis,
+exactly where the remaining losses live: wrong-object flights the
+servo can never rescue (grounding), engagements the frozen-axis
+script cannot convert (heading stalls), and a thin tail of carry
+losses.
+
+The learned terminal controller (E5) then became the campaign's
+hardest engineering story and its best result. Six distinct defects
+stood between the idea and a working controller, each invisible
+until the previous one was fixed: a grip channel that made the weld
+unreachable by construction (retro-explaining a "hard exploration"
+cliff that was never about exploration); a teacher whose frozen
+approach axis and forward ratchet made its actions unlearnable from
+the observation; an observation missing the setpoint, the grasp
+parameters, and a body frame; a clone that approached perfectly and
+never stopped, because stopping lives in 5% of the ticks; DAgger
+labels poisoned by a fire latch; and a deployment give-back clock
+that yanked the gradually-closing learned grip off the grasp it was
+seating. The remedies were textbook once the defects were named —
+Markovian teacher, body-frame observation with the controller's own
+state, DART noise, DAgger with a state-inferred latch and a reopen
+rule, and a deployment contract that mirrors the training contract.
+
+At cluster scale the clone welded six of six by imitation alone, a
+short reinforcement-learning polish made it 24% faster before a
+monitored kill rule stopped the run at the first sign of churn, and
+the frozen n=60 evaluation delivered the ladder's final rung:
+**60% grasp, 45% complete pick-and-place — the learned servo beating
+the scripted teacher it was cloned from**, 90% versus 62% conversion
+of engagements, precisely because DAgger had trained it on the
+off-axis states the script's latched design cannot handle. The
+student did not just copy the teacher; it generalised past the
+teacher's structural weakness. What remains — quantified, filmed,
+and pre-registered — is the grounding block (a scaled paired-command
+fine-tune is collecting), the policy's untrained post-grasp grip
+that drops a few carries, and the episode clock.
+
 ## The through-line
 
 Every stage repeats one lesson in a new costume: the system learns
@@ -123,6 +164,11 @@ it does closed-loop. Overhead reaches taught visibility; v1 taught
 that demonstrations transmit habits, not intentions; v2 taught that
 smooth data makes smooth policies but does not conjure precision;
 the fine-tune taught that new behaviour needs exposure, not just
-presence, in the batch; and the hybrid shows that knowing precisely
+presence, in the batch; the hybrid shows that knowing precisely
 *where* the learned system's competence ends is itself the
-engineering result that unlocks task success.
+engineering result that unlocks task success; and the learned closer
+adds the arc's ending — a controller taught by demonstration and
+polished by reward can outgrow its demonstrator, provided its
+observation contains what its teacher actually used, its training
+states include the ones it will actually visit, and its deployment
+honours the contract it trained under.
