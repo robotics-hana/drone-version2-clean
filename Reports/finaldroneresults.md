@@ -769,6 +769,31 @@ same tag; videos on.
     contribution over BC: +1 weld and 24% faster (130 → 99 ticks).
     Next: E5 gated mini — the learned actor in H1's takeover
     machinery in place of _servo_tick (new flag ⇒ new freeze).
+  - **E5 EVAL INTEGRATION (2026-09-08):** platform_e5.py
+    (V2PlatformLearned: ONLY _servo_tick overridden; obs via
+    rl_env.obs_vec — the training env's own function, parity by
+    construction; action application mirrors rl_env.step verbatim)
+    + eval_v2 `--learned-servo actor.pt` (requires --assist; PROV
+    records actor sha; flag absent ⇒ no new imports, all paths
+    untouched). replay_e5_validation.py PASS 4/4: case A exact
+    banked weld ticks 292/195/241 (inert with assist off), B/C the
+    LEARNED servo welds ~20 ticks FASTER than the expert's own
+    creep (274/175/220), N no engagement outside radius.
+  - **E5C MINI #1 (2026-09-08, job 305176, tag e5cmini, exit 0) —
+    DEPLOYMENT-CONTRACT BUG, DIAGNOSED AND FIXED:** n=10 median
+    17.8 mm, 2 picked, 1 placed (vs h1cmini's 6/6). Engagements
+    8/10 — identical delivery to h1cmini (paired scenes) — but
+    conversions 2/8. Every failure shares one signature: miss
+    5–29 mm with 65–71 assist ticks: the platform's
+    45-ticks-after-fire give-back clock, keyed on the grip crossing
+    0.8, fired during the learned actor's gradual grip EASING
+    (scripted servo snap-closes; the actor was trained under the
+    env's plain 300-tick episode with no fire clock) and yanked
+    control back mid-grasp — ep08 was pulled off at 5.2 mm. Fix:
+    learned-servo give-back = the 300-tick cap only (the training
+    contract). Validation re-PASS 4/4. Re-run = job 305571, tag
+    e5cmini2. (Nav 1/4 vs h1cmini's 2/4 is the documented cross-run
+    GPU jitter — nav never touches the servo.)
 
 - **H1C composition arm (pre-registered 2026-09-07, Hana's
   question "why not the plan-C model?"): H1 servo on C-15000** —
