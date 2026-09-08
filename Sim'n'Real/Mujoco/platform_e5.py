@@ -51,14 +51,17 @@ class V2PlatformLearned(V2Platform):
         d_grip = float(np.clip(mu[3], -1, 1) * DGRIP_MAX)
         self.sp = self.sp + np.clip(d_xyz, -0.035, 0.035)
         self.grip = float(np.clip(self.grip + d_grip, 0.0, 1.0))
-        # fire detection for the give-back clock: grip crossing the
-        # open/closed boundary (the scripted servo's a_fired analog)
-        if not self.a_fired and self.grip < 0.8:
-            self.a_fired = True
-            self.a_fire_tick = self.i
         self.assist_ticks += 1
-        if ((self.i - self.took_tick) > 300
-                or (self.a_fired
-                    and (self.i - self.a_fire_tick) > 45)):
+        # give-back: the 300-tick overall cap ONLY -- the training
+        # env's episode contract. The scripted servo's extra
+        # 45-ticks-after-fire clock does not transfer: its fire is a
+        # discrete snap-to-close, while the learned actor EASES the
+        # grip down during the final approach, so a grip-threshold
+        # "fire" starts the clock early and yanks control back
+        # mid-grasp (measured on e5cmini, job 305176: engaged 8/10
+        # but converted 2/8, every failure at 5-29 mm with 65-71
+        # assist ticks -- pulled off the grasp by the clock; the two
+        # conversions seated in 47/58 ticks, just inside it).
+        if (self.i - self.took_tick) > 300:
             self.takeover = False
             self.assist_done = True
