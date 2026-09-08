@@ -105,6 +105,16 @@ LSERVO = (sys.argv[sys.argv.index("--learned-servo") + 1]
 if LSERVO is not None:
     assert ASSIST > 0.0, "--learned-servo requires --assist R > 0"
     from platform_e5 import V2PlatformLearned
+# PAG ablation (pre-registered ledger precondition, run approved by
+# Hana 2026-09-08): --naive-payload removes the payload feed-forward
+# trim that V2Runner.weld_grasp adds to the controller's hover thrust
+# at the weld instant (collect_v2.py L119-138). The weld itself is
+# unchanged -- the runner's weld_grasp is rebound to the BASE
+# A.Runner method, so the constraint seats but the controller stays
+# tuned for the unloaded mass (the paper's "no payload-aware
+# guidance" condition). No frozen file is edited; default absent =>
+# every existing path untouched.
+NAIVE_PAYLOAD = "--naive-payload" in sys.argv
 RTC = "--rtc" in sys.argv
 if RTC:
     assert EXEC < HORIZON, "--rtc needs --exec < %d (chunk overlap)" % HORIZON
@@ -162,6 +172,7 @@ print("PROV " + json.dumps(dict(
     script_sha=hashlib.sha256(open(__file__, "rb").read()).hexdigest()[:12],
     dep_sha=DEPS, exec_horizon=EXEC, rtc=RTC,
     assist_r=ASSIST, learned_servo=LSERVO,
+    naive_payload=NAIVE_PAYLOAD,
     actor_sha=(hashlib.sha256(open(LSERVO, "rb").read())
                .hexdigest()[:12] if LSERVO else None),
     ckpt=CKPT, argv=sys.argv[1:], torch_seed=TORCHSEED,
@@ -169,6 +180,12 @@ print("PROV " + json.dumps(dict(
     when=time.strftime("%Y-%m-%dT%H:%M:%S"))), flush=True)
 
 r = V.V2Runner(SCENE_SEED)
+if NAIVE_PAYLOAD:
+    # bypass V2Runner's feed-forward override: weld seats, trim never
+    # engages, _ff_on stays False (so end-of-episode FF cleanup is a
+    # no-op by construction)
+    r.weld_grasp = lambda on: A.Runner.weld_grasp(r, on)
+    print("NAIVE-PAYLOAD: payload feed-forward DISABLED", flush=True)
 IMG224 = 224
 
 

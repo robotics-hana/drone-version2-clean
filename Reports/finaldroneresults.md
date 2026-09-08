@@ -881,6 +881,42 @@ same tag; videos on.
   family 97000, paired scenes as all prior rungs. Existing rungs
   are NOT re-run — new rows only.
 
+### PAG FALSIFICATION (2026-09-08): THE PAYLOAD FEED-FORWARD IS
+### INERT IN THE PD-ERA STACK
+
+- Building the pre-registered `--naive-payload` ablation exposed
+  that the mechanism it would ablate does nothing: ground-truth
+  replay with the trim verifiably engaged vs bypassed produced
+  MILLIMETRE-IDENTICAL trajectories (weld ticks 292/195, carry
+  z-errors equal to the mm). Code path confirms: V2Runner.weld_grasp
+  bumps `nominal_hover_thrust` (collect_v2 L131) but pd_flight
+  computes thrust from `self.total_mass` (L170) and never reads
+  that attribute — only the retired MPPI warm-start paths do. The
+  mechanism was live in the MPPI era and was silently orphaned by
+  the PD migration.
+- Consequences: (a) NO banked number changes — every demo and eval
+  flew with the trim inert, identically; (b) payload transfer in
+  the shipped system is actually handled by the PD's conditional
+  z-integral + the expert's measured lead compensation (the
+  "loaded PD parks ~0.28 m past setpoint" law); (c) the
+  dissertation passage "feed-forward in place of a staged lift"
+  MUST BE REWORDED — it credits an inert mechanism (flagged to
+  Hana); (d) the pre-registered naive-payload ablation is moot —
+  the shipped system IS the naive condition. Redesigned experiment
+  (offered, awaiting Hana): a `--pag` arm that updates
+  `total_mass` at the weld instant (true payload-aware control)
+  vs the shipped stack, measuring carry sag/settle/table-drag/
+  place accuracy. The inert `--naive-payload` flag stays in
+  eval_v2 with PROV recording, harmless and documented.
+
+### PLAN D COLLECTION AMENDMENT (2026-09-08): collection measured
+### at 5.4 min/ep (2× the E3-era estimate; ETA 52 h > 30 h wall),
+### so the 300 pairs are split across two parallel jobs: 305829
+### (airvla_v2_d, seed 75000, runs to wall-truncation ≈165 pairs)
+### + 306679 (airvla_v2_d2, seed 76000, 135 pairs). v2_merge_d
+### generalized to both repos; pair units keyed by
+### (collector_seed, pair_id).
+
 ### CONDITIONAL LADDER — success GIVEN correct-target heading
 ### (right-target = episode ended <300 mm of the commanded object)
 
