@@ -26,6 +26,8 @@ usage:
                     # (default 50 = the frozen naive baseline; E1=10)
       [--rtc]       # E2: RTC prefix guidance across chunks (needs
                     # --exec < 50); default off = baseline sampling
+      [--learned-servo actor.pt]  # E5: learned terminal controller
+                    # in place of the scripted servo (needs --assist)
       [--assist R]  # H1 hybrid: scripted terminal servo takes the
                     # last R metres to the weld (default 0 = off)
 """
@@ -91,6 +93,18 @@ assert PICK_TICKS % EXEC == 0 and NAV_TICKS % EXEC == 0, \
 ASSIST = (float(sys.argv[sys.argv.index("--assist") + 1])
           if "--assist" in sys.argv else 0.0)
 assert 0.0 <= ASSIST <= 0.30, "assist radius sanity bound"
+# E5 (pre-registered 2026-09-07, actor frozen + ledgered 2026-09-08):
+# --learned-servo <actor.pt> swaps the takeover behaviour from the
+# scripted creep law to the LEARNED terminal controller
+# (platform_e5.V2PlatformLearned; obs via rl_env.obs_vec, the
+# training env's own function). Requires --assist R > 0 -- the
+# engagement trigger and give-back machinery are H1's, unchanged.
+# Default absent => no new imports, every existing path untouched.
+LSERVO = (sys.argv[sys.argv.index("--learned-servo") + 1]
+          if "--learned-servo" in sys.argv else None)
+if LSERVO is not None:
+    assert ASSIST > 0.0, "--learned-servo requires --assist R > 0"
+    from platform_e5 import V2PlatformLearned
 RTC = "--rtc" in sys.argv
 if RTC:
     assert EXEC < HORIZON, "--rtc needs --exec < %d (chunk overlap)" % HORIZON
@@ -138,7 +152,8 @@ def infer_chunk(batch, prev_tail):
 # documented hazard (review 2026-09-04)
 DEPS = {}
 for _m in ("collect_airvla", "collect_v2", "pd_flight",
-           "collect_demos", "platform_v2"):
+           "collect_demos", "platform_v2",
+           "platform_e5", "rl_env", "rl_nets"):
     _mod = sys.modules.get(_m)
     if _mod is not None and getattr(_mod, "__file__", None):
         DEPS[_m] = hashlib.sha256(
@@ -146,7 +161,9 @@ for _m in ("collect_airvla", "collect_v2", "pd_flight",
 print("PROV " + json.dumps(dict(
     script_sha=hashlib.sha256(open(__file__, "rb").read()).hexdigest()[:12],
     dep_sha=DEPS, exec_horizon=EXEC, rtc=RTC,
-    assist_r=ASSIST,
+    assist_r=ASSIST, learned_servo=LSERVO,
+    actor_sha=(hashlib.sha256(open(LSERVO, "rb").read())
+               .hexdigest()[:12] if LSERVO else None),
     ckpt=CKPT, argv=sys.argv[1:], torch_seed=TORCHSEED,
     scene_seed=SCENE_SEED, tag=TAG,
     when=time.strftime("%Y-%m-%dT%H:%M:%S"))), flush=True)
@@ -172,7 +189,11 @@ def obs_batch(task):
 def run_pick(i):
     obj, start, alt, tgt = r.reset_scene_v2()
     task = A.PROMPT_MANIP.format(obj=obj)
-    plat = V2Platform(r, start, 0.0, assist_r=ASSIST)
+    if LSERVO is not None:
+        plat = V2PlatformLearned(r, start, 0.0, assist_r=ASSIST,
+                                 actor_path=LSERVO)
+    else:
+        plat = V2Platform(r, start, 0.0, assist_r=ASSIST)
     adr = r.cur["adr"]
     miss = 1e9
     lifted = False

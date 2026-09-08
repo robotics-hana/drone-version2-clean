@@ -51,6 +51,49 @@ DXYZ_MAX = 0.01
 DGRIP_MAX = 0.2
 
 
+def body_frame(yaw):
+    """Body-frame basis (fwd, left) for a heading (v2 convention:
+    yaw 0 faces -y)."""
+    fwd = np.array([np.sin(yaw), -np.cos(yaw)])
+    left = np.array([np.cos(yaw), np.sin(yaw)])
+    return fwd, left
+
+
+def to_body(yaw, v):
+    fwd, left = body_frame(yaw)
+    return np.array([v[0:2] @ fwd, v[0:2] @ left, v[2]])
+
+
+def to_world(yaw, v):
+    fwd, left = body_frame(yaw)
+    xy = v[0] * fwd + v[1] * left
+    return np.array([xy[0], xy[1], v[2]])
+
+
+def obs_vec(rr, plat):
+    """The 18-dim body-frame observation (module-level so the E5
+    DEPLOYMENT platform, platform_e5.py, builds its observation
+    through this exact function -- training/deployment obs parity by
+    construction, not by parallel maintenance)."""
+    aim, _ = rr.live_target()
+    aim = np.asarray(aim, dtype=float)
+    jaw = np.asarray(rr.jaws(), dtype=float)
+    vel = np.asarray(rr.data.qvel[0:3], dtype=float)
+    ang = np.asarray(rr.data.qvel[3:6], dtype=float)
+    ap = float(rr.data.qpos[rr.gadr])
+    # yaw error toward the aim (v2 heading convention: 0 faces -y)
+    des = float(np.arctan2(aim[0] - rr.data.qpos[0],
+                           -(aim[1] - rr.data.qpos[1])))
+    yerr = (plat.yaw - des + np.pi) % (2 * np.pi) - np.pi
+    return np.concatenate([
+        to_body(plat.yaw, aim - jaw),
+        to_body(plat.yaw, np.asarray(plat.sp, dtype=float) - jaw),
+        to_body(plat.yaw, vel), ang,
+        [ap, yerr, plat.grip],
+        [float(rr.cur["ap_lo"]), float(rr.cur["ap_hi"]),
+         float(rr.cur["close"])]]).astype(np.float32)
+
+
 def markov_tick(plat, rr):
     """One tick of the Markovian terminal teacher (BC/DAgger
     labeler): platform_v2._servo_tick's law with the approach axis
@@ -101,40 +144,16 @@ class TerminalEnv:
         return np.asarray(aim, dtype=float)
 
     def _frame(self):
-        """Body-frame basis (fwd, left) for the current heading
-        (v2 convention: yaw 0 faces -y)."""
-        y = self.plat.yaw
-        fwd = np.array([np.sin(y), -np.cos(y)])
-        left = np.array([np.cos(y), np.sin(y)])
-        return fwd, left
+        return body_frame(self.plat.yaw)
 
     def _to_body(self, v):
-        fwd, left = self._frame()
-        return np.array([v[0:2] @ fwd, v[0:2] @ left, v[2]])
+        return to_body(self.plat.yaw, v)
 
     def _to_world(self, v):
-        fwd, left = self._frame()
-        xy = v[0] * fwd + v[1] * left
-        return np.array([xy[0], xy[1], v[2]])
+        return to_world(self.plat.yaw, v)
 
     def obs(self):
-        r = self.r
-        aim = self._aim()
-        jaw = np.asarray(r.jaws(), dtype=float)
-        vel = np.asarray(r.data.qvel[0:3], dtype=float)
-        ang = np.asarray(r.data.qvel[3:6], dtype=float)
-        ap = float(r.data.qpos[r.gadr])
-        # yaw error toward the aim (v2 heading convention: 0 faces -y)
-        des = float(np.arctan2(aim[0] - r.data.qpos[0],
-                               -(aim[1] - r.data.qpos[1])))
-        yerr = (self.plat.yaw - des + np.pi) % (2 * np.pi) - np.pi
-        return np.concatenate([
-            self._to_body(aim - jaw),
-            self._to_body(np.asarray(self.plat.sp, dtype=float) - jaw),
-            self._to_body(vel), ang,
-            [ap, yerr, self.plat.grip],
-            [float(r.cur["ap_lo"]), float(r.cur["ap_hi"]),
-             float(r.cur["close"])]]).astype(np.float32)
+        return obs_vec(self.r, self.plat)
 
     def reset(self):
         r = self.r
