@@ -844,6 +844,24 @@ same tag; videos on.
   observation (drone heading to the wrong target) is the first
   item, quantified.
 
+### CONDITIONAL LADDER — success GIVEN correct-target heading
+### (right-target = episode ended <300 mm of the commanded object)
+
+| System (frozen n=60) | Right-target | Grasped of those | Placed of those |
+|---|---|---|---|
+| Pure π₀ 047500 | 42/60 | 1/42 (2.4%) | 1/42 (2.4%) |
+| Pure Plan-C | 47/60 | 1/47 (2.1%) | 1/47 (2.1%) |
+| 047500 + servo | 41/60 | 21/41 (51.2%) | 19/41 (46.3%) |
+| **Plan-C + servo (H1C)** | **46/60** | **24/46 (52.2%)** | **22/46 (47.8%)** |
+
+  Reading: on correct-target flights the hybrid grasps ~52% and
+  places nearly all of them; the raw 36.7% is dragged down by the
+  wrong-target flights. Plan C's paired data cut wrong-target
+  episodes 18-19 → 13-14 (~25% relative), consistent across the
+  pure and hybrid runs (same policy flies in each pair) — the
+  evidence that scaling paired-command data attacks a movable
+  number.
+
 ### H1 FULL RESULT (2026-09-07, job 296350, exit 0) — THE FROZEN
 ### n=60 HYBRID NUMBER
 
