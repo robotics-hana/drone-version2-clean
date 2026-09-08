@@ -740,6 +740,16 @@ same tag; videos on.
     (±0.045/tick grip noise over 100+ in-ball ticks, +10 weld
     bonus). Chain resubmitted as job 301570 (DAgger BC 120+3×60 →
     PPO 9 h from the best round's actor).
+  - **RESULT (2026-09-08, job 301570): at cluster scale the clone
+    welds by pure imitation.** DAgger rounds 0/6 → 0/6 → **6/6 →
+    6/6** (56,559 pairs; ~15× the local gates' data — scale was the
+    missing ingredient, the reframe wasn't even needed). PPO from
+    the best actor opened at **weld100 = 1.00 on its first
+    iteration** (27/27 episodes welding UNDER full sampling noise,
+    std 0.22) — the 9 h PPO leg now optimizes speed/consistency
+    from ceiling rather than discovering the weld. The E5 ladder
+    rung (learned terminal servo vs H1's scripted one) is
+    functionally established pending its gated mini/full eval.
 
 - **H1C composition arm (pre-registered 2026-09-07, Hana's
   question "why not the plan-C model?"): H1 servo on C-15000** —
