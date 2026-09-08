@@ -794,6 +794,15 @@ same tag; videos on.
     contract). Validation re-PASS 4/4. Re-run = job 305571, tag
     e5cmini2. (Nav 1/4 vs h1cmini's 2/4 is the documented cross-run
     GPU jitter — nav never touches the servo.)
+  - **E5C MINI #2 (2026-09-08, job 305571, tag e5cmini2, exit 0) —
+    LEARNED SERVO MATCHES SCRIPTED ON THE MINI:** n=10 median
+    15.3 mm, **6 picked, 5 placed** (h1cmini scripted: 6/6, same
+    paired scenes); NAV 3/4. The contract fix moved conversions
+    2/10 → 6/10. Character difference: the learned servo is slower
+    (two grasps at 140–152 assist ticks vs the script's ~30–60 —
+    trained for reliability within the 300-tick budget), and one
+    weld (ep8, 30-tick engage) was lost during carry. MINI GATE
+    PASSED → full n=60+20 dispatched: job 305965, tag e5cfull.
 
 - **H1C composition arm (pre-registered 2026-09-07, Hana's
   question "why not the plan-C model?"): H1 servo on C-15000** —
