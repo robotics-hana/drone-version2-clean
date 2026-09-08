@@ -26,7 +26,12 @@ from huggingface_hub import HfApi
 from lerobot.datasets.aggregate import aggregate_datasets
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-D_MAN, OUT_SPLIT, OUT_MAN = sys.argv[1:4]
+# Amendment 2026-09-08: collection ran 2x slower than the E3-era
+# estimate (5.4 min/ep, ETA 52 h > the 30 h wall), so the 300 pairs
+# were split across two parallel jobs/repos: airvla_v2_d (seed 75000,
+# truncated at its wall) + airvla_v2_d2 (seed 76000, 135 pairs).
+# Both manifests are passed, both repos aggregated, in that order.
+D_MAN, D2_MAN, OUT_SPLIT, OUT_MAN = sys.argv[1:5]
 SPLIT_SEED = 424245                      # D-episode split only (424244
                                          # is taken: C-wrapper's
                                          # rebalance sampling); the
@@ -43,10 +48,14 @@ def banked_rows(path):
             and r["attempt"] not in werr]
 
 
-d_rows = banked_rows(D_MAN)
-print("d banked:", len(d_rows), flush=True)
+d1_rows = banked_rows(D_MAN)
+d2_rows = banked_rows(D2_MAN)
+d_rows = d1_rows + d2_rows              # must match aggregation order
+print("d banked: %d + %d = %d" % (len(d1_rows), len(d2_rows),
+                                  len(d_rows)), flush=True)
 
-aggregate_datasets(["hanapasta/airvla_v21", "hanapasta/airvla_v2_d"],
+aggregate_datasets(["hanapasta/airvla_v21", "hanapasta/airvla_v2_d",
+                    "hanapasta/airvla_v2_d2"],
                    "hanapasta/airvla_v22")
 ds = LeRobotDataset("hanapasta/airvla_v22")
 total = ds.meta.total_episodes
@@ -67,7 +76,10 @@ new_idx = list(range(V21_EPS, total))
 units = {}
 for i, r in zip(new_idx, d_rows):
     assert r["kind"] in ("pairA", "pairB"), r["kind"]
-    units.setdefault(r["pair_id"], []).append(i)
+    # pair_id restarts at 0 in each collection job -- key units by
+    # (collector_seed, pair_id) or pairs from the two jobs would fuse
+    units.setdefault((r["collector_seed"], r["pair_id"]),
+                     []).append(i)
 pair_units = [tuple(v) for v in units.values()]
 
 
