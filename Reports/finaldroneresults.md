@@ -750,6 +750,25 @@ same tag; videos on.
     from ceiling rather than discovering the weld. The E5 ladder
     rung (learned terminal servo vs H1's scripted one) is
     functionally established pending its gated mini/full eval.
+  - **PPO CHURN-KILL + ACTOR SELECTION (2026-09-08, rule pre-stated
+    at the first sub-0.90 alarm, executed on trigger):** weld100
+    held 0.95–1.00 through iteration ~60 while episodes shortened
+    (PPO learning SPEED under the time-pressure term), then hit the
+    kill rule at iterations 70–71 (0.88 → 0.83, two consecutive
+    sub-0.90 reads, value loss 1.6 → 5.2 — the churn signature; PPO
+    hyperparameters are pre-registered so no mid-run retuning). Job
+    killed at ~iteration 71 / 3,373 episodes. Selection among
+    preserved actors by DETERMINISTIC closed-loop weld rate over 6
+    shared-seed episodes (seed 58000), tie-break mean time-to-weld:
+    bc_init 5/6 @130t · it0040 **6/6 @99t** · it0050 5/6 @68t ·
+    it0060 5/6 @66t (later actors traded welds for speed — the
+    churn tipping over). **FROZEN E5 ACTOR = actor_it0040 →
+    e5_actor_final.pt** (cluster md5 b005267b4932b5895eb4d39aaad2
+    2654, repo git-blob 4569c3ad1751fe103aa534bc5c761d504e3dd89e,
+    also in-repo at Sim'n'Real/Mujoco/e5_actor/). PPO's net
+    contribution over BC: +1 weld and 24% faster (130 → 99 ticks).
+    Next: E5 gated mini — the learned actor in H1's takeover
+    machinery in place of _servo_tick (new flag ⇒ new freeze).
 
 - **H1C composition arm (pre-registered 2026-09-07, Hana's
   question "why not the plan-C model?"): H1 servo on C-15000** —
