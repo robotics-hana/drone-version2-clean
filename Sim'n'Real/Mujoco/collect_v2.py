@@ -967,7 +967,7 @@ def _judge_pick(res):
     return ok, reason
 
 
-def collect_e3_main(repo_id, seed, n_term=150, n_pair=80):
+def collect_e3_main(repo_id, seed, n_term=150, n_pair=80, hours=None):
     """The E3 collection (pre-registered; Hana's demo sign-off
     2026-09-06): n_term terminal-corrective episodes (drift-then-yaw-
     correct) + n_pair PAIRED-COMMAND units. A pair = two episodes on
@@ -1024,12 +1024,29 @@ def collect_e3_main(repo_id, seed, n_term=150, n_pair=80):
                   flush=True)
         return True, res
 
+    # Time-budget stop (amendment 2026-09-09): a wall-killed LeRobot
+    # v3 writer loses the ENTIRE dataset (footer only written at
+    # close -- measured: job 305829's 456 episodes all unreadable),
+    # and node speed varies ~5x, so a fixed episode target cannot
+    # guarantee finishing inside the wall. With a budget the
+    # collector stops CLEANLY at unit boundaries and banks whatever
+    # fits, whatever node the scheduler dealt.
+    def out_of_time():
+        return hours is not None and (time.time() - t0) / 3600 > hours
+
     for slot in range(n_term):
+        if out_of_time():
+            print("TIME-BUDGET STOP before term slot %d" % slot,
+                  flush=True)
+            break
         for _ in range(6):
             ok, _res = attempt("term", slot, terminal=True)
             if ok:
                 break
     for p in range(n_pair):
+        if out_of_time():
+            print("TIME-BUDGET STOP before pair %d" % p, flush=True)
+            break
         slot = n_term + p
         okA = False
         for _ in range(6):
@@ -1058,10 +1075,14 @@ if __name__ == "__main__":
     assert mode in ("demo", "demonav", "demoterm", "collect",
                     "collecte3")
     if mode == "collecte3":
-        # usage: collecte3 <repo_id> <seed> [n_term n_pair]
+        # usage: collecte3 <repo_id> <seed> [n_term n_pair [hours]]
+        # hours = wall-safe time budget: stop cleanly (writer closes)
+        # once elapsed time exceeds it, banking whatever fits
         collect_e3_main(out, int(sys.argv[3]),
                         int(sys.argv[4]) if len(sys.argv) > 4 else 150,
-                        int(sys.argv[5]) if len(sys.argv) > 5 else 80)
+                        int(sys.argv[5]) if len(sys.argv) > 5 else 80,
+                        float(sys.argv[6]) if len(sys.argv) > 6
+                        else None)
         sys.exit(0)
     if mode == "demoterm":
         # E3 terminal-corrective flavour demo (6 eps, coin-flip
