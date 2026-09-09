@@ -30,7 +30,15 @@ from lerobot.datasets.lerobot_dataset import LeRobotDataset
 # estimate (5.4 min/ep, ETA 52 h > the 30 h wall), so the 300 pairs
 # were split across two parallel jobs/repos: airvla_v2_d (seed 75000,
 # truncated at its wall) + airvla_v2_d2 (seed 76000, 135 pairs).
-# Both manifests are passed, both repos aggregated, in that order.
+# Amendment 2026-09-09: the wall-kill of airvla_v2_d proved
+# UNRECOVERABLE -- the LeRobot v3 writer concatenates the whole
+# dataset into single parquet files whose footer is written only at
+# close, so a hard kill leaves every episode unreadable ("Parquet
+# magic bytes not found"). All 455/456 of seed-75000's episodes were
+# lost; the repo is abandoned. Replacement: airvla_v2_d3 (seed 77000,
+# 120 pairs, target sized UNDER the wall so the writer closes).
+# Sources are therefore d2 + d3; both jobs must end with
+# DCOLLECT-EXIT=0 (a clean close is now a merge precondition).
 D_MAN, D2_MAN, OUT_SPLIT, OUT_MAN = sys.argv[1:5]
 SPLIT_SEED = 424245                      # D-episode split only (424244
                                          # is taken: C-wrapper's
@@ -54,8 +62,8 @@ d_rows = d1_rows + d2_rows              # must match aggregation order
 print("d banked: %d + %d = %d" % (len(d1_rows), len(d2_rows),
                                   len(d_rows)), flush=True)
 
-aggregate_datasets(["hanapasta/airvla_v21", "hanapasta/airvla_v2_d",
-                    "hanapasta/airvla_v2_d2"],
+aggregate_datasets(["hanapasta/airvla_v21", "hanapasta/airvla_v2_d2",
+                    "hanapasta/airvla_v2_d3"],
                    "hanapasta/airvla_v22")
 ds = LeRobotDataset("hanapasta/airvla_v22")
 total = ds.meta.total_episodes
@@ -105,7 +113,8 @@ print("split: train %d val %d (new pair-units %d/%d)"
       % (len(train), len(val), len(p_tr_u), len(p_va_u)), flush=True)
 
 api = HfApi()
-for repo in ("hanapasta/airvla_v2_d", "hanapasta/airvla_v22"):
+for repo in ("hanapasta/airvla_v2_d2", "hanapasta/airvla_v2_d3",
+             "hanapasta/airvla_v22"):
     LeRobotDataset(repo).push_to_hub()
     info = api.dataset_info(repo)
     print("PUSH-READBACK %s revision %s files-ok" % (repo,

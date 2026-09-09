@@ -951,6 +951,30 @@ same tag; videos on.
 ### generalized to both repos; pair units keyed by
 ### (collector_seed, pair_id).
 
+### PLAN D DATA-LOSS INCIDENT + RECOVERY (2026-09-09):
+### WALL-KILLED LEROBOT WRITERS LOSE THE WHOLE DATASET
+
+- Job 305829 (seed 75000) hit its 30 h wall at 456 banked episodes
+  (228 pairs). The merge then failed loudly ("Parquet magic bytes
+  not found in footer"): the LeRobot v3 writer concatenates the
+  ENTIRE dataset into single parquet files (data/chunk-000/
+  file-000.parquet + the episode index) whose footer is written
+  only at close — a hard kill leaves every episode unreadable, not
+  just a torn tail. All 455 committed episodes of airvla_v2_d are
+  unrecoverable by standard tools (footer reconstruction = page-
+  level thrift parsing, not attempted); repo abandoned. Job B
+  (airvla_v2_d2, 270 eps / 135 pairs) closed cleanly and is intact.
+- **BANKED LESSON: never point a LeRobot collection at a target
+  that exceeds the wall — the writer must reach close(). Clean
+  DCOLLECT-EXIT=0 is now a hard merge precondition for every
+  source.**
+- Recovery: recollection job 315675 (airvla_v2_d3, seed 77000,
+  120 pairs = 240 eps, sized ~17 h ≪ 30 h wall). Rebuilt chain:
+  merge 315678 (v21 + d2 + d3 → airvla_v22, both-clean-exit gate)
+  → train 315679 (unchanged recipe). Final Plan D dose: 255 pairs
+  (with E3's 80: 335 total; pre-registration's 300 D-pairs amended
+  to 255, documented here). Cost: ~1 day of calendar.
+
 ### CONDITIONAL LADDER — success GIVEN correct-target heading
 ### (right-target = episode ended <300 mm of the commanded object)
 
