@@ -35,11 +35,18 @@ from lerobot.datasets.lerobot_dataset import LeRobotDataset
 # dataset into single parquet files whose footer is written only at
 # close, so a hard kill leaves every episode unreadable ("Parquet
 # magic bytes not found"). All 455/456 of seed-75000's episodes were
-# lost; the repo is abandoned. Replacement: airvla_v2_d3 (seed 77000,
-# 120 pairs, target sized UNDER the wall so the writer closes).
-# Sources are therefore d2 + d3; both jobs must end with
-# DCOLLECT-EXIT=0 (a clean close is now a merge precondition).
-D_MAN, D2_MAN, OUT_SPLIT, OUT_MAN = sys.argv[1:5]
+# lost; the repo is abandoned. Replacements collect under a TIME
+# BUDGET (clean close guaranteed) and the node lottery is hedged by
+# running several in parallel: d2 (76000, complete), d3 (77000),
+# d4 (78000). Sources are now DISCOVERED: any (repo, manifest) whose
+# manifest exists and is non-empty is merged, in seed order; the job
+# gate separately requires each submitted job's clean exit.
+OUT_SPLIT, OUT_MAN = sys.argv[1:3]
+CANDIDATES = [
+    ("hanapasta/airvla_v2_d2", "e3_manifest_76000.jsonl"),
+    ("hanapasta/airvla_v2_d3", "e3_manifest_77000.jsonl"),
+    ("hanapasta/airvla_v2_d4", "e3_manifest_78000.jsonl"),
+]
 SPLIT_SEED = 424245                      # D-episode split only (424244
                                          # is taken: C-wrapper's
                                          # rebalance sampling); the
@@ -56,14 +63,19 @@ def banked_rows(path):
             and r["attempt"] not in werr]
 
 
-d1_rows = banked_rows(D_MAN)
-d2_rows = banked_rows(D2_MAN)
-d_rows = d1_rows + d2_rows              # must match aggregation order
-print("d banked: %d + %d = %d" % (len(d1_rows), len(d2_rows),
-                                  len(d_rows)), flush=True)
+import os
+sources = [(repo, man) for repo, man in CANDIDATES
+           if os.path.exists(man) and os.path.getsize(man) > 0]
+assert sources, "no D source manifests found"
+d_rows = []                              # must match aggregation order
+for repo, man in sources:
+    rows = banked_rows(man)
+    print("source %s: %d banked" % (repo, len(rows)), flush=True)
+    d_rows += rows
+print("d banked total: %d" % len(d_rows), flush=True)
 
-aggregate_datasets(["hanapasta/airvla_v21", "hanapasta/airvla_v2_d2",
-                    "hanapasta/airvla_v2_d3"],
+aggregate_datasets(["hanapasta/airvla_v21"]
+                   + [repo for repo, _ in sources],
                    "hanapasta/airvla_v22")
 ds = LeRobotDataset("hanapasta/airvla_v22")
 total = ds.meta.total_episodes
@@ -113,8 +125,7 @@ print("split: train %d val %d (new pair-units %d/%d)"
       % (len(train), len(val), len(p_tr_u), len(p_va_u)), flush=True)
 
 api = HfApi()
-for repo in ("hanapasta/airvla_v2_d2", "hanapasta/airvla_v2_d3",
-             "hanapasta/airvla_v22"):
+for repo in [r for r, _ in sources] + ["hanapasta/airvla_v22"]:
     LeRobotDataset(repo).push_to_hub()
     info = api.dataset_info(repo)
     print("PUSH-READBACK %s revision %s files-ok" % (repo,
