@@ -1006,6 +1006,13 @@ same tag; videos on.
   mini → full n=60+20 on the frozen protocol (pure; +servo arm
   optional afterward). Smoke-first: 200-step mini-train + loss
   sanity before the real run.
+  **Stated before any ACT result exists:** vanilla ACT is NOT
+  language-conditioned — it ignores the instruction. The baseline
+  therefore measures the ceiling of pure visuomotor imitation on
+  this task; ~chance target selection (~50% wrong-object) is
+  EXPECTED by construction, and the comparison against π₀'s
+  wrong-object rate is the designed argument for why a
+  language-conditioned VLA is needed at all.
 - **Diffusion Policy baseline:** same dataset/split/cadence
   parity, lerobot diffusion policy defaults, same gates; runs
   after ACT on whichever cluster is free.
