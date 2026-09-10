@@ -1009,10 +1009,17 @@ same tag; videos on.
 - **Diffusion Policy baseline:** same dataset/split/cadence
   parity, lerobot diffusion policy defaults, same gates; runs
   after ACT on whichever cluster is free.
-- **Latency (Table 13.1):** benchmarked on Sparks GB10 (deployment-
-  representative), full per-inference path (preprocess incl.
-  tokenization + predict_action_chunk), 100 timed calls after
-  warmup; result recorded below when it lands.
+- **Latency (Table 13.1) — MEASURED (2026-09-10, Sparks GB10,
+  fp32, full per-inference path incl. tokenization, 100 calls
+  after 5 warmup):** median **235.9 ms**, p95 **237.9 ms**, max
+  239.2 ms — a very tight distribution. Amortized per 10 Hz
+  control tick (one inference serves a 50-tick chunk):
+  **4.72 ms**. Reading vs a 150 ms watchdog: a synchronous
+  per-inference deadline is NOT met; amortized/pipelined operation
+  clears it with ~47× margin (inference fits well inside the 5 s
+  a chunk buys, ~5% duty cycle). Weight values do not affect
+  latency, so the v1-era checkpoint used is representative of all
+  π₀ configurations in the ladder.
 
 ### CONDITIONAL LADDER — success GIVEN correct-target heading
 ### (right-target = episode ended <300 mm of the commanded object)
