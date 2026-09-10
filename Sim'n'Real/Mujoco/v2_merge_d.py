@@ -46,6 +46,7 @@ CANDIDATES = [
     ("hanapasta/airvla_v2_d2", "e3_manifest_76000.jsonl"),
     ("hanapasta/airvla_v2_d3", "e3_manifest_77000.jsonl"),
     ("hanapasta/airvla_v2_d4", "e3_manifest_78000.jsonl"),
+    ("hanapasta/airvla_v2_d5", "e3_manifest_79000.jsonl"),
 ]
 SPLIT_SEED = 424245                      # D-episode split only (424244
                                          # is taken: C-wrapper's
