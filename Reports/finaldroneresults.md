@@ -975,6 +975,45 @@ same tag; videos on.
   (with E3's 80: 335 total; pre-registration's 300 D-pairs amended
   to 255, documented here). Cost: ~1 day of calendar.
 
+### FINAL-PHASE ROADMAP PRE-REGISTRATION (2026-09-10, Hana's
+### directive: "then lets run compositional, then ACT (and
+### Diffusion Policy), ignore OOD for now"; both clusters in
+### parallel, mini-first, per-task commits)
+
+- **Ordering:** Plan D results → C1 compositional probe → ACT
+  baseline → Diffusion Policy baseline. OOD (novel objects/gates)
+  DROPPED — stays a documented exclusion.
+- **C1 — compositional zero-shot probe (eval-only, pre-registered
+  here):** the composite task ("fly through the gate, then pick up
+  the {obj} and put it in the wooden box") is DELIBERATELY absent
+  from all training data. New eval episode kind in eval_v2: start
+  from the nav spawn behind the gate, composite instruction,
+  success = clean gate crossing AND pick AND place; stage metrics
+  reported separately (crossed / approached / picked / placed).
+  Harness validated FIRST by chained expert replay (expert nav
+  phase + pick phase on the same scene must complete the composite
+  under the new scoring). Mini n=10 on C-15000 (best flier), then
+  n=10 with +learned servo; full n=60 only if the mini shows any
+  composite success (zero-shot may legitimately be ~0 — a null is
+  a reportable result for a held-out composition).
+- **ACT baseline (from-scratch imitation, pre-registered):**
+  lerobot 0.6 ACT on airvla_v21, SAME train split as Plan C
+  (e3_split train, 728 eps), chunk_size=50 / n_action_steps=50
+  (naive-50 cadence parity), default ACT optimizer, 50k steps,
+  save every 5k, seed 1000. Trains on SPARKS (GB10) in parallel
+  with Myriad's Plan D. Selection: lowest val-split MSE (adapted
+  curve) with final-checkpoint fallback; then the standard gated
+  mini → full n=60+20 on the frozen protocol (pure; +servo arm
+  optional afterward). Smoke-first: 200-step mini-train + loss
+  sanity before the real run.
+- **Diffusion Policy baseline:** same dataset/split/cadence
+  parity, lerobot diffusion policy defaults, same gates; runs
+  after ACT on whichever cluster is free.
+- **Latency (Table 13.1):** benchmarked on Sparks GB10 (deployment-
+  representative), full per-inference path (preprocess incl.
+  tokenization + predict_action_chunk), 100 timed calls after
+  warmup; result recorded below when it lands.
+
 ### CONDITIONAL LADDER — success GIVEN correct-target heading
 ### (right-target = episode ended <300 mm of the commanded object)
 
