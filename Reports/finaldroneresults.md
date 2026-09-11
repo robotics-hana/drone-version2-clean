@@ -1016,6 +1016,19 @@ same tag; videos on.
 - **Diffusion Policy baseline:** same dataset/split/cadence
   parity, lerobot diffusion policy defaults, same gates; runs
   after ACT on whichever cluster is free.
+- **ACT MINI RESULT (2026-09-11, job 321042, tag actmini, exit
+  0):** n=10 median **312.6 mm, 0 picked, 0 placed**; NAV 2/4. As
+  pre-registered for the language-blind baseline: flies plausibly,
+  approaches far worse than any π₀ (baseline 047500: 170.8 mm),
+  converts nothing. Training: 50k steps on Sparks GB10 (~5 h),
+  final loss 0.080, checkpoint hanapasta/act_v21. Full n=60+20
+  dispatched: job 321544, tag actfull. (Ops notes: checkpoint
+  transfer via HF; a nested-folder slip crashed the first mini at
+  config parse — path fixed; eval amendment `--policy act` with
+  native camera keys, PROV records policy_type.)
+- **DP TRAINING DONE (2026-09-11):** 50k steps on GB10 (~7.5 h),
+  final loss 0.005, checkpoint pushing to hanapasta/dp_v21; mini
+  next after ACT full.
 - **Latency (Table 13.1) — MEASURED (2026-09-10, Sparks GB10,
   fp32, full per-inference path incl. tokenization, 100 calls
   after 5 warmup):** median **235.9 ms**, p95 **237.9 ms**, max
