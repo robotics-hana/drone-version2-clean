@@ -368,6 +368,22 @@ if picks:
           % (len(picks), mm[len(mm) // 2],
              sum(x["picked"] for x in picks),
              sum(x["placed"] for x in picks)), flush=True)
+    # Target-true metrics (Hana 2026-09-11): the general median mixes
+    # approach precision with target selection -- an episode that
+    # flies to the DISTRACTOR contributes its (large) distance to the
+    # commanded object. Restricting to episodes that actually went
+    # for the commanded target (miss < 300 mm, below the object-
+    # separation band -- the established wrong-object criterion)
+    # separates the two: target-true median = how close it gets WHEN
+    # it goes for the right object; flew-to-target = how often it
+    # does. Additive print only; nothing upstream changes.
+    tt = [x for x in mm if x < 300]
+    if tt:
+        print("TARGET-TRUE: flew-to-target %d/%d  median %.1f mm"
+              % (len(tt), len(picks), tt[len(tt) // 2]), flush=True)
+    else:
+        print("TARGET-TRUE: flew-to-target 0/%d  median n/a"
+              % len(picks), flush=True)
 navs = [x for x in results if x["kind"] == "nav"]
 if navs:
     print("NAV SUMMARY: n=%d success %d/%d"

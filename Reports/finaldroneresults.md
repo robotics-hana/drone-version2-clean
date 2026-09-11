@@ -1041,6 +1041,41 @@ same tag; videos on.
   latency, so the v1-era checkpoint used is representative of all
   π₀ configurations in the ladder.
 
+### TARGET-TRUE METRICS (defined 2026-09-11, Hana's directive:
+### separate approach precision from target selection)
+
+- **Definition:** flew-to-target = episodes whose closest approach
+  to the COMMANDED object is < 300 mm (below the object-separation
+  band — the established wrong-object criterion); target-true
+  median = median closest approach over those episodes only. The
+  general median stays reported alongside (it mixes both effects:
+  a wrong-object flight contributes its large distance to the
+  commanded target). Harness amendment: eval_v2 now prints a
+  TARGET-TRUE line after every PICK SUMMARY (additive only).
+  Script median convention (mm[n//2]) throughout — the general
+  column below reproduces every banked number exactly.
+
+| Run | n | General median | Flew-to-target | Target-true median |
+|---|---|---|---|---|
+| full47k5 (pure 047500) | 60 | 170.8 | 42/60 | **121.5** |
+| e3cfull (pure Plan C) | 60 | 145.8 | 47/60 | **87.6** |
+| h1full (047500+servo) | 60 | 18.2 | 41/60 | **12.7** |
+| h1cfull (C+scripted servo) | 60 | 19.2 | 46/60 | **15.1** |
+| e5cfull (C+learned servo) | 60 | 12.8 | 45/60 | **10.1** |
+| actmini (ACT baseline) | 10 | 312.6 | 5/10 | 180.4 |
+| mini47k5 | 10 | 175.5 | 6/10 | 110.8 |
+| e3cmini | 10 | 109.3 | 8/10 | 108.8 |
+| h1mini | 10 | 20.8 | 6/10 | 8.6 |
+| h1cmini | 10 | 8.9 | 8/10 | 7.3 |
+| e5cmini2 | 10 | 15.3 | 8/10 | 10.7 |
+
+  Readings: Plan C's data improved BOTH axes (flew-to-target 42→47,
+  target-true 121.5→87.6); the servos' precision is even better
+  than the general medians showed (target-true 10-15 mm); and the
+  language-blind ACT baseline reaches the commanded object almost
+  exactly at chance (5/10) with poor precision even then (180.4) —
+  the pre-registered prediction, now measured.
+
 ### CONDITIONAL LADDER — success GIVEN correct-target heading
 ### (right-target = episode ended <300 mm of the commanded object)
 
