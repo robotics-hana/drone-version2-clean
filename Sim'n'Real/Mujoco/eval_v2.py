@@ -118,11 +118,32 @@ NAIVE_PAYLOAD = "--naive-payload" in sys.argv
 RTC = "--rtc" in sys.argv
 if RTC:
     assert EXEC < HORIZON, "--rtc needs --exec < %d (chunk overlap)" % HORIZON
-KEY = {"observation.images.camera3": "observation.images.base_0_rgb",
-       "observation.images.camera1": "observation.images.left_wrist_0_rgb",
-       "observation.images.camera2": "observation.images.right_wrist_0_rgb"}
+# Baseline-policy support (pre-registered 2026-09-10): --policy act
+# evaluates a from-scratch ACT checkpoint on the identical frozen
+# protocol. ACT trained on the dataset's NATIVE camera keys (no
+# pretrained slot names), so the key map collapses to identity; ACT
+# has no RTC and ignores the task string (language-blind by
+# construction -- the stated point of the baseline). Default "pi0"
+# leaves every existing path byte-identical.
+PTYPE = (sys.argv[sys.argv.index("--policy") + 1]
+         if "--policy" in sys.argv else "pi0")
+assert PTYPE in ("pi0", "act"), PTYPE
+if PTYPE == "act":
+    assert not RTC, "--rtc is a pi0 flag; keep the act baseline pure"
+    assert LSERVO is None, "--learned-servo not composed with act"
+KEY = ({"observation.images.camera3": "observation.images.base_0_rgb",
+        "observation.images.camera1": "observation.images.left_wrist_0_rgb",
+        "observation.images.camera2": "observation.images.right_wrist_0_rgb"}
+       if PTYPE == "pi0" else
+       {"observation.images.camera1": "observation.images.camera1",
+        "observation.images.camera2": "observation.images.camera2",
+        "observation.images.camera3": "observation.images.camera3"})
 
-policy = PI0Policy.from_pretrained(CKPT)
+if PTYPE == "act":
+    from lerobot.policies.act.modeling_act import ACTPolicy
+    policy = ACTPolicy.from_pretrained(CKPT)
+else:
+    policy = PI0Policy.from_pretrained(CKPT)
 if RTC:
     from lerobot.policies.rtc.configuration_rtc import RTCConfig
     policy.config.rtc_config = RTCConfig(enabled=True,
@@ -172,7 +193,7 @@ print("PROV " + json.dumps(dict(
     script_sha=hashlib.sha256(open(__file__, "rb").read()).hexdigest()[:12],
     dep_sha=DEPS, exec_horizon=EXEC, rtc=RTC,
     assist_r=ASSIST, learned_servo=LSERVO,
-    naive_payload=NAIVE_PAYLOAD,
+    naive_payload=NAIVE_PAYLOAD, policy_type=PTYPE,
     actor_sha=(hashlib.sha256(open(LSERVO, "rb").read())
                .hexdigest()[:12] if LSERVO else None),
     ckpt=CKPT, argv=sys.argv[1:], torch_seed=TORCHSEED,
