@@ -1029,6 +1029,18 @@ same tag; videos on.
 - **DP TRAINING DONE (2026-09-11):** 50k steps on GB10 (~7.5 h),
   final loss 0.005, checkpoint pushing to hanapasta/dp_v21; mini
   next after ACT full.
+- **ACT FULL RESULT (2026-09-11, job 321544, exit 0, frozen
+  n=60+20):** PICK median 313.5 mm, **1 picked, 1 placed (1.7%)**;
+  NAV 10/20; **TARGET-TRUE: flew-to-target 28/60 (46.7% —
+  chance-level target selection at n=60) with 150.3 mm true
+  median**. The pre-registered prediction measured exactly: the
+  language-blind from-scratch policy navigates comparably (10/20
+  vs π₀'s 9-12/20), selects the commanded object at coin-flip
+  rate, and approaches worse even when right (150.3 vs π₀'s
+  121.5 true median). The single complete success is the coin
+  landing right once. The baseline argument for language
+  conditioning is complete; π₀'s pretraining buys both grounding
+  (42-47/60 vs 28/60) and precision.
 - **Latency (Table 13.1) — MEASURED (2026-09-10, Sparks GB10,
   fp32, full per-inference path incl. tokenization, 100 calls
   after 5 warmup):** median **235.9 ms**, p95 **237.9 ms**, max
