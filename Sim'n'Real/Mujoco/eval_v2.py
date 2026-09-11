@@ -127,10 +127,10 @@ if RTC:
 # leaves every existing path byte-identical.
 PTYPE = (sys.argv[sys.argv.index("--policy") + 1]
          if "--policy" in sys.argv else "pi0")
-assert PTYPE in ("pi0", "act"), PTYPE
-if PTYPE == "act":
-    assert not RTC, "--rtc is a pi0 flag; keep the act baseline pure"
-    assert LSERVO is None, "--learned-servo not composed with act"
+assert PTYPE in ("pi0", "act", "diffusion"), PTYPE
+if PTYPE != "pi0":
+    assert not RTC, "--rtc is a pi0 flag; keep baselines pure"
+    assert LSERVO is None, "--learned-servo not composed with baselines"
 KEY = ({"observation.images.camera3": "observation.images.base_0_rgb",
         "observation.images.camera1": "observation.images.left_wrist_0_rgb",
         "observation.images.camera2": "observation.images.right_wrist_0_rgb"}
@@ -142,6 +142,10 @@ KEY = ({"observation.images.camera3": "observation.images.base_0_rgb",
 if PTYPE == "act":
     from lerobot.policies.act.modeling_act import ACTPolicy
     policy = ACTPolicy.from_pretrained(CKPT)
+elif PTYPE == "diffusion":
+    from lerobot.policies.diffusion.modeling_diffusion import (
+        DiffusionPolicy)
+    policy = DiffusionPolicy.from_pretrained(CKPT)
 else:
     policy = PI0Policy.from_pretrained(CKPT)
 if RTC:
