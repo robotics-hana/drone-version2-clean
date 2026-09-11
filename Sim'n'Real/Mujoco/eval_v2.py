@@ -225,10 +225,25 @@ def obs_batch(task):
                                      dtype=np.float32))
     batch["observation.state"] = st.unsqueeze(0).cuda()
     batch["task"] = [task]
+    if PTYPE == "diffusion":
+        # DP consumes n_obs_steps=2 stacked observations [B, T, ...];
+        # keep a 1-frame history per key, duplicated at episode start
+        # (cleared by run_pick/run_nav via _dp_hist.clear()). pi0/act
+        # paths untouched.
+        for k in list(batch.keys()):
+            if k == "task":
+                continue
+            prev = _dp_hist.get(k, batch[k])
+            _dp_hist[k] = batch[k]
+            batch[k] = torch.stack([prev, batch[k]], dim=1)
     return batch
 
 
+_dp_hist = {}
+
+
 def run_pick(i):
+    _dp_hist.clear()                     # fresh obs history per episode
     obj, start, alt, tgt = r.reset_scene_v2()
     task = A.PROMPT_MANIP.format(obj=obj)
     if LSERVO is not None:
@@ -303,6 +318,7 @@ def run_pick(i):
 
 
 def run_nav(i):
+    _dp_hist.clear()                     # fresh obs history per episode
     obj, start, alt, tgt = r.reset_scene_v2(nav=True)
     task = A.PROMPT_NAV.format(obj=obj)
     yaw0 = float(2 * np.arctan2(r.data.qpos[6], r.data.qpos[3]))
