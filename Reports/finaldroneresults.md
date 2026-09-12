@@ -885,6 +885,53 @@ same tag; videos on.
   vs C's 13–14) and D + scripted servo (headline), n=60+20, seed
   family 97000, paired scenes as all prior rungs. Existing rungs
   are NOT re-run — new rows only.
+- **AS-BUILT DATA RECORD (final banked counts, vs the 300-pair
+  plan above):** **224 paired units = 448 episodes**, collected
+  across three time-budgeted jobs after the wall-kill loss —
+  airvla_v2_d2 (seed 76000) 270 eps/135 pairs · airvla_v2_d3
+  (77000) 90 eps/45 pairs · airvla_v2_d4 (78000) 88 eps/44 pairs.
+  A fourth job (d5, seed 79000) was dropped by the stated
+  slow-node rule at 3 episodes. Merged with airvla_v21 (910) →
+  **airvla_v22 = 1,358 episodes**, pushed to HF and read-back
+  verified (revision 85978f65). Extended split **1,086 train /
+  272 val**, the v21 split verbatim plus the 224 new pair-units
+  split 179/45 as units. Total paired dose in training:
+  **304 pairs** (E3's 80 + D's 224) = 3.8× the E3 dose.
+- **AS-BUILT TRAINING RECORD:** job 321543, **20,000 steps in
+  8 h 47 min, exit 0**, loss ~0.042–0.056 over the final decade;
+  8 checkpoints. Episode list **846 = 488 C-list + 358 D-pair**
+  episodes (42% new). TWO FALSE STARTS preceded it, both
+  root-caused and structurally closed: (1) job 317458 —
+  lerobot refuses a pre-existing `output_dir`, and the earlier
+  killed attempt had left one (fix: the job now `rm -rf`s its
+  output dir before launching); (2) job 321088 — **`Disk quota
+  exceeded (os error 122)` at the first checkpoint save**, with
+  ~380 GB reclaimed by a janitor pass (all finished runs'
+  `training_state` optimizer dirs, the dead A/B fine-tune models,
+  hub-backed dataset caches, the torn d-repo) while keeping
+  047500, 060000, C-15000, the E5 actor and airvla_v22. Neither
+  crash cost data, only ~2 h of wall clock.
+- **AS-BUILT VALIDATION CURVE** (extended val set, 272 episodes,
+  flavour split; baseline = unmodified C-15000 scored on the same
+  windows as pseudo-checkpoint 000000; job 323960):
+
+| Checkpoint | Combined MSE | Old-flavour ratio vs baseline |
+|---|---|---|
+| baseline C-15000 | 7.733e-5 | 1.000 |
+| 002500 | 7.535e-5 | 0.947 |
+| 005000 | 6.867e-5 | 0.918 |
+| 007500 | 8.789e-5 | 1.070 |
+| 010000 | 6.958e-5 | 0.996 |
+| 012500 | 7.320e-5 | 0.939 |
+| **015000 ← SELECTED** | **6.797e-5** | **0.881** |
+| 017500 | 7.038e-5 | 0.913 |
+| 020000 | 7.195e-5 | 0.925 |
+
+  Every checkpoint passed the 1.10× churn bound and seven of
+  eight scored BELOW the baseline with old-flavour rows improved
+  — offline, Plan D looked like the campaign's best fine-tune.
+  That is precisely what makes its closed-loop regression the
+  sharpest offline/online divergence on record here.
 - **SELECTION + GATE RECORD (2026-09-12, overnight):** curve
   complete, all 8 checkpoints under the churn bound; **D-15000
   selected** (mse 6.80e-5 < baseline 7.73e-5; old-flavour ratio
@@ -949,6 +996,23 @@ same tag; videos on.
   confirms erosion and turns the pair-scaling result positive;
   no recovery strengthens the overdose finding against its main
   objection. Cluster: Myriad (C-15000 checkpoint locality).
+- **SMOKE GATES PASSED (2026-09-12, both clusters):** Myriad job
+  329427 — 200 steps, **exit 0**, loss 0.065, checkpoint saved:
+  the KI flags are accepted by the trainer with no config
+  incompatibility. Insulated training runs at **0.83 s/step vs
+  the full fine-tune's 1.2 s/step** (gradients only through the
+  action expert), so the 20k run costs ~4.6 h instead of 8.8.
+  A parallel config-smoke on Sparks (run during a Myriad network
+  outage, using 047500 + airvla_v21 since C-15000/v22 are
+  Myriad-local) also completed cleanly at **3.45 s/step**,
+  confirming π₀ training is ~4× slower on the GB10 and that
+  Myriad routing was correct. **Full D-KI training = job 330045.**
+- **OPERATIONAL NOTE (2026-09-12):** Myriad was unreachable for
+  several hours (TCP timeouts to the login node; DNS fine, Sparks
+  unaffected — a UCL-side incident, not the scheduled work).
+  UCL's calendar shows a **planned Myriad outage 24–25 September
+  2026** (central switch replacement, no access); any remaining
+  cluster work must land before it.
 
 ### E5C FULL RESULT (2026-09-08, job 305965, exit 0) — NEW BEST
 ### SYSTEM: THE LEARNED SERVO BEATS ITS SCRIPTED TEACHER
