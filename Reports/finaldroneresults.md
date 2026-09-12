@@ -1196,6 +1196,45 @@ same tag; videos on.
   latency, so the v1-era checkpoint used is representative of all
   π₀ configurations in the ladder.
 
+### GROUNDING PROBE RESULT (recovered from cluster logs
+### 2026-09-12 — previously pre-registered and run, but never
+### banked as a result block)
+
+Offline probe (groundprobe.py, jobs 290283 / v2gprobec): on val
+PAIR episodes the SAME observation is presented with BOTH commands
+under pinned noise; the 50-step integrated xy displacement is
+classified toward the correct / wrong object by cosine against the
+layout's object directions. FLIP = the fraction of pairs where the
+heading actually swaps with the instruction — the direct test of
+instruction sensitivity.
+
+| Checkpoint | correct | wrong | null | **FLIP** |
+|---|---|---|---|---|
+| 000000 (unmodified 047500 baseline) | 0.19 | 0.53 | 0.28 | 0.03 |
+| Plan-C 012500 | 0.22 | 0.50 | 0.28 | 0.00 |
+| **Plan-C 015000 (selected)** | 0.25 | 0.44 | 0.31 | 0.03 |
+| Plan-C 017500 | 0.22 | 0.47 | 0.31 | 0.00 |
+| Plan-C 020000 | 0.28 | 0.41 | 0.31 | 0.03 |
+
+- **Reading:** the paired-command data moved the bias in the right
+  direction — wrong-object headings 0.53 → 0.41-0.44, correct
+  0.19 → 0.25-0.28 — but the **FLIP rate stayed at ~0.03 (i.e.
+  essentially zero) at every checkpoint**: swapping the
+  instruction over an identical observation almost never swaps
+  the policy's early heading.
+- **Why this does NOT contradict the closed-loop 47/60**
+  (flew-to-target for the same C-15000): the probe integrates
+  only the first 50 steps from the episode START, where the two
+  objects often lie in a similar direction and ~30% of cases are
+  unclassifiable ("null") — it is an early-phase, low-sensitivity
+  instrument. Discrimination evidently happens later in the
+  approach, which the probe cannot see.
+- **Status: SUPERSEDED** by the closed-loop TARGET-TRUE metric
+  below (frozen protocol, all runs, measures what the drone
+  actually does). Cite flew-to-target for grounding claims; the
+  probe is reportable as methodology that proved too insensitive,
+  with its one durable finding being the near-zero flip rate.
+
 ### TARGET-TRUE METRICS (defined 2026-09-11, Hana's directive:
 ### separate approach precision from target selection)
 
