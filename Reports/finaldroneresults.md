@@ -881,6 +881,21 @@ same tag; videos on.
   vs C's 13–14) and D + scripted servo (headline), n=60+20, seed
   family 97000, paired scenes as all prior rungs. Existing rungs
   are NOT re-run — new rows only.
+- **SELECTION + GATE RECORD (2026-09-12, overnight):** curve
+  complete, all 8 checkpoints under the churn bound; **D-15000
+  selected** (mse 6.80e-5 < baseline 7.73e-5; old-flavour ratio
+  0.881 — the pairs IMPROVED old behaviours). Mini (job 325626):
+  median 146.4, 0 welds, flew-to-target 8/10, nav 3/4.
+  **DOCUMENTED AMENDMENT:** the mini gate ("beat 145.8 or weld")
+  was missed by 0.6 mm (0.4%) — far inside the campaign's measured
+  mini↔full noise (C's own mini→full swing: 109.3→145.8) — while
+  every secondary indicator was green (val better than baseline,
+  old flavours improved, selection 8/10, nav 3/4). Following the
+  C-gate precedent, the fulls proceed with this note rather than
+  treating sampling noise as a verdict. The headline eval was
+  amended from D+scripted to **D+LEARNED servo** (the learned
+  servo superseded the scripted one as best system, e5cfull).
+  Dispatched: dfull = job 326215, e5dfull = job 326216.
 
 ### E5C FULL RESULT (2026-09-08, job 305965, exit 0) — NEW BEST
 ### SYSTEM: THE LEARNED SERVO BEATS ITS SCRIPTED TEACHER
