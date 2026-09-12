@@ -254,6 +254,18 @@ nav). Full narrative + film diagnosis in finaldroneresults.md.
 | Hybrid: 047500 + terminal servo (R=0.15) | 296350, h1full | 21/60 (35.0%) | 19/60 (31.7%) | 18.2 mm | 10/20 |
 | Hybrid: Plan-C + scripted servo (H1C) | 298457, h1cfull | 24/60 (40.0%) | 22/60 (36.7%) | 19.2 mm | 11/20 |
 | **Hybrid: Plan-C + LEARNED servo (E5C)** | **305965, e5cfull** | **36/60 (60.0%)** | **27/60 (45.0%)** | **12.8 mm** | **11/20** |
+| Pure Plan-D (pair overdose arm) | 326215, dfull | 1/60 (1.7%) | 1/60 (1.7%) | 204.9 mm | 10/20 |
+| Hybrid: Plan-D + learned servo | 326216, e5dfull | 28/60 (46.7%) | 21/60 (35.0%) | 16.4 mm | 11/20 |
+| ACT baseline (language-blind) | 321544, actfull | 1/60 (1.7%) | 1/60 (1.7%) | 313.5 mm | 10/20 |
+| Diffusion Policy baseline (language-blind) | 324360, dpfull | 0/60 | 0/60 | 249.8 mm | 0/20 |
+
+Final campaign verdict (2026-09-12): **Plan C + learned terminal
+servo is the best system (60% grasp / 45% complete task)**. Plan D
+(~300 pairs) REGRESSED grounding despite better val MSE —
+dose-response is non-monotonic (wrong-target 18-19 → 13-14 @80
+pairs → 20 @~300). Both from-scratch baselines are language-blind
+(chance target selection) and grasp-free, completing the argument
+for the pretrained VLA + learned terminal controller composition.
 
 E5C addendum (2026-09-08): the learned servo (DAgger clone of a
 Markovianized scripted teacher + PPO speed polish, frozen actor
