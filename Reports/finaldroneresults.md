@@ -927,6 +927,29 @@ same tag; videos on.
   Plan D closes as the measured overdose arm of the dose-response
   curve (0 pairs: 18-19 wrong-target · 80: 13-14 · ~300: 20).**
 
+### D-KI PRE-REGISTRATION (2026-09-12, Hana's approval: "lets try
+### knowledge insulation ... do a mini trial to check for errors
+### before committing to full run")
+
+- **Hypothesis:** Plan D's grounding regression is BACKBONE EROSION
+  under full fine-tuning — action-expert gradients degrading the
+  VLM's language representations (Driess et al., arXiv:2505.23705,
+  the π₀ authors' Knowledge Insulation result; the whole campaign
+  trained with train_expert_only=false).
+- **Design:** identical to Plan D in every respect (airvla_v22,
+  same episode list, 20k steps, same LR schedule, seed 1000)
+  except `freeze_vision_encoder=true` + `train_expert_only=true`.
+  One-flag causal test. dki_train_wrapper.py.
+- **Gates:** 200-step smoke first (Hana's mini-first rule), then
+  full train → val curve (same machinery, baseline C-15000) →
+  closed-loop mini → fulls only if the mini shows grounding
+  recovery. **Primary endpoint: flew-to-target vs C's 47/60 and
+  D's 40/60.**
+- **Interpretation, stated in advance:** recovery to ≥47/60
+  confirms erosion and turns the pair-scaling result positive;
+  no recovery strengthens the overdose finding against its main
+  objection. Cluster: Myriad (C-15000 checkpoint locality).
+
 ### E5C FULL RESULT (2026-09-08, job 305965, exit 0) — NEW BEST
 ### SYSTEM: THE LEARNED SERVO BEATS ITS SCRIPTED TEACHER
 
