@@ -842,6 +842,10 @@ same tag; videos on.
 | Hybrid: 047500 + terminal servo (R=0.15) | 296350, h1full | 21/60 (35.0%) | 19/60 (31.7%) | 18.2 mm | 10/20 |
 | Hybrid: Plan-C + scripted servo (H1C) | 298457, h1cfull | 24/60 (40.0%) | 22/60 (36.7%) | 19.2 mm | 11/20 |
 | **Hybrid: Plan-C + LEARNED servo (E5C)** | **305965, e5cfull** | **36/60 (60.0%)** | **27/60 (45.0%)** | **12.8 mm** | **11/20** |
+| Pure Plan-D (overdose arm) | 326215, dfull | 1/60 (1.7%) | 1/60 (1.7%) | 204.9 mm | 10/20 |
+| Hybrid: Plan-D + learned servo | 326216, e5dfull | 28/60 (46.7%) | 21/60 (35.0%) | 16.4 mm | 11/20 |
+| ACT baseline (language-blind) | 321544, actfull | 1/60 (1.7%) | 1/60 (1.7%) | 313.5 mm | 10/20 |
+| Diffusion Policy baseline (language-blind) | 324360, dpfull | 0/60 | 0/60 | 249.8 mm | 0/20 |
 
   Remaining headroom (corrected 2026-09-08, per-episode analysis
   of h1cfull): **wrong-object flights 14/60** (miss in the
@@ -912,6 +916,16 @@ same tag; videos on.
   over-represented relative to the eval distribution. The honest
   reading for the dissertation: paired-command grounding has a
   useful dose and an overdose at this data scale.
+- **E5D FULL RESULT (2026-09-12, job 326216, exit 0) — THE
+  CAMPAIGN'S LAST RUNG:** D-15000 + learned servo: PICK median
+  16.4 mm, **28 picked (46.7%), 21 placed (35.0%)**; TARGET-TRUE
+  flew-to-target 39/60, true median 10.5 mm; NAV 11/20. Below
+  C+learned servo (60% / 45%) — the composition faithfully
+  transmits pure D's grounding regression (arrivals 39 vs 45).
+  **FINAL CAMPAIGN VERDICT: Plan C + learned terminal servo is
+  the best system — 60% grasp, 45% complete pick-and-place — and
+  Plan D closes as the measured overdose arm of the dose-response
+  curve (0 pairs: 18-19 wrong-target · 80: 13-14 · ~300: 20).**
 
 ### E5C FULL RESULT (2026-09-08, job 305965, exit 0) — NEW BEST
 ### SYSTEM: THE LEARNED SERVO BEATS ITS SCRIPTED TEACHER
