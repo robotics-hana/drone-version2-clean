@@ -896,6 +896,22 @@ same tag; videos on.
   amended from D+scripted to **D+LEARNED servo** (the learned
   servo superseded the scripted one as best system, e5cfull).
   Dispatched: dfull = job 326215, e5dfull = job 326216.
+- **D FULL RESULT (2026-09-12, job 326215, exit 0) — HYPOTHESIS
+  FALSIFIED AT PURE-POLICY LEVEL:** PICK median **204.9 mm, 1
+  picked, 1 placed**; TARGET-TRUE **flew-to-target 40/60** (C:
+  47/60 — a REGRESSION), true median 110.7 (C: 87.6); NAV 10/20
+  (C: 12/20). The 4× paired dose did not improve closed-loop
+  grounding; it worsened every axis, despite BETTER validation
+  MSE (6.80e-5 vs 7.73e-5) with improved old-flavour rows — the
+  campaign's starkest offline/online divergence yet, and in
+  hindsight the mini's 0.6 mm gate miss was signal, not noise.
+  Dose-response is now non-monotonic: 0→80 pairs helped
+  (wrong-target 18→13), +224 more hurt (→20/60). Candidate
+  mechanisms (not adjudicated): pairs-only new data at 42% of the
+  list diluted terminal-corrective exposure; pair scenes
+  over-represented relative to the eval distribution. The honest
+  reading for the dissertation: paired-command grounding has a
+  useful dose and an overdose at this data scale.
 
 ### E5C FULL RESULT (2026-09-08, job 305965, exit 0) — NEW BEST
 ### SYSTEM: THE LEARNED SERVO BEATS ITS SCRIPTED TEACHER
