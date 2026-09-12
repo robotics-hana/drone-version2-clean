@@ -1041,6 +1041,17 @@ same tag; videos on.
   landing right once. The baseline argument for language
   conditioning is complete; π₀'s pretraining buys both grounding
   (42-47/60 vs 28/60) and precision.
+- **DP FULL RESULT (2026-09-12, job 324360, exit 0, frozen
+  n=60+20):** PICK median 249.8 mm, **0 picked, 0 placed**;
+  **NAV 0/20** (never crosses the gate); TARGET-TRUE: flew-to-
+  target 35/60 (within noise of chance; binomial p≈0.12), true
+  median **115.2 mm**. Profile vs ACT: better approach precision
+  near objects (115 vs 150 mm — diffusion's multi-modal fitting),
+  but no grasps at all and no navigation. Both from-scratch
+  baselines: language-blind (chance selection), grasp-free, and
+  each worse than π₀ on at least one axis π₀'s pretraining
+  provides. Mini was 0/10, med 365.8, nav 0/4 (obs-history
+  harness amendment validated there).
 - **Latency (Table 13.1) — MEASURED (2026-09-10, Sparks GB10,
   fp32, full per-inference path incl. tokenization, 100 calls
   after 5 warmup):** median **235.9 ms**, p95 **237.9 ms**, max
