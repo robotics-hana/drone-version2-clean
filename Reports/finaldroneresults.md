@@ -1067,6 +1067,35 @@ same tag; videos on.
   2026** (central switch replacement, no access); any remaining
   cluster work must land before it.
 
+### V3-ARM PRE-REGISTRATION (2026-09-13, Hana: "train a v3 vla,
+### same training demonstrations as v2, but have the policy
+### control the arm as well")
+
+- **Question:** does giving the VLA arm-joint control help or hurt,
+  at this data scale? (The design discussion predicts: the
+  demonstrated arm signal is near-deterministic given phase, so
+  supervision adds little information and two dims of flow noise;
+  measured slew/stability limits argue for platform enforcement.
+  Either outcome is the measured answer to a real design question.)
+- **Data — NO recollection:** relabel airvla_v2's padded action
+  dims 3,4 with per-step arm-joint deltas reconstructed from
+  consecutive proprio states (episode-boundary-safe; last frame 0),
+  action stats refreshed → **hanapasta/airvla_v3** (relabel_v3.py).
+  Same 600 demonstrations, same 7-dim layout, byte-identical
+  everything else.
+- **Training:** the v2 baseline's exact from-base recipe (π₀ base,
+  30k steps, batch 4, seed 1000, full fine-tune) so **v3-arm vs
+  047500 is a one-variable comparison: arm supervision only.**
+- **Eval:** new `--policy-arm` flag — platform applies action dims
+  3,4 as arm-joint deltas, clipped per tick to the flight-validated
+  slew bound (0.06/tick), REPLACING the phase-based q_travel/
+  q_carry switching; deploy flag retained for metrics only. New
+  flag ⇒ compile + expert-replay validation before use (replay
+  with relabeled expert actions must still weld).
+- **Gates:** relabel --dry verify → training smoke (200 steps) →
+  full train → val curve (T4-style selection) → closed-loop mini →
+  frozen full n=60+20. Mini-first at every stage.
+
 ### E5C FULL RESULT (2026-09-08, job 305965, exit 0) — NEW BEST
 ### SYSTEM: THE LEARNED SERVO BEATS ITS SCRIPTED TEACHER
 
