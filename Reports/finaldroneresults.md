@@ -1095,6 +1095,28 @@ same tag; videos on.
 - **Gates:** relabel --dry verify → training smoke (200 steps) →
   full train → val curve (T4-style selection) → closed-loop mini →
   frozen full n=60+20. Mini-first at every stage.
+- **RELABEL DONE (2026-09-13, job 332663, V3RELABEL-EXIT=0):**
+  patched 239,520 frames; **|d_arm| mean 0.0019, p99 = max =
+  0.0300 rad/step** — the hard ceiling at exactly 0.03 is the
+  platform's slew-rate cap showing through the reconstruction,
+  precisely the near-deterministic signature the design argument
+  predicted. Refreshed action std dims 3,4 ≈ 0.0073 (same order as
+  the position dims → healthy normalization). Verified nonzero on
+  reload; pushed **hanapasta/airvla_v3**; local copy at
+  `~/Scratch/hf_cache/lerobot/hanapasta/airvla_v3` (the offline
+  path training reads).
+- **TRAINING SMOKE SUBMITTED (job 332683, v3smoke.job):** built by
+  sed-transforming v2train.job on the cluster (no whole-file scp);
+  word-level diff audit of the train command shows exactly 4
+  changes — dataset→airvla_v3, output→pi0_v3_smoke, steps 30000→200,
+  save_freq 2500→200. Episodes list (488), seed 1000, batch 4,
+  π₀-base path, full-fine-tune flags byte-identical to the 047500
+  recipe. Also fixed the historical bad `HF_HOME=/c/Users/...` line
+  (the makedirs-spy era bug) to `$HOME/Scratch/hf_cache`, and the
+  job self-cleans its output dir. Plan on smoke pass: submit 30k
+  full train (pi0_v3_out) mirroring v2's actual procedure — 30k
+  first, val curve, extend toward 60k only if the curve is still
+  improving at 30k (exactly how 047500 was reached).
 
 ### E5C FULL RESULT (2026-09-08, job 305965, exit 0) — NEW BEST
 ### SYSTEM: THE LEARNED SERVO BEATS ITS SCRIPTED TEACHER
