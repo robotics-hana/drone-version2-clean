@@ -1007,6 +1007,41 @@ same tag; videos on.
   Myriad-local) also completed cleanly at **3.45 s/step**,
   confirming π₀ training is ~4× slower on the GB10 and that
   Myriad routing was correct. **Full D-KI training = job 330045.**
+- **D-KI TRAINING + CURVE (2026-09-13, job 330045 exit 0, curve
+  job 330291):** 20,000 steps completed; validation curve
+  complete, all 8 checkpoints inside the churn bound (max 1.023).
+  **Selected: D-KI-005000** (mse 7.2646e-5, old-flavour ratio
+  0.953) by the same pre-registered rule.
+
+| Checkpoint | **D-KI** MSE | old-ratio | Plan D MSE (full FT) |
+|---|---|---|---|
+| baseline C-15000 | 7.7331e-5 | 1.000 | 7.7331e-5 |
+| 002500 | 7.8698e-5 | 1.011 | 7.5348e-5 |
+| **005000 ← SELECTED** | **7.2646e-5** | **0.953** | 6.8665e-5 |
+| 007500 | 7.7655e-5 | 1.009 | 8.7888e-5 |
+| 010000 | 7.6070e-5 | 0.993 | 6.9584e-5 |
+| 012500 | 7.7581e-5 | 1.023 | 7.3197e-5 |
+| 015000 | 7.6880e-5 | 1.009 | 6.7972e-5 |
+| 017500 | 7.6542e-5 | 1.007 | 7.0375e-5 |
+| 020000 | 7.7244e-5 | 1.014 | 7.1948e-5 |
+
+- **THE OFFLINE METRIC NOW POINTS AGAINST THE HYPOTHESIS — BY
+  DESIGN.** Insulated training fits the data notably WORSE than
+  full fine-tuning at every checkpoint (best 7.26e-5 vs Plan D's
+  6.80e-5, and barely under the untouched baseline's 7.73e-5),
+  which is exactly what freezing the backbone should do: less
+  capacity to absorb the new data. The hypothesis predicts the
+  OPPOSITE ordering closed-loop. This makes D-KI a genuinely
+  strong test: if its grounding recovers toward C's 47/60 while
+  its validation MSE is worse than D's, the offline/online
+  divergence is confirmed twice over and in opposite directions.
+- **MINI-GATE POWER NOTE (stated before the result):** at n=10 the
+  mini CANNOT discriminate 47/60 (78%) from 40/60 (67%) — both C
+  and D scored 8/10 flew-to-target at mini scale. The D-KI mini
+  (job 331457) therefore serves as a crash/sanity gate only; the
+  **primary endpoint is the n=60 full**, which proceeds unless the
+  mini is catastrophic (e.g. flight breakdown or ≤4/10
+  flew-to-target).
 - **OPERATIONAL NOTE (2026-09-12):** Myriad was unreachable for
   several hours (TCP timeouts to the login node; DNS fine, Sparks
   unaffected — a UCL-side incident, not the scheduled work).
