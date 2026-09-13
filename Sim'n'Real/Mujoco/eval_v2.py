@@ -58,9 +58,21 @@ TAG = (sys.argv[sys.argv.index("--tag") + 1]
 VIDEO = "--video" in sys.argv           # film episodes: cam1|cam2|cam3
                                         # strip, every 2nd tick, 10 fps
                                         # (identical to the demo videos)
-SCENE_SEED = 97000                     # NEW family: disjoint from
+SCENE_SEED = (int(sys.argv[sys.argv.index("--sceneseed") + 1])
+              if "--sceneseed" in sys.argv else 97000)
+                                       # default 97000 = the frozen
+                                       # family, disjoint from
                                        # collection (71000), v1 eval
-                                       # (77000), probes (88000)
+                                       # (77000), probes (88000);
+                                       # 99000 reserved for the SOLO
+                                       # probe's fresh test set
+# SOLO probe (Hana 2026-09-13): --solo evaluates pick episodes on
+# scenes containing ONLY the commanded object (distractor parked
+# off-scene by reset_scene_v2) — pure grasp competence with the
+# target-selection confound physically removed. A NEW PROTOCOL ARM,
+# never mixed into the frozen two-object ladder; solo scenes are
+# mildly out-of-distribution (all training scenes have two objects).
+SOLO = "--solo" in sys.argv
 HORIZON = 50
 # E1 (pre-registered 2026-09-05): actions EXECUTED per 50-step chunk
 # before re-inferring. Default 50 = the frozen naive baseline -- with
@@ -197,7 +209,7 @@ print("PROV " + json.dumps(dict(
     script_sha=hashlib.sha256(open(__file__, "rb").read()).hexdigest()[:12],
     dep_sha=DEPS, exec_horizon=EXEC, rtc=RTC,
     assist_r=ASSIST, learned_servo=LSERVO,
-    naive_payload=NAIVE_PAYLOAD, policy_type=PTYPE,
+    naive_payload=NAIVE_PAYLOAD, policy_type=PTYPE, solo=SOLO,
     actor_sha=(hashlib.sha256(open(LSERVO, "rb").read())
                .hexdigest()[:12] if LSERVO else None),
     ckpt=CKPT, argv=sys.argv[1:], torch_seed=TORCHSEED,
@@ -244,7 +256,7 @@ _dp_hist = {}
 
 def run_pick(i):
     _dp_hist.clear()                     # fresh obs history per episode
-    obj, start, alt, tgt = r.reset_scene_v2()
+    obj, start, alt, tgt = r.reset_scene_v2(solo=SOLO)
     task = A.PROMPT_MANIP.format(obj=obj)
     if LSERVO is not None:
         plat = V2PlatformLearned(r, start, 0.0, assist_r=ASSIST,

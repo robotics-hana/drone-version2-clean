@@ -190,7 +190,7 @@ class V2Runner(A.Runner):
     TABLE_C = np.array([0.0, 0.50])    # FIXED table centre (Hana:
                                        # constant framing in camera3)
     def reset_scene_v2(self, obj=None, corrective=False, nav=False,
-                       layout=None):
+                       layout=None, solo=False):
         rng = self.rng
         fe = float(self.TABLE_C[1]) + 0.30          # front edge y
         if layout is not None:
@@ -258,7 +258,20 @@ class V2Runner(A.Runner):
         curo = self.objs[obj]
         self.data.qpos[curo["adr"]:curo["adr"] + 2] = tgt_xy
         other = [o for k, o in self.objs.items() if k != obj][0]
-        self.data.qpos[other["adr"]:other["adr"] + 2] = dis_xy
+        if solo:
+            # SOLO probe (Hana 2026-09-13): only the commanded object
+            # on the table -- the distractor is parked far off-scene
+            # (outside every camera frame, on the floor), removing the
+            # target-selection confound entirely. Scene sampling above
+            # is UNCHANGED (same rng draws), so a solo episode differs
+            # from its two-object counterpart only by the distractor's
+            # absence. Solo scenes are mildly out-of-distribution:
+            # every training scene contains both objects.
+            assert layout is None and not nav and not corrective
+            self.data.qpos[other["adr"]:other["adr"] + 2] = [3.0, 3.0]
+            self.data.qpos[other["adr"] + 2] = 0.10
+        else:
+            self.data.qpos[other["adr"]:other["adr"] + 2] = dis_xy
         # the BOX beside the fixed table, side coin-flipped, both sides
         # inside the measured camera3 frame (pinned when replaying a
         # paired layout)
@@ -698,10 +711,11 @@ class V2Runner(A.Runner):
         return float(np.linalg.norm(oxy - self.bin_xy))
 
     def episode_v2(self, corrective=False, obj=None, terminal=False,
-                   layout=None):
+                   layout=None, solo=False):
         obj, start, alt, tgt = self.reset_scene_v2(obj=obj,
                                                    corrective=corrective,
-                                                   layout=layout)
+                                                   layout=layout,
+                                                   solo=solo)
         task = A.PROMPT_MANIP.format(obj=obj)
         frames = []
         grasped = self.pick_v2(frames, task, alt, corrective=corrective,
