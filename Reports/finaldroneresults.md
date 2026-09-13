@@ -1040,7 +1040,8 @@ same tag; videos on.
   43/60** (D: 40, C: 47), **target-true median 88.2 mm** (D:
   110.7, C: 87.6 — precision FULLY recovered), general median
   **117.8 mm — the best pure policy of the campaign** (C: 145.8),
-  0 picked. **Interpretation per the pre-registered endpoints:
+  0 picked; **NAV 12/20 — matching C's campaign best** (D had
+  regressed it to 10/20); exit 0. **Interpretation per the pre-registered endpoints:
   PARTIAL grounding recovery — Plan D's regression decomposes
   into BOTH candidate mechanisms.** Backbone erosion (fixed by
   insulation) accounts for all of the precision damage and about
