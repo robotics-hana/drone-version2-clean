@@ -1117,6 +1117,30 @@ same tag; videos on.
   full train (pi0_v3_out) mirroring v2's actual procedure — 30k
   first, val curve, extend toward 60k only if the curve is still
   improving at 30k (exactly how 047500 was reached).
+- **SMOKE ATTEMPT 1 FAILED, ENV NOT MODEL (job 332683, exit 1):**
+  lerobot's metadata loader saw the `.cache/huggingface/download/`
+  marker that `snapshot_download(local_dir=...)` leaves inside the
+  dataset dir (`has_legacy_hub_download_metadata`) and forced a hub
+  re-sync, which dies under `HF_HUB_OFFLINE=1`. The relabel's
+  `copytree` had carried the marker from the freshly re-downloaded
+  v2 mirror (the original writer-created v2 dir was lost in the
+  quota janitor sweep — writer-created dirs never have the marker,
+  which is why all previous offline trains worked). Fix: deleted
+  `.cache/` from both `airvla_v3` and `airvla_v2` local mirrors
+  (download bookkeeping only; zero dataset bytes touched).
+  Resubmitted as **job 333133** with a fresh log (v3smoke2.log —
+  per-job-log rule; first resubmit 333128 reused the old log and
+  was qdel'd before start, own job).
+- **SOLO MINI PASSED (2026-09-13, job 332011, SOLOMINI-EXIT=0):**
+  Plan C on 10 solo pick scenes (seed 99000, PROV `solo: true`):
+  **flew-to-target 9/10, target-true median 48.8 mm**, general
+  median 77.7 mm, picked 1 placed 1 (ep1: weld tick 295, d_bin
+  34.9 mm). Gate (not catastrophic, >4/10 flew-to-target) passed
+  decisively — with the distractor physically absent the approach
+  band tightens (9/10 within 300 mm vs 47/60 paired). Harness path
+  validated ⇒ **4 solo fulls submitted (n=30 picks each, jobs
+  333129 047500 / 333130 C-15000 / 333131 ACT / 333132 DP)**, tags
+  solofull_47k5/c/act/dp, per-job logs.
 
 ### E5C FULL RESULT (2026-09-08, job 305965, exit 0) — NEW BEST
 ### SYSTEM: THE LEARNED SERVO BEATS ITS SCRIPTED TEACHER
