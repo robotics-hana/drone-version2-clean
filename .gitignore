@@ -13,3 +13,9 @@ Mujoco/MUJOCO_LOG.TXT
 *.3mf
 Reports/airvla_review15.mp4
 Reports/v6_review15_3cam.mp4
+# Large media stays local: GitHub rejects blobs >100MB and the
+# eval videos total ~5GB. Contact sheets (*.png) remain tracked.
+Reports/v2_eval_videos/**/*.mp4
+Reports/*.mp4
+Sim'n'Real/Mujoco/*.ply
+Sim'n'Real/Mujoco/*.glb
