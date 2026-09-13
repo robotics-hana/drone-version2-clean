@@ -1035,6 +1035,23 @@ same tag; videos on.
   strong test: if its grounding recovers toward C's 47/60 while
   its validation MSE is worse than D's, the offline/online
   divergence is confirmed twice over and in opposite directions.
+- **D-KI FULL RESULT — PRIMARY ENDPOINT (2026-09-13, job 331748,
+  picks complete, navs finishing):** n=60 pick: **flew-to-target
+  43/60** (D: 40, C: 47), **target-true median 88.2 mm** (D:
+  110.7, C: 87.6 — precision FULLY recovered), general median
+  **117.8 mm — the best pure policy of the campaign** (C: 145.8),
+  0 picked. **Interpretation per the pre-registered endpoints:
+  PARTIAL grounding recovery — Plan D's regression decomposes
+  into BOTH candidate mechanisms.** Backbone erosion (fixed by
+  insulation) accounts for all of the precision damage and about
+  half the grounding deficit; a residual pair-overdose effect
+  (43 vs 47, surviving a frozen backbone) accounts for the rest.
+  The offline/online divergence is confirmed in both directions
+  as designed: D-KI fit validation WORST of the line (7.26e-5 vs
+  D's 6.80e-5) yet flies with the line's best closed-loop
+  precision. Servo-composition arm: gate read strictly (≥47) not
+  met; decision on running it referred to Hana with a
+  recommendation to proceed given the precision recovery.
 - **MINI-GATE POWER NOTE (stated before the result):** at n=10 the
   mini CANNOT discriminate 47/60 (78%) from 40/60 (67%) — both C
   and D scored 8/10 flew-to-target at mini scale. The D-KI mini
