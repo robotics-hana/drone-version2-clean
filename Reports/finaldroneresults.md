@@ -1390,6 +1390,12 @@ C 78%, ACT 47% (chance), DP 58%.
   **max arm-tracking error |dq| < 0.01 rad throughout** — the
   relabel rule, the delta path and the ±0.06 clip compose
   correctly. Contract validated; mini + full may proceed.
+- **V3 MINI PASSED (job 337960, V3MINI-EXIT=0):** 10+4 on ckpt
+  025000 with --policy-arm: **flew-to-target 8/10, target-true
+  median 83.3 mm**, general 117.7 mm, picked 0, nav 1/4 (n=4 —
+  noisy, not gating). No flight breakdown with the policy driving
+  the arm — the catastrophe gate (≤4/10 flew or flight loss)
+  passes decisively; **full n=60+20 auto-launched (337961)**.
 
 ### FT-DAG PRE-REGISTRATION (2026-09-14, Hana: "let's try this" —
 ### DAgger, the strongest untried pure-VLA lever)
