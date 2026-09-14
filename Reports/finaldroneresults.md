@@ -1217,6 +1217,33 @@ C 78%, ACT 47% (chance), DP 58%.
   `--policy-arm` eval flag (arm deltas from dims 3,4, clipped
   0.06/tick, replacing q_travel/q_carry switching) + expert-replay
   validation → closed-loop mini → frozen full n=60+20 vs 047500.
+- **VAL SWEEP COMPLETE (job 333599, V3VAL-ALL-DONE) — SELECTED
+  025000 (6.29e-5), NO EXTENSION:** full curve ×1e-4: 2500 10.6 ·
+  5000 3.37 · 7500 2.25 · 10000 1.94 · 12500 1.52 · 15000 1.59 ·
+  17500 1.20 · 20000 0.98 · 22500 0.70 · **25000 0.63** · 27500
+  0.77 · 30000 0.69. The curve TURNS after 25000 (both later
+  checkpoints worse), so unlike v2 (still improving at its 30k
+  boundary → extended) the optimum is interior and the mirrored
+  procedure resolves: select 025000, no 60k extension. Train
+  333563 exit 0 (30k steps, ~11 h, loss healthy throughout).
+- **--POLICY-ARM BUILT (2026-09-14):** platform_v2.V2Platform gains
+  `policy_arm=` (default False = byte-identical path): dims 3,4
+  applied as per-tick arm deltas clip ±0.06, cmd clamped to the
+  actuator ctrlrange, REPLACING phase switching; deployed keeps
+  updating for metrics. eval_v2 `--policy-arm` flag + PROV field;
+  composition with --learned-servo asserted out (not
+  pre-registered). Surgical cluster mirror, sha parity all three
+  files (platform_v2 090a5ad25ceb, eval_v2 f253176c28c8,
+  replay_v3_arm 5f1633ba2ee4), compile-checked.
+- **GATED CHAIN SUBMITTED:** replay gate **337932** (CPU,
+  replay_v3_arm.py: captures 6 expert episodes, relabels dims 3,4
+  in-memory by the relabel_v3 rule, replays through the REAL
+  V2Platform policy_arm=True — pass = every expert-grasped episode
+  welds+lifts; prints max|dq| arm-tracking error) → mini **337933**
+  (10+4, ckpt 025000, tag v3mini, gate V3REPLAY-EXIT=0) → full
+  **337934** (60+20, tag v3full, gate V3MINI-EXIT=0). One-variable
+  comparison target: 047500's pure row (1/60, 170.8 mm,
+  42/60 flew, 9/20 nav).
 
 ### E5-DKI SUBMITTED (2026-09-14, job 335659) — D-KI + LEARNED
 ### SERVO, GATE AMENDMENT

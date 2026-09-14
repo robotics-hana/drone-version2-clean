@@ -32,7 +32,7 @@ import collect_airvla as A
 
 class V2Platform:
 
-    def __init__(self, rr, start, yaw0, assist_r=0.0):
+    def __init__(self, rr, start, yaw0, assist_r=0.0, policy_arm=False):
         self.r = rr
         self.sp = np.array(start, dtype=float)
         self.yaw = float(yaw0)
@@ -43,6 +43,20 @@ class V2Platform:
         self.i = 0
         self.weld_tick = None
         self.released = False
+        # V3-ARM (pre-registered 2026-09-13): when True, action dims
+        # 3,4 drive the arm joints directly as per-tick deltas
+        # (clipped +-0.06/tick, the phase-slew bound), REPLACING the
+        # q_travel/q_carry switching below. self.deployed still
+        # updates (metrics only). Default False = frozen behaviour,
+        # byte-identical path.
+        self.policy_arm = bool(policy_arm)
+        if self.policy_arm:
+            m = rr.model
+            lohi = [m.actuator_ctrlrange[mujoco.mj_name2id(
+                        m, mujoco.mjtObj.mjOBJ_ACTUATOR, nm)]
+                    for nm in ("act_joint1", "act_joint2")]
+            self._arm_lo = np.array([lohi[0][0], lohi[1][0]])
+            self._arm_hi = np.array([lohi[0][1], lohi[1][1]])
         # H1 terminal-servo state (inert when assist_r == 0)
         self.assist_r = float(assist_r)
         self.takeover = False
@@ -149,11 +163,17 @@ class V2Platform:
             self.near = self.near + 1 if dxy < 0.60 else 0
             if self.near >= 5:
                 self.deployed = True
-        tgt = (rr.expert.q_carry if (self.deployed and not nav
-                                     and not self.released)
-               else rr.expert.q_travel)
-        self.cmd = self.cmd + np.clip(np.array(tgt) - self.cmd,
-                                      -0.06, 0.06)
+        if self.policy_arm:
+            self.cmd = np.clip(
+                self.cmd + np.clip(np.asarray(act[3:5], dtype=float),
+                                   -0.06, 0.06),
+                self._arm_lo, self._arm_hi)
+        else:
+            tgt = (rr.expert.q_carry if (self.deployed and not nav
+                                         and not self.released)
+                   else rr.expert.q_travel)
+            self.cmd = self.cmd + np.clip(np.array(tgt) - self.cmd,
+                                          -0.06, 0.06)
         self.i += 1
         rr.ctrl.set_targets(self.sp, self.cmd,
                             A.C.GRIPPER_OPEN * self.grip)

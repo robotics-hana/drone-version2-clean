@@ -87,6 +87,14 @@ PARA_SET = [
     "lift the {obj} and carry it over to the wooden box",
     "take the {obj} and set it down inside the wooden box",
 ]
+# V3-ARM (pre-registered 2026-09-13): --policy-arm hands the arm
+# joints to the policy -- action dims 3,4 applied by the platform as
+# per-tick joint deltas (clip +-0.06), REPLACING the phase-based
+# q_travel/q_carry switching. For v3-trained checkpoints (airvla_v3
+# relabel); with the flag absent every existing path is untouched.
+POLICY_ARM = "--policy-arm" in sys.argv
+assert not (POLICY_ARM and "--learned-servo" in sys.argv), \
+    "--policy-arm + --learned-servo composition is not pre-registered"
 HORIZON = 50
 # E1 (pre-registered 2026-09-05): actions EXECUTED per 50-step chunk
 # before re-inferring. Default 50 = the frozen naive baseline -- with
@@ -224,7 +232,7 @@ print("PROV " + json.dumps(dict(
     dep_sha=DEPS, exec_horizon=EXEC, rtc=RTC,
     assist_r=ASSIST, learned_servo=LSERVO,
     naive_payload=NAIVE_PAYLOAD, policy_type=PTYPE, solo=SOLO,
-    paraphrase=PARAPHRASE,
+    paraphrase=PARAPHRASE, policy_arm=POLICY_ARM,
     actor_sha=(hashlib.sha256(open(LSERVO, "rb").read())
                .hexdigest()[:12] if LSERVO else None),
     ckpt=CKPT, argv=sys.argv[1:], torch_seed=TORCHSEED,
@@ -278,7 +286,8 @@ def run_pick(i):
         plat = V2PlatformLearned(r, start, 0.0, assist_r=ASSIST,
                                  actor_path=LSERVO)
     else:
-        plat = V2Platform(r, start, 0.0, assist_r=ASSIST)
+        plat = V2Platform(r, start, 0.0, assist_r=ASSIST,
+                          policy_arm=POLICY_ARM)
     adr = r.cur["adr"]
     miss = 1e9
     lifted = False
@@ -351,7 +360,7 @@ def run_nav(i):
     obj, start, alt, tgt = r.reset_scene_v2(nav=True)
     task = A.PROMPT_NAV.format(obj=obj)
     yaw0 = float(2 * np.arctan2(r.data.qpos[6], r.data.qpos[3]))
-    plat = V2Platform(r, start, yaw0)
+    plat = V2Platform(r, start, yaw0, policy_arm=POLICY_ARM)
     adr = r.cur["adr"]
     gx = r._gate_x
     crossed = False
