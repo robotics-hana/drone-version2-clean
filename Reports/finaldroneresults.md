@@ -6,6 +6,32 @@ BEFORE collection/training), then results as bullets as they land.
 Nothing in the pre-registration section may be edited after training
 starts — corrections get dated addenda.
 
+## COMPLETED-EXPERIMENT INDEX (what / why / headline result)
+
+Digest of every completed v2-era experiment — the question each was
+built to answer and its decisive number. Details, pre-registrations,
+amendments and provenance live in the dated sections below.
+
+| Experiment | Why (the question) | Headline result |
+|---|---|---|
+| v2 base (047500) | Does π₀ learn the task from 480 clean demos? | Approach yes, grasp no: 1/60 picks, 170.8 mm median, 42/60 flew-to-target, 9/20 nav |
+| E1 exec-10 | Does 5× faster replanning fix the terminal? | FALSIFIED — plan-resampling churn doubled the miss (337.6 mm mini); LIBERO transfer does not hold |
+| E2 RTC | Does prefix-consistent replanning fix it? | Cures churn, not the rate: 1/60 (= naive), best-executed grasp (4.6 mm) but enters final 3 cm less often; nav degrades 9→6 |
+| F1/C terminal-correctives + 80 pairs | Does failure-matched data help? | Precision yes, rate no: 145.8 mm (170.8), wrong-target 18-19→13-14, grasp still 1/60 |
+| F2/D pair scaling (80→304) | Does 3.8× paired data improve grounding? | OVERDOSE — wrong-target worsens to 20/60, nav 12→10, precision 204.9 mm; dose-response is U-shaped |
+| D-KI knowledge insulation | Is D's regression backbone erosion or data? | BOTH, apportioned: frozen backbone recovers precision (88.2 mm true, best pure) + nav (12/20) but only half the grounding (43 vs 47) |
+| H1 scripted servo | Is the last 150 mm solvable by a scripted terminal controller? | Yes: 21-24/60 grasped (vs 1), 31.7-36.7% placed; conversion 62% — heading brittleness |
+| E5 learned servo (DAgger) | Can a learned closer beat its scripted teacher? | Yes — student surpasses teacher: **E5C 36/60 grasp (60%), 27/60 placed (45%) = BEST SYSTEM**; conversion 90% |
+| E5D / E5-DKI compositions | Which policy pairs best with the servo? | C wins: E5D 35%, E5-DKI 43.3% (best-ever true median 9.3 mm; loses on conversion 85% vs 90%) |
+| PAG feed-forward ablation | Does the loaded-thrust feed-forward do anything? | INERT — mm-identical with it removed (orphaned by MPPI→PD migration); active arm gravity-moment FF is separate and load-bearing |
+| ACT / DP baselines | Do from-scratch policies match the VLA? | No: chance-level grounding (28, 35/60), 0-1 picks, medians 249-313 mm |
+| Target-true metrics | Are medians confounded by wrong-object flights? | Yes — general vs target-true median separates selection from precision for every run (retro-computed for all) |
+| Solo probe (4 arms, n=30) | Is the deficit target selection or approach skill? | Dissociates: C 97% flew-to-target solo (78% paired) = selection; ACT 53%/DP 63% solo ≈ paired = approach incompetence |
+| Paraphrase OOD (E5C, n=60) | Is grounding template memorization? | No — COMPLETE PARITY under 5 unseen phrasings (36/28/46 vs 36/27/45); wording brittleness falsified |
+| Latency (GB10) | Is the system real-time viable? | 235.9 ms median/inference, 4.72 ms/tick amortized at exec-50 — yes |
+| V3-arm (relabel + train) | Should the VLA control the arm? | Relabel shows arm signal is 99% slew-cap-deterministic; ckpt 025000 selected; replay gate 6/6; closed-loop mini+full IN QUEUE |
+| DAgger/FT-DAG (approved 2026-09-14) | Does on-policy corrective data fix the pure-VLA terminal? | IN BUILD — pre-registration below |
+
 ## The questions (defined before collecting)
 
 - Q1: Is the dataset sufficiently diverse and physically valid?
@@ -1349,6 +1375,68 @@ C 78%, ACT 47% (chance), DP 58%.
   WHAT THE WORDS MEAN (wording-invariant) or HOW TO FLY (solo
   97%). Per-episode prompts recorded in the EVAL lines (PROV
   paraphrase=true).
+
+### V3-ARM REPLAY GATE PASSED (2026-09-14, job 337958, exit 0)
+
+- First submission (337932) died on ENV not logic: EGL cannot
+  create a headless context on CPU-only nodes (V2Runner always
+  builds camera renderers). Chain rebuilt on gpu=1 (337958 →
+  mini 337960 → full 337961), fresh log v3replay2.log per the
+  per-job-log rule; queued dependents qdel'd before start (own
+  jobs).
+- **PASS 6/6:** every expert-grasped episode welds + lifts when
+  its relabeled actions drive the arm through the REAL
+  policy_arm=True platform; miss 6.1-6.6 mm, weld ticks 195-290,
+  **max arm-tracking error |dq| < 0.01 rad throughout** — the
+  relabel rule, the delta path and the ±0.06 clip compose
+  correctly. Contract validated; mini + full may proceed.
+
+### FT-DAG PRE-REGISTRATION (2026-09-14, Hana: "let's try this" —
+### DAgger, the strongest untried pure-VLA lever)
+
+- **Question:** does ON-POLICY corrective data — expert
+  completions from states the POLICY actually reaches — fix the
+  pure VLA's terminal, where hand-designed offsets (F1) improved
+  precision but not the grasp rate? Rationale: this exact
+  mechanism took the servo from 62% to 90% conversion; the pure
+  VLA has the same disease (demos cover only the expert's 3 mm/
+  tick corridor; its own slightly-off states are OOD).
+- **Method — roll-in policy, roll-out expert (chunk-consistent
+  DAgger):** per unit, Plan C (C-15000) drives the frozen-style
+  platform on a FRESH collection scene (seed family 81000; trial
+  82000 — both disjoint from 71-79k/36k/88k/97k/99k) with NOTHING
+  recorded; takeover fires when the jaws hold within 0.25 m of
+  the commanded object for 25 ticks ("parked near", the
+  policy's real failure state) or at the 600-tick roll-in cap
+  ("timeout", covers wrong-object states — recovery-to-commanded
+  data). At the seam the expert's hidden integrators are synced
+  to the platform (sp, yaw, goals, grip reopened) and the STOCK
+  pick_v2 → place_v2 pipeline completes the episode — recovery
+  is demonstrated in the standard motion vocabulary, recorded
+  frames start AT the seam (policy actions are never supervision;
+  roll-in contact counters zeroed at takeover, roll-in hits kept
+  in the manifest). Policy-welded roll-ins are discarded.
+  Acceptance = the standard _judge_pick gates + banking filter,
+  6 attempts/slot, time-budget stop, per-seed manifest
+  (dag_manifest_<seed>.jsonl records trigger, seam distance,
+  roll-in ticks).
+- **Data/training plan:** target ~150 banked units →
+  hanapasta/airvla_dag; merge with v21 → **airvla_v24** (split:
+  existing retained, new episodes 80:20 as units, seed 424246);
+  **FT-DAG = the FT-C recipe verbatim from C-15000** (all dagger
+  train episodes + stratified half of the existing mix, 20k
+  steps, 5e-6→5e-7, seed 1000) so FT-DAG vs C is one variable:
+  on-policy vs hand-designed corrective data.
+- **Gates (mini-first):** collection trial (10 units, seed 82000,
+  seam/parking/clean audit + film check) → full collection →
+  merge read-back → training smoke 200 steps → full train → val
+  curve (T4) → closed-loop mini 10+4 → frozen full n=60+20 vs C.
+- **Predictions (registered):** target-true median < 87.6 mm
+  (beats C); pure grasp rate the primary uncertainty — ≥4/60
+  would clearly exit the 0-2/60 band all pure arms occupy;
+  null result (still ≤2/60 with better median) would locate the
+  residual gap in perception/actuation rather than data coverage,
+  making the terminal-observability audit the next lever.
 
 ### E5C FULL RESULT (2026-09-08, job 305965, exit 0) — NEW BEST
 ### SYSTEM: THE LEARNED SERVO BEATS ITS SCRIPTED TEACHER
