@@ -1142,6 +1142,43 @@ same tag; videos on.
   333129 047500 / 333130 C-15000 / 333131 ACT / 333132 DP)**, tags
   solofull_47k5/c/act/dp, per-job logs.
 
+### SOLO PROBE FULL RESULTS (2026-09-14, jobs 333129-32, all
+### exit 0) — THE CONFOUND DISSOCIATES CLEANLY
+
+Solo scenes (seed 99000, single commanded object, distractor
+physically absent), n=30 picks per arm, no assist:
+
+| Arm | Flew-to-target | Gen median | True median | Picked |
+|---|---|---|---|---|
+| 047500 | 26/30 (87%) | 121.2 mm | 85.8 mm | 0 |
+| **Plan C** | **29/30 (97%)** | 98.7 mm | 93.5 mm | 0 |
+| ACT | 16/30 (53%) | 275.9 mm | 103.0 mm | 0 |
+| DP | 19/30 (63%) | 259.4 mm | 195.5 mm | 0 |
+
+Paired-scene flew-to-target rates for comparison: 047500 70%,
+C 78%, ACT 47% (chance), DP 58%.
+
+- **The VLAs' paired-scene shortfall is target selection, not
+  approach skill:** remove the distractor and Plan C approaches
+  the object 97% of the time (047500: 87%). Its residual paired
+  gap (78% vs 97%) is almost entirely wrong-object flights — the
+  language-grounding axis, exactly what Plan C/D/D-KI manipulate.
+- **The baselines' shortfall is approach competence itself:** ACT
+  53% and DP 63% on scenes where there is NOTHING ELSE TO FLY TO.
+  Their paired-scene numbers barely move (47→53, 58→63), so
+  distractor confusion explains almost none of their deficit —
+  answering the examiner question "would the language-blind
+  baselines do better with one object?" with a measured no.
+- Approach precision is unchanged by the distractor (C true
+  median 93.5 solo vs 87.6 paired; 047500 85.8 vs 121.5), while
+  the GENERAL median improves sharply solo (C 98.7 vs 145.8) —
+  consistent with wrong-target flights inflating the paired
+  general median, which is what motivated the target-true metric.
+- Picks 0/30 everywhere (mini's 1/10 was the usual rare unassisted
+  weld): pure policies still terminal-servo-limited — the solo
+  probe isolates approach, not grasp closure; the servo ladder
+  covers that axis.
+
 ### E5C FULL RESULT (2026-09-08, job 305965, exit 0) — NEW BEST
 ### SYSTEM: THE LEARNED SERVO BEATS ITS SCRIPTED TEACHER
 
