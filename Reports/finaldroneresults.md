@@ -1238,8 +1238,32 @@ C 78%, ACT 47% (chance), DP 58%.
   equal-or-better conversion on engaged episodes; plausible range
   for grasps 28-38/60. E5C's 36/60 (60%) is the bar.
 
-### PARAPHRASE-OOD PRE-REGISTRATION (2026-09-14, Hana: "lets que
-### em" — OOD block, first arm)
+### E5-DKI FULL RESULT (2026-09-14, job 335659, E5DKIFULL-EXIT=0)
+### — SECOND-BEST SYSTEM; E5C KEEPS THE CROWN
+
+- **PICK n=60: 33 grasped (55%), 26 placed (43.3%)**, general
+  median 14.9 mm, **target-true median 9.3 mm = best of the
+  entire campaign** (E5C 10.1); flew-to-target **46/60** (E5C 45);
+  NAV **12/20** (ties best). Same frozen scenes, same servo, same
+  seeds as every rung.
+- **Mechanism:** engagements 39 (E5C 40), conversion 33/39 = 85%
+  (E5C 90%); median 90 assist ticks on conversions (E5C 71), max
+  302; grasp-no-place 7 (E5C 9); wrong-band 14 (E5C 15).
+- **Prediction scorecard (registered pre-result):** grasps 33 ∈
+  [28,38] ✓; "fewer engagements" 39<40 marginal ✓; "equal-or-
+  better conversion" ✗ (85% < 90% — the honest miss). The
+  precision advantage DID materialize (9.3 mm true median, best
+  ever) but did not convert to more grasps: D-KI's servo hand-offs
+  ran slower (90 vs 71 ticks), costing ~3 conversions to the
+  clock.
+- **Reading:** composition-level grounding is EQUAL (46 vs 45
+  flew-to-target — the pure-policy gap 43-vs-47 washed out under
+  assist), so the E5C-vs-E5DKI difference is almost purely the
+  conversion axis. Insulation buys approach precision and nav
+  robustness but the fully-fine-tuned C remains better matched to
+  the servo's engagement dynamics. **Final ladder: E5C 45.0% >
+  E5-DKI 43.3% > E5D 35% > H1C 36.7%-scripted.** Both
+  freeze-vs-full comparisons now have closed-loop answers.
 
 - **Question:** is the system robust to instruction WORDING it has
   never seen? Every training episode used the single template
