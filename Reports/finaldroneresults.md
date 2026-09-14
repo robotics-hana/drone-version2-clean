@@ -1177,7 +1177,46 @@ C 78%, ACT 47% (chance), DP 58%.
 - Picks 0/30 everywhere (mini's 1/10 was the usual rare unassisted
   weld): pure policies still terminal-servo-limited — the solo
   probe isolates approach, not grasp closure; the servo ladder
-  covers that axis.
+  covers that axis. (Paired-scene pure pick rates for the record:
+  047500 1/60, C 1/60, ACT 1/60, DP 0/60 — scene composition does
+  not move grasp closure. A solo run of C+learned servo would give
+  the hybrid's grasp ceiling with target selection free — offered
+  to Hana, decision open.)
+
+### V3-ARM TRAINING IN FLIGHT (2026-09-14)
+
+- **SMOKE PASSED (attempt 2, job 333133, V3SMOKE2-EXIT=0):** 200
+  steps on airvla_v3, loss 0.368 falling, grad norm ~8.8,
+  1.2 s/step, checkpoint written and cleaned after. Data path
+  (relabeled arm dims through the lerobot loader) validated.
+- **FULL TRAIN SUBMITTED (job 333563, v3train.job):** the v2
+  baseline recipe verbatim (π₀ base, 30k steps, batch 4, seed
+  1000, full fine-tune, same 488-episode list; word-level diff vs
+  v2train.job = dataset + output dir only), plus the self-cleaning
+  output dir (FileExistsError lesson) and the training_state
+  janitor keeping newest two (quota lesson). Started ~01:15,
+  ~1.2 s/step, ETA ~11:30.
+- **VAL SWEEP CHAINED (job 333599, v3val.job):** submitted only
+  AFTER checkpoint 002500 existed (the D incident rule). Rolling
+  v2val60k pattern, pinned noise (seed 31415) = exactly paired
+  rows, same v2_split.json + v2_manifest_71000.jsonl as the
+  047500 selection, but scored against **hanapasta/airvla_v3** so
+  dims 3,4 are graded on the real arm deltas (manifest carries
+  only metadata; ground-truth actions come from the dataset arg —
+  verified before submitting). Output v3_valcurve.json, runs to
+  030000.
+- **VAL CURVE SO FAR** (overall MSE, real units):
+  | ckpt | 2500 | 5000 | 7500 | 10000 | 12500 | 15000 | 17500 |
+  |---|---|---|---|---|---|---|---|
+  | MSE ×1e-4 | 10.6 | 3.37 | 2.25 | 1.94 | 1.52 | 1.59 | **1.20** |
+  Textbook from-base descent; the single 15000 uptick was noise
+  (17500 = new best). NOTE: v3 MSE rows are NOT comparable to the
+  v2/D/D-KI curves' absolute values — dims 3,4 now carry real
+  targets instead of freely-predictable zeros.
+- Remaining pre-registered gates: val-curve T4 selection →
+  `--policy-arm` eval flag (arm deltas from dims 3,4, clipped
+  0.06/tick, replacing q_travel/q_carry switching) + expert-replay
+  validation → closed-loop mini → frozen full n=60+20 vs 047500.
 
 ### E5C FULL RESULT (2026-09-08, job 305965, exit 0) — NEW BEST
 ### SYSTEM: THE LEARNED SERVO BEATS ITS SCRIPTED TEACHER
