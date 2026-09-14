@@ -1298,6 +1298,31 @@ C 78%, ACT 47% (chance), DP 58%.
 - Position-OOD arm deferred until this validates (needs careful
   reachability design; registered intent only).
 
+### PARAPHRASE-OOD RESULT (2026-09-14, mini 335680 + full 335681,
+### both exit 0) — ZERO WORDING BRITTLENESS
+
+- Mini gate: 6/10 grasped, 5 placed, 7/10 flew, 9.8 mm true —
+  PASSED, full auto-launched via -hold_jid gate.
+- **FULL n=60 under five never-seen phrasings: 36 grasped (60%),
+  28 placed (46.7%), flew-to-target 46/60, general median
+  12.0 mm, target-true 10.2 mm.** Canonical-prompt E5C on the
+  same scenes: 36 / 27 / 45 / 12.8 / 10.1. **Complete parity on
+  every axis** (place and approach a hair above — noise).
+- Prediction scorecard: registered 35-45/60 flew-to-target
+  anticipating partial degradation; landed 46 — ABOVE the range.
+  The degradation hypothesis is falsified: E5C's grounding is
+  fully robust to instruction wording.
+- **Reading for the thesis:** the paired-command effect is not
+  template memorization — π₀'s language backbone carries the
+  command SEMANTICS across verb/preposition/structure variation
+  (grab/drop, particle movement, truncated "the box", implicit-
+  grasp "put the X into..."). Combined with the solo probe this
+  completes the grounding decomposition: failures are about WHICH
+  object (selection, 14/60 wrong-band unchanged), never about
+  WHAT THE WORDS MEAN (wording-invariant) or HOW TO FLY (solo
+  97%). Per-episode prompts recorded in the EVAL lines (PROV
+  paraphrase=true).
+
 ### E5C FULL RESULT (2026-09-08, job 305965, exit 0) — NEW BEST
 ### SYSTEM: THE LEARNED SERVO BEATS ITS SCRIPTED TEACHER
 
