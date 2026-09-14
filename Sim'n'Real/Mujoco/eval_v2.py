@@ -73,6 +73,20 @@ SCENE_SEED = (int(sys.argv[sys.argv.index("--sceneseed") + 1])
 # never mixed into the frozen two-object ladder; solo scenes are
 # mildly out-of-distribution (all training scenes have two objects).
 SOLO = "--solo" in sys.argv
+# PARAPHRASE OOD (Hana 2026-09-14, "lets que em"): --paraphrase swaps
+# the single training prompt template for an UNSEEN wording, cycling
+# deterministically by episode index (ep % 5) so runs are exactly
+# reproducible. Every training episode used PROMPT_MANIP verbatim, so
+# any drop under this flag measures instruction-wording brittleness.
+# Additive: flag absent = frozen behaviour, byte-identical prompts.
+PARAPHRASE = "--paraphrase" in sys.argv
+PARA_SET = [
+    "grab the {obj} and drop it into the wooden box",
+    "pick the {obj} up and place it in the box",
+    "put the {obj} into the wooden box",
+    "lift the {obj} and carry it over to the wooden box",
+    "take the {obj} and set it down inside the wooden box",
+]
 HORIZON = 50
 # E1 (pre-registered 2026-09-05): actions EXECUTED per 50-step chunk
 # before re-inferring. Default 50 = the frozen naive baseline -- with
@@ -210,6 +224,7 @@ print("PROV " + json.dumps(dict(
     dep_sha=DEPS, exec_horizon=EXEC, rtc=RTC,
     assist_r=ASSIST, learned_servo=LSERVO,
     naive_payload=NAIVE_PAYLOAD, policy_type=PTYPE, solo=SOLO,
+    paraphrase=PARAPHRASE,
     actor_sha=(hashlib.sha256(open(LSERVO, "rb").read())
                .hexdigest()[:12] if LSERVO else None),
     ckpt=CKPT, argv=sys.argv[1:], torch_seed=TORCHSEED,
@@ -257,7 +272,8 @@ _dp_hist = {}
 def run_pick(i):
     _dp_hist.clear()                     # fresh obs history per episode
     obj, start, alt, tgt = r.reset_scene_v2(solo=SOLO)
-    task = A.PROMPT_MANIP.format(obj=obj)
+    task = (PARA_SET[i % len(PARA_SET)] if PARAPHRASE
+            else A.PROMPT_MANIP).format(obj=obj)
     if LSERVO is not None:
         plat = V2PlatformLearned(r, start, 0.0, assist_r=ASSIST,
                                  actor_path=LSERVO)
@@ -319,7 +335,8 @@ def run_pick(i):
                assisted=bool(plat.took_tick is not None),
                assist_tick=plat.took_tick,
                assist_ticks=plat.assist_ticks,
-               frames=frames_n)
+               frames=frames_n,
+               **({"prompt": task} if PARAPHRASE else {}))
     with open("eval_v2_traj.jsonl", "a") as fh:
         fh.write(json.dumps(dict(tag=TAG, kind="pick", ep=i, obj=obj,
                                  tgt=[round(float(x), 3) for x in tgt],

@@ -1238,6 +1238,42 @@ C 78%, ACT 47% (chance), DP 58%.
   equal-or-better conversion on engaged episodes; plausible range
   for grasps 28-38/60. E5C's 36/60 (60%) is the bar.
 
+### PARAPHRASE-OOD PRE-REGISTRATION (2026-09-14, Hana: "lets que
+### em" — OOD block, first arm)
+
+- **Question:** is the system robust to instruction WORDING it has
+  never seen? Every training episode used the single template
+  "pick up the {obj} and put it in the wooden box"; this is the
+  cleanest OOD axis for the instruction-blindness chapter (CAST /
+  vision-shortcut literature) and needs no new scene machinery.
+- **Harness amendment (frozen-discipline):** new additive
+  `--paraphrase` flag in eval_v2.py — cycles 5 unseen phrasings
+  deterministically by episode index (ep % 5): "grab … drop it
+  into", "pick … up and place it in the box", "put … into",
+  "lift … carry it over to", "take … set it down inside". Flag
+  absent = byte-identical frozen behaviour. Prompt recorded per
+  episode (EVAL `prompt` key) and in PROV (`paraphrase`).
+  Surgical cluster edit, sha-verified parity local=cluster
+  **7dda224a348b** (pre-edit cluster sha ea80180879ca matched the
+  solo run's PROV = we were in sync). Compile-checked.
+- **System under test: E5C (the headline system)** — C-15000 +
+  learned servo, R=0.15, same frozen seed-97000 pick scenes,
+  torchseed 1000. Jobs: **mini 335680** (10 picks, tag paramini)
+  → **full 335681** (60 picks, tag parafull, -hold_jid + hard
+  gate on PARAMINI-EXIT=0).
+- **Reference points (same scenes, canonical prompt):** E5C
+  36/60 grasped, 27/60 placed, 45/60 flew-to-target, 12.8 mm
+  general / 10.1 mm true median.
+- **Prediction (registered):** partial degradation — π₀'s
+  PaliGemma backbone should generalize wording far better than a
+  from-scratch encoder, but D/D-KI showed grounding is the
+  fragile axis; plausible flew-to-target 35-45/60. A collapse
+  toward the wrong-object band would be strong instruction-
+  brittleness evidence; parity would show the grounding that
+  exists is wording-robust.
+- Position-OOD arm deferred until this validates (needs careful
+  reachability design; registered intent only).
+
 ### E5C FULL RESULT (2026-09-08, job 305965, exit 0) — NEW BEST
 ### SYSTEM: THE LEARNED SERVO BEATS ITS SCRIPTED TEACHER
 
