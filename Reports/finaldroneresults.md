@@ -1218,6 +1218,26 @@ C 78%, ACT 47% (chance), DP 58%.
   0.06/tick, replacing q_travel/q_carry switching) + expert-replay
   validation → closed-loop mini → frozen full n=60+20 vs 047500.
 
+### E5-DKI SUBMITTED (2026-09-14, job 335659) — D-KI + LEARNED
+### SERVO, GATE AMENDMENT
+
+- The composition gate pre-registered for D-KI (flew-to-target
+  ≥47/60) was NOT met (43/60). **Hana approved running it anyway
+  (2026-09-14, "yes queue it")** on the argument that the learned
+  servo's conversion depends mainly on approach precision (capture
+  R=0.15 m), which is D-KI's strongest axis (best pure target-true
+  88.2 mm, best pure general 117.8 mm), so the composition tests
+  precision-vs-grounding trade directly. Recorded as an explicit
+  gate amendment, C/D-mini precedent.
+- Job v2e5dkifull.job = v2e5dfull.job with ONLY ckpt path
+  (pi0_dki_out/checkpoints/005000), tag e5dkifull, log, job name
+  changed (diff-audited). Same frozen n=60+20 seed-97000 scenes,
+  torchseed 1000, e5_actor_final.pt, --assist 0.15.
+- Prediction (registered before result): fewer engagements than
+  E5C (wrong-target flights cost opportunities: 43 vs 47) but
+  equal-or-better conversion on engaged episodes; plausible range
+  for grasps 28-38/60. E5C's 36/60 (60%) is the bar.
+
 ### E5C FULL RESULT (2026-09-08, job 305965, exit 0) — NEW BEST
 ### SYSTEM: THE LEARNED SERVO BEATS ITS SCRIPTED TEACHER
 
