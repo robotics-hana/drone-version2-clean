@@ -29,8 +29,8 @@ amendments and provenance live in the dated sections below.
 | Solo probe (4 arms, n=30) | Is the deficit target selection or approach skill? | Dissociates: C 97% flew-to-target solo (78% paired) = selection; ACT 53%/DP 63% solo ≈ paired = approach incompetence |
 | Paraphrase OOD (E5C, n=60) | Is grounding template memorization? | No — COMPLETE PARITY under 5 unseen phrasings (36/28/46 vs 36/27/45); wording brittleness falsified |
 | Latency (GB10) | Is the system real-time viable? | 235.9 ms median/inference, 4.72 ms/tick amortized at exec-50 — yes |
-| V3-arm (relabel + train) | Should the VLA control the arm? | Relabel shows arm signal is 99% slew-cap-deterministic; ckpt 025000 selected; replay gate 6/6; closed-loop mini+full IN QUEUE |
-| DAgger/FT-DAG (approved 2026-09-14) | Does on-policy corrective data fix the pure-VLA terminal? | IN BUILD — pre-registration below |
+| V3-arm (relabel + train) | Should the VLA control the arm? | **NO — measured**: v3full 38/60 flew, 139.4 mm true, 264.2 mm general, 7/20 nav, 0 picks — worse than 047500 on EVERY axis; the arm-as-platform design is vindicated by a one-variable experiment |
+| DAgger/FT-DAG (approved 2026-09-14) | Does on-policy corrective data fix the pure-VLA terminal? | Trial: mechanism validated (4/4 banked, 3 near-seams 181-213 mm); full collection in flight |
 
 ## The questions (defined before collecting)
 
@@ -1397,6 +1397,33 @@ C 78%, ACT 47% (chance), DP 58%.
   the arm — the catastrophe gate (≤4/10 flew or flight loss)
   passes decisively; **full n=60+20 auto-launched (337961)**.
 
+### V3-ARM FULL RESULT (2026-09-15, job 337961, V3FULL-EXIT=0) —
+### THE ANSWER IS NO: ARM SUPERVISION HURTS AT THIS DATA SCALE
+
+- **v3full (ckpt 025000, --policy-arm, frozen n=60+20):** PICK
+  general median **264.2 mm** (047500: 170.8), **target-true
+  139.4 mm** (121.5), **flew-to-target 38/60** (42), picked 0
+  (1), placed 0 (1); **NAV 7/20** (9/20). Worse than the 047500
+  baseline on EVERY axis of the one-variable comparison.
+- **Verdict on Hana's question ("shouldn't the VLA control the
+  arm?"): measured no.** The relabel already showed the arm
+  signal is ~deterministic (99% of deltas at the 0.03 slew cap);
+  training on it bought nothing and cost real performance — the
+  two extra supervised dimensions act as a noise tax on the dims
+  that matter, and the policy's own arm commands add jitter the
+  phase-based platform never produces. The mini's healthy-looking
+  numbers (8/10, 83.3 mm) were small-n flattery; the full undoes
+  them.
+- **Offline/online divergence, third instance:** v3's val curve
+  was the best-looking of any run (6.29e-5 — deflated by the two
+  now-easy near-deterministic arm dims) while its closed-loop is
+  the worst pure π₀ arm of the campaign. Validation MSE cannot
+  arbitrate design questions; only closed-loop can.
+- **Dissertation reading:** the "Arm as Platform, Not as Policy"
+  section is now backed by a pre-registered, one-variable,
+  n=60+20 experiment instead of an argument. Chapter-ready:
+  design claim → obvious objection → measured answer.
+
 ### FT-DAG PRE-REGISTRATION (2026-09-14, Hana: "let's try this" —
 ### DAgger, the strongest untried pure-VLA lever)
 
@@ -1443,6 +1470,31 @@ C 78%, ACT 47% (chance), DP 58%.
   null result (still ≤2/60 with better median) would locate the
   residual gap in perception/actuation rather than data coverage,
   making the terminal-observability audit the next lever.
+
+### FT-DAG TRIAL RESULT (2026-09-15, job 338825) — MECHANISM
+### VALIDATED; WRITER LOST TO THE WALL (MARGIN LESSON, AGAIN)
+
+- **Every attempted unit banked first-try, 4/4, all clean,
+  parking window 1 throughout the seam:** slot 0 timeout-takeover
+  from 666 mm (wrong-object recovery flavour) then THREE
+  near-trigger seams at **181 / 189 / 213 mm after 174-227
+  roll-in ticks** — the expert taking over precisely from the
+  policy's characteristic parked-short state, which is the whole
+  point of the design. d_bin 13-40 mm on completions.
+- **The trial DATASET is unreadable** — the node ran ~1 h/unit
+  (lottery), unit 5 overran the 4.5 h budget check into the 6 h
+  wall, and the wall-killed LeRobot writer never finalized
+  (meta/episodes absent — the documented 2026-09-09 loss mode).
+  Cost: 4 trial episodes, nothing else; all gate evidence is in
+  dag_manifest_82000.jsonl. Lesson re-learned as arithmetic:
+  budget-to-wall margin must exceed the WORST observed unit time
+  (1.6 h), not the mean.
+- **FULL COLLECTION LAUNCH (amended for node lottery):** four
+  parallel collectors, seeds **81000 / 83000 / 84000 / 85000**
+  (disjoint from all prior families), n=50 units each, **20 h
+  budget inside a 24 h wall** (margin > 2× worst unit), repos
+  airvla_dag1..dag4, per-job logs dagcol1-4. Total banked target
+  ~100-150 (accept what lands, D-precedent); merge-N follows.
 
 ### E5C FULL RESULT (2026-09-08, job 305965, exit 0) — NEW BEST
 ### SYSTEM: THE LEARNED SERVO BEATS ITS SCRIPTED TEACHER
