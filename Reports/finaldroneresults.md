@@ -1504,6 +1504,62 @@ C 78%, ACT 47% (chance), DP 58%.
   ratio matches the trial's. Rate ~1.2 h/unit on the slow nodes;
   projection 45-70 total if c3 never starts, ~60-90 if it does.
 
+### WRONG-OBJECT ASYMMETRY ANALYSIS (2026-09-15, derived from
+### existing frozen logs — zero new GPU-hours)
+
+Among wrong-object episodes (miss ≥ 300 mm), commanded-object
+split (cmd=weight→went-penguin : cmd=penguin→went-weight):
+baseline **12:6** · FT-C 7:6 · FT-D 9:11 · FT-D-KI 9:8 · E5C
+10:5 · ACT **20:12** · DP 9:16 · solo arms ~0. Reading (pooled
+honestly): the baseline's 2:1 penguin-ward bias is **reduced
+toward symmetric by paired-command training** (C-policy pooled
+across its two runs: 17:11 — reduced, NOT proven eliminated;
+small n) · **ACT reproduces the penguin-ward pull with no
+language channel** (visual salience: the large high-contrast
+plush) · wording-invariant (paraphrase) · absent without a
+distractor (solo). Mechanism: a visual-salience prior that
+grounding counteracts. Caveat: DP skews the OTHER way (9:16), so
+salience is not architecture-universal. Criterion note: this
+band definition (≥300 mm) differs from the thesis draft's
+terminal-zone definition (16 wrong / 39 entered) — one
+definition per table.
+
+### FULL OOD LINEUP PRE-REGISTRATION (2026-09-15, Hana: "do a
+### full OOD experimental line up" — robustness of E5C)
+
+- Three arms on **E5C** (C-15000 + learned servo, R=0.15,
+  torchseed 1000), each isolating one axis; mini(10) → gated
+  full(60); additive flags, PROV-recorded; cluster parity
+  verified (eval_v2 612a19be1345, collect_v2 ec7324de6312
+  normalized — local CRLF, content identical). Completed
+  paraphrase arm = the fourth row of the block.
+- **OOD-N `--synonyms` (jobs 345158→345159):** canonical template,
+  object NOUNS swapped to never-trained names (toy penguin /
+  stuffed penguin / blue plush bird · dumbbell / metal weight /
+  calibration weight, ep%3), frozen 97000 scenes = exactly paired.
+  Prediction: parity-to-mild degradation (flew-to-target
+  40-46/60); collapse ⇒ grounding is trained-token-bound.
+- **OOD-P `--oodpos` (345160→345161):** TARGET lateral position
+  forced outside the trained band (|x| ∈ [0.36, 0.42] vs ±0.35;
+  ≥3 cm table-edge margin; distractor normal; y band unchanged),
+  own seed family **96000**. DOCUMENTED: position is informative
+  under this flag (target = outer object) — irrelevant to a
+  frozen policy; scenes never reusable for training/probes.
+  Prediction: modest degradation (grasp 24-34/60) — the servo is
+  position-agnostic; risk is the POLICY's approach at unseen
+  lateral eccentricity.
+- **OOD-D `--novel-distractor` (345162→345163):** the v1-era
+  mustard bottle (in the XML, absent from every v2 training
+  frame) dropped on a third table spot by a DETERMINISTIC
+  candidate-grid rule (no rng draws ⇒ the frozen 97000 scene
+  stream is untouched, exactly paired with canonical E5C).
+  Bottle is in no contact-counter set; weld ignores it.
+  Prediction: the sharpest risk of the three — a salience-prone
+  policy may approach novel clutter; flew-to-target 38-45/60;
+  wrong-band composition (bottle-adjacent parks) will be read
+  from per-episode positions.
+- Queued behind the 4 DAgger collectors; ~8 GPU-h total.
+
 ### DISSERTATION-SUPPORT ERRATA LOG (2026-09-15, figure/bullet
 ### audit against this ledger)
 

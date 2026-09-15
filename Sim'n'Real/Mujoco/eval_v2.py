@@ -95,6 +95,26 @@ PARA_SET = [
 POLICY_ARM = "--policy-arm" in sys.argv
 assert not (POLICY_ARM and "--learned-servo" in sys.argv), \
     "--policy-arm + --learned-servo composition is not pre-registered"
+# OOD LINEUP (pre-registered 2026-09-15, Hana: "do a full OOD
+# experimental line up" — robustness of the best system):
+#   --synonyms         OOD-N: unseen object NAMES in the canonical
+#                      template, cycled ep%3 (tests noun-level
+#                      grounding vs trained-token memorization)
+#   --oodpos           OOD-P: target forced outside the trained
+#                      lateral band (reset_scene_v2; own seed family)
+#   --novel-distractor OOD-D: v1-era mustard bottle as never-trained
+#                      clutter on the SAME frozen scenes (paired)
+# All additive, default-off = frozen paths byte-identical.
+SYNONYMS = "--synonyms" in sys.argv
+SYN_SET = {
+    "plush penguin": ["toy penguin", "stuffed penguin",
+                      "blue plush bird"],
+    "weight": ["dumbbell", "metal weight", "calibration weight"],
+}
+OODPOS = "--oodpos" in sys.argv
+NOVELDIST = "--novel-distractor" in sys.argv
+assert not (SYNONYMS and PARAPHRASE), "one prompt manipulation at a time"
+assert not (SOLO and (OODPOS or NOVELDIST)), "not pre-registered"
 HORIZON = 50
 # E1 (pre-registered 2026-09-05): actions EXECUTED per 50-step chunk
 # before re-inferring. Default 50 = the frozen naive baseline -- with
@@ -233,6 +253,7 @@ print("PROV " + json.dumps(dict(
     assist_r=ASSIST, learned_servo=LSERVO,
     naive_payload=NAIVE_PAYLOAD, policy_type=PTYPE, solo=SOLO,
     paraphrase=PARAPHRASE, policy_arm=POLICY_ARM,
+    synonyms=SYNONYMS, oodpos=OODPOS, novel_distractor=NOVELDIST,
     actor_sha=(hashlib.sha256(open(LSERVO, "rb").read())
                .hexdigest()[:12] if LSERVO else None),
     ckpt=CKPT, argv=sys.argv[1:], torch_seed=TORCHSEED,
@@ -279,9 +300,13 @@ _dp_hist = {}
 
 def run_pick(i):
     _dp_hist.clear()                     # fresh obs history per episode
-    obj, start, alt, tgt = r.reset_scene_v2(solo=SOLO)
-    task = (PARA_SET[i % len(PARA_SET)] if PARAPHRASE
-            else A.PROMPT_MANIP).format(obj=obj)
+    obj, start, alt, tgt = r.reset_scene_v2(solo=SOLO, oodpos=OODPOS,
+                                            novel_distractor=NOVELDIST)
+    if SYNONYMS:
+        task = A.PROMPT_MANIP.format(obj=SYN_SET[obj][i % 3])
+    else:
+        task = (PARA_SET[i % len(PARA_SET)] if PARAPHRASE
+                else A.PROMPT_MANIP).format(obj=obj)
     if LSERVO is not None:
         plat = V2PlatformLearned(r, start, 0.0, assist_r=ASSIST,
                                  actor_path=LSERVO)
@@ -345,7 +370,7 @@ def run_pick(i):
                assist_tick=plat.took_tick,
                assist_ticks=plat.assist_ticks,
                frames=frames_n,
-               **({"prompt": task} if PARAPHRASE else {}))
+               **({"prompt": task} if (PARAPHRASE or SYNONYMS) else {}))
     with open("eval_v2_traj.jsonl", "a") as fh:
         fh.write(json.dumps(dict(tag=TAG, kind="pick", ep=i, obj=obj,
                                  tgt=[round(float(x), 3) for x in tgt],

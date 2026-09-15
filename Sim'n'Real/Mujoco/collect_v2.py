@@ -190,9 +190,16 @@ class V2Runner(A.Runner):
     TABLE_C = np.array([0.0, 0.50])    # FIXED table centre (Hana:
                                        # constant framing in camera3)
     def reset_scene_v2(self, obj=None, corrective=False, nav=False,
-                       layout=None, solo=False):
+                       layout=None, solo=False, oodpos=False,
+                       novel_distractor=False):
         rng = self.rng
         fe = float(self.TABLE_C[1]) + 0.30          # front edge y
+        if oodpos or novel_distractor:
+            # OOD arms (pre-registered 2026-09-15) are plain pick
+            # scenes only; composition with other flavours is not
+            # registered
+            assert (layout is None and not nav and not corrective
+                    and not solo)
         if layout is not None:
             # PAIRED-COMMAND replay (E3 grounding component, Hana
             # 2026-09-05): re-create a previous episode's scene
@@ -215,17 +222,45 @@ class V2Runner(A.Runner):
             # positions so the model cannot overfit a spot); picks
             # keep the reachable band
             y_lo = fe - 0.52 if nav else fe - 0.26
-            for _ in range(200):
-                spots = [np.array([rng.uniform(-0.35, 0.35)
-                                   + self.TABLE_C[0],
-                                   rng.uniform(y_lo, fe - 0.06)])
-                         for _ in range(2)]
-                if float(np.linalg.norm(spots[0] - spots[1])) >= 0.40:
-                    break
-            rng.shuffle(spots)
-            if obj is None:
-                obj = "weight" if rng.random() < 0.5 else "plush penguin"
-            tgt_xy, dis_xy = spots
+            if oodpos:
+                # OOD-P (pre-registered 2026-09-15): the TARGET's
+                # lateral position is forced strictly OUTSIDE the
+                # trained band (|x| in [0.36, 0.42] vs training's
+                # +-0.35; table half-extent 0.45 leaves >=3 cm edge
+                # margin); the distractor samples the normal band;
+                # y band and >=0.40 separation unchanged. NOTE
+                # (documented): under this flag position IS
+                # informative (target = outer object) — irrelevant
+                # to a frozen policy, but these scenes must never
+                # be used for training or shortcut probes.
+                for _ in range(200):
+                    sx = 1.0 if rng.random() < 0.5 else -1.0
+                    t_xy = np.array([sx * rng.uniform(0.36, 0.42)
+                                     + self.TABLE_C[0],
+                                     rng.uniform(y_lo, fe - 0.06)])
+                    d_xy = np.array([rng.uniform(-0.35, 0.35)
+                                     + self.TABLE_C[0],
+                                     rng.uniform(y_lo, fe - 0.06)])
+                    if float(np.linalg.norm(t_xy - d_xy)) >= 0.40:
+                        break
+                if obj is None:
+                    obj = ("weight" if rng.random() < 0.5
+                           else "plush penguin")
+                tgt_xy, dis_xy = t_xy, d_xy
+            else:
+                for _ in range(200):
+                    spots = [np.array([rng.uniform(-0.35, 0.35)
+                                       + self.TABLE_C[0],
+                                       rng.uniform(y_lo, fe - 0.06)])
+                             for _ in range(2)]
+                    if float(np.linalg.norm(
+                            spots[0] - spots[1])) >= 0.40:
+                        break
+                rng.shuffle(spots)
+                if obj is None:
+                    obj = ("weight" if rng.random() < 0.5
+                           else "plush penguin")
+                tgt_xy, dis_xy = spots
         alt = (A.PLATE_TOP + 0.005 + self.objs[obj]["aim_z"]
                - float(self.expert.off_carry[2]))
         if nav:
@@ -272,6 +307,28 @@ class V2Runner(A.Runner):
             self.data.qpos[other["adr"] + 2] = 0.10
         else:
             self.data.qpos[other["adr"]:other["adr"] + 2] = dis_xy
+        if novel_distractor:
+            # OOD-D (pre-registered 2026-09-15): the v1-era mustard
+            # bottle — in the XML, absent from EVERY v2 training
+            # frame — dropped upright onto a third table spot as
+            # novel clutter. Placement is DETERMINISTIC (fixed
+            # candidate grid, first spot >=0.30 m from both task
+            # objects): no rng draws, so the frozen scene stream is
+            # byte-identical to the canonical family and runs stay
+            # exactly paired. Bottle geoms are in no contact-counter
+            # set and the weld machinery ignores it.
+            madr = self.model.joint("mustard_free_joint").qposadr[0]
+            cands = [np.array([self.TABLE_C[0] + cx, cy])
+                     for cx, cy in ((0.0, fe - 0.16), (-0.30, fe - 0.10),
+                                    (0.30, fe - 0.10), (-0.30, fe - 0.24),
+                                    (0.30, fe - 0.24), (0.0, fe - 0.08))]
+            mspot = next((c for c in cands
+                          if float(np.linalg.norm(c - tgt_xy)) >= 0.30
+                          and float(np.linalg.norm(c - dis_xy)) >= 0.30),
+                         cands[0])
+            self.data.qpos[madr:madr + 3] = [mspot[0], mspot[1],
+                                             A.PLATE_TOP + 0.12]
+            self.data.qpos[madr + 3:madr + 7] = [1, 0, 0, 0]
         # the BOX beside the fixed table, side coin-flipped, both sides
         # inside the measured camera3 frame (pinned when replaying a
         # paired layout)
