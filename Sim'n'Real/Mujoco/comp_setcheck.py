@@ -30,6 +30,28 @@ for ep in range(N_EP):
     task = COMP_PROMPT.format(obj=obj)
     frames = []
     hover_ok = r.nav_v2(frames, task)
+    # BRIDGE LEG (fix 2026-09-16, setcheck attempt 1 FAIL 2/6): nav
+    # ends hovering directly OVER the object, and pick_v2's standard
+    # branch descends to grasp altitude AT THE CURRENT XY before
+    # retreating to its standoff -- over the table, dragging the
+    # legs (measured 87-573 table-hit ticks; weight grasps 0/4,
+    # penguin 2/2). Climb and retreat to a room-side standoff first;
+    # pick_v2 then runs its stock approach from clear air. Expert
+    # choreography only -- harness and scoring untouched.
+    ex = r.expert
+    here = r.data.qpos[0:3].copy()
+    ex.set_goal(xyz=np.array([here[0], here[1], alt + 0.15]))
+    r.run_until(frames, task,
+                lambda: float(r.data.qpos[2]) > alt + 0.10,
+                timeout_s=8.0)
+    stand = np.array([float(tgt[0]), float(tgt[1]) + 0.65,
+                      alt + 0.15])
+    r.yaw_then_go(frames, task, stand[0:2])
+    ex.set_goal(xyz=stand)
+    r.run_until(frames, task,
+                lambda: float(np.linalg.norm(
+                    np.asarray(r.data.qpos[0:2]) - stand[0:2])) < 0.10,
+                timeout_s=14.0)
     grasped = r.pick_v2(frames, task, alt)
     d_bin = r.place_v2(frames, task) if grasped else float("nan")
     S = np.stack([f["observation.state"] for f in frames])

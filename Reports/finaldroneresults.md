@@ -1598,7 +1598,20 @@ definition per table.
   normalized sha parity all three (eval_v2 a1b1abdff108,
   collect_v2 fecc68d91923, comp_setcheck 80fd81759bda); compiled
   on the pinned env.
-- Chain: **compcheck 346997** (expert-chain 6/6 gate) →
+- **SETCHECK ATTEMPT 1 FAILED 2/6 (job 346997, 2026-09-16
+  night) — expert choreography, not harness:** crossing and hover
+  6/6 and the staged scoring worked, but nav ends hovering OVER
+  the object and pick_v2's standard branch descends to grasp
+  altitude AT THAT XY before retreating to its standoff — over
+  the table, dragging the legs (87-573 table-hit ticks/episode;
+  weight grasps 0/4, forgiving penguin 2/2, one placed-outside).
+  Fix: a climb-and-retreat BRIDGE LEG in comp_setcheck.py only
+  (room-side standoff at alt+0.15 before the stock pick approach);
+  harness/scoring untouched, sha 7e1d5779e0ce mirrored. Pending
+  minis qdel'd BEFORE their gates burned (no logs written); chain
+  resubmitted as **347072-347075** with fresh log names
+  (compcheck2.log).
+- Chain: **compcheck 346997→347072** (expert-chain 6/6 gate) →
   **compmini 346998** (C-15000 pure, 10) + **compminis 346999**
   (E5C, 10) → **compfull 347000** (E5C n=60, runs ONLY on any
   composite success in either mini; otherwise exits 0 recording
