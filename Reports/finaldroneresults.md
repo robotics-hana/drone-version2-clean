@@ -1580,6 +1580,16 @@ definition per table.
 - Next (as collectors exit): 4-source merge → airvla_v24 (split
   seed 424246, read-back gate) → FT-DAG smoke → full train →
   val curve → minis → frozen full vs C.
+- **FT-DAG CHAIN SUBMITTED (2026-09-16 night, jobs 347002-347005),
+  fully gated:** merge (v2_merge_dag.py — clean-exit-gated source
+  discovery per the wall-kill lesson, v21 split verbatim + dagger
+  80:20 seed 424246, push + read-back) → smoke 200 steps →
+  full train (dag_train_wrapper.py: C-list rebuilt seed 424244 +
+  all dagger train episodes, C's recipe verbatim from C-15000,
+  self-cleaning output + quota janitor) → val curve (concurrent,
+  touches nothing until the first real checkpoint exists —
+  FileExistsError lesson — baseline C-15000 as 000000, scored on
+  airvla_v24). Merge holds on the three remaining collectors.
 
 ### COMP CHAIN + TRUE-PAG DEPLOYED (2026-09-16 after login
 ### recovery; jobs 346997-347001)
