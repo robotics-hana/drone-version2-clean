@@ -1495,6 +1495,40 @@ C 78%, ACT 47% (chance), DP 58%.
   budget inside a 24 h wall** (margin > 2× worst unit), repos
   airvla_dag1..dag4, per-job logs dagcol1-4. Total banked target
   ~100-150 (accept what lands, D-precedent); merge-N follows.
+- **COLLECTION PROGRESS (2026-09-15 evening):** three of four
+  running (c3/84000 still queued). Manifest ground truth:
+  81000 **7 banked**/8 attempts (3 near-seams) · 83000 **3/4**
+  (2 near) · 85000 **7/7** (3 near) = **17 banked, 8 near-seams
+  (47%)**, zero policy-welded roll-ins, zero writer errors. The
+  early 1-of-6 near-seam scare was startup variance; the running
+  ratio matches the trial's. Rate ~1.2 h/unit on the slow nodes;
+  projection 45-70 total if c3 never starts, ~60-90 if it does.
+
+### DISSERTATION-SUPPORT ERRATA LOG (2026-09-15, figure/bullet
+### audit against this ledger)
+
+- Recurring wrong-row slip found TWICE in draft materials: **88.2
+  mm used where 87.6 mm is meant.** 87.6 = FT-C pure target-true
+  median (the F1/failure-driven-data result); 88.2 = FT-D-KI pure
+  target-true median. Adjacent rows in the target-true table —
+  easy to grab wrong; both draft figure panel B and a key-findings
+  bullet had it.
+- Draft figure labels "V3" for what is actually **FT-C** (three
+  bars). V3 now names the arm-supervision policy, whose real
+  numbers (0/60 picks, 264.2 mm general) contradict the labeled
+  bars — must be renamed before submission.
+- Draft figure panel B mixed median conventions (pure bars
+  target-true, servo bars general). Canonical sets, either usable
+  if consistent: general 170.8/145.8/18.2/19.2/12.8 · target-true
+  121.5/87.6/12.7/15.1/10.1 (with flew-to-target 42/47/41/46/45).
+- Panel-B axis wording: the metric is the episode's CLOSEST
+  jaw-to-target distance ("terminal precision"), not pre-handoff
+  approach quality — servo bars drop because the terminal leg
+  completes, not because the approach changed (trigger radius is
+  0.15 m).
+- "Quadrupling paired data" → as-built is **3.8×** (80→304); and
+  the paired-data val-error claim must be scoped to the fine-tune
+  line (D 6.80e-5 vs C-baseline 7.73e-5 on the shared 272-ep set).
 
 ### E5C FULL RESULT (2026-09-08, job 305965, exit 0) — NEW BEST
 ### SYSTEM: THE LEARNED SERVO BEATS ITS SCRIPTED TEACHER
