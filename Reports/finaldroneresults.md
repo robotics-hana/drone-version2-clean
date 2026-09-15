@@ -1559,6 +1559,42 @@ definition per table.
   wrong-band composition (bottle-adjacent parks) will be read
   from per-episode positions.
 - Queued behind the 4 DAgger collectors; ~8 GPU-h total.
+- **OOD-P MINI PASSED (2026-09-15 late, job 345160,
+  OODPMINI-EXIT=0) — E5C grasps at unseen positions:** n=10 on
+  out-of-band targets (|x| ∈ [0.36, 0.42]): **picked 5, placed 2**,
+  flew-to-target 6/10, general median 22.9 mm, true median
+  14.7 mm. Even where the target's lateral position exceeds every
+  training draw, the system converts half its attempts at mini
+  scale. Full n=60 auto-released (345161).
+
+### DAGGER COLLECTION LANDED THE TARGET (2026-09-15/16, through
+### the Myriad login outage)
+
+- **149 banked units, 105 near-seams (70%)** at last count:
+  c1/81000 **50/50 COMPLETE in 56 attempts** (COLLECT-DAG-DONE),
+  c2/83000 48, c4/85000 50, c3/84000 finally scheduled (1 so
+  far, still running). The original 150-unit design target is
+  effectively met, with a far richer near-seam fraction than the
+  trial suggested. Compute jobs ran through the login outage
+  untouched (outage #3, several hours, login-only).
+- Next (as collectors exit): 4-source merge → airvla_v24 (split
+  seed 424246, read-back gate) → FT-DAG smoke → full train →
+  val curve → minis → frozen full vs C.
+
+### COMP CHAIN + TRUE-PAG DEPLOYED (2026-09-16 after login
+### recovery; jobs 346997-347001)
+
+- Files streamed with git-audited deltas (commit 7c552b2) +
+  normalized sha parity all three (eval_v2 a1b1abdff108,
+  collect_v2 fecc68d91923, comp_setcheck 80fd81759bda); compiled
+  on the pinned env.
+- Chain: **compcheck 346997** (expert-chain 6/6 gate) →
+  **compmini 346998** (C-15000 pure, 10) + **compminis 346999**
+  (E5C, 10) → **compfull 347000** (E5C n=60, runs ONLY on any
+  composite success in either mini; otherwise exits 0 recording
+  the pre-registered null). **pagfull 347001** (E5C + --pag,
+  n=60, frozen 97000 scenes, paired vs e5cfull) runs
+  unconditionally.
 
 ### C1 COMPOSITIONAL PROBE — BUILT (2026-09-15, Hana: "deffo lets
 ### run this asap"; deployment pending the Myriad login outage)
