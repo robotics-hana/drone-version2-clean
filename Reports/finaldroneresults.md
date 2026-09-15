@@ -1560,6 +1560,46 @@ definition per table.
   from per-episode positions.
 - Queued behind the 4 DAgger collectors; ~8 GPU-h total.
 
+### C1 COMPOSITIONAL PROBE — BUILT (2026-09-15, Hana: "deffo lets
+### run this asap"; deployment pending the Myriad login outage)
+
+- Implements the 2026-09-10 pre-registration exactly: `--comp` in
+  eval_v2 — nav spawn behind the gate + PICK-BAND objects
+  (reset_scene_v2 comp=True), composite instruction = the
+  concatenation of the two trained prompts ("fly through the gate
+  and hover over the {obj}, then pick up the {obj} and put it in
+  the wooden box" — never in any training episode), staged scoring
+  crossed/approached/picked/placed, success = crossed AND picked
+  AND placed, 1700-tick budget, COMP SUMMARY line, traj banked
+  kind="comp". Composes only with --assist/--learned-servo
+  (asserted). Scene family **95000** (fresh).
+- Gate chain (to submit when the login node returns):
+  comp_setcheck.py (6 chained-expert episodes: nav_v2 → pick_v2 →
+  place_v2 under the comp scoring, must pass 6/6) → compmini
+  (C-15000 pure, 10) → compminis (E5C, 10) → compfull (60) ONLY if
+  either mini shows any composite success — zero-shot ~0 is a
+  reportable null per the pre-registration.
+
+### TRUE-PAG ARM — BUILT (2026-09-15, the 2026-09-08 redesigned
+### experiment; triggered by Hana's "would it be difficult")
+
+- `--pag` in eval_v2: at the weld instant the PD's **total_mass**
+  is increased by the payload's subtree mass (and restored at
+  release) — the variable the PD's thrust AND arm gravity-moment
+  feed-forwards actually read; this is the genuine version of what
+  the falsified trim only pretended to do. Guarded against
+  --naive-payload; PROV pag=true; weld wrapper mirrors the _ff_on
+  latch so double-weld/cleanup paths stay correct.
+- Known approximation (documented): the payload's contribution to
+  composite inertia and to the CoM offset in the moment FF is not
+  modeled — the dominant payload effect (hover thrust) is.
+- Plan: **pagfull = E5C + --pag, n=60 picks, frozen 97000 scenes,
+  paired against e5cfull**; primary metrics carry sag / settle /
+  place accuracy from the banked trajectories, plus the standard
+  ladder metrics. Answers Q6 ("does payload compensation reduce
+  payload-induced disturbance?") in its honest post-falsification
+  form.
+
 ### DISSERTATION-SUPPORT ERRATA LOG (2026-09-15, figure/bullet
 ### audit against this ledger)
 

@@ -191,7 +191,7 @@ class V2Runner(A.Runner):
                                        # constant framing in camera3)
     def reset_scene_v2(self, obj=None, corrective=False, nav=False,
                        layout=None, solo=False, oodpos=False,
-                       novel_distractor=False):
+                       novel_distractor=False, comp=False):
         rng = self.rng
         fe = float(self.TABLE_C[1]) + 0.30          # front edge y
         if oodpos or novel_distractor:
@@ -200,6 +200,16 @@ class V2Runner(A.Runner):
             # registered
             assert (layout is None and not nav and not corrective
                     and not solo)
+        if comp:
+            # C1 COMPOSITIONAL probe (pre-registered 2026-09-10, run
+            # approved by Hana 2026-09-15 "deffo lets run this asap"):
+            # nav-style spawn behind the gate + PICK-BAND object
+            # placement, so the composite gate->pick->place is
+            # physically standard in both halves. Eval-only kind;
+            # never collected in any flavour by design.
+            assert (layout is None and not nav and not corrective
+                    and not solo and not oodpos
+                    and not novel_distractor)
         if layout is not None:
             # PAIRED-COMMAND replay (E3 grounding component, Hana
             # 2026-09-05): re-create a previous episode's scene
@@ -263,9 +273,11 @@ class V2Runner(A.Runner):
                 tgt_xy, dis_xy = spots
         alt = (A.PLATE_TOP + 0.005 + self.objs[obj]["aim_z"]
                - float(self.expert.off_carry[2]))
-        if nav:
-            # nav: spawn SOUTH of the gate facing the room (v1 eval
-            # geometry), gate side coin-flipped
+        if nav or comp:
+            # nav (and C1 comp): spawn SOUTH of the gate facing the
+            # room (v1 eval geometry), gate side coin-flipped. comp
+            # keeps this spawn but its objects were sampled in the
+            # PICK band above (nav=False in the y_lo selection).
             gx = -0.7 if rng.random() < 0.5 else 0.7
             start = np.array([rng.uniform(-0.95, 0.95),
                               rng.uniform(-1.9, -1.2),

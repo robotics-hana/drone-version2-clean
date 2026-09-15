@@ -115,6 +115,21 @@ OODPOS = "--oodpos" in sys.argv
 NOVELDIST = "--novel-distractor" in sys.argv
 assert not (SYNONYMS and PARAPHRASE), "one prompt manipulation at a time"
 assert not (SOLO and (OODPOS or NOVELDIST)), "not pre-registered"
+# C1 COMPOSITIONAL probe (pre-registered 2026-09-10; run approved by
+# Hana 2026-09-15): --comp turns the pick loop into COMPOSITE
+# episodes -- nav spawn behind the gate, composite instruction (the
+# concatenation of the two trained prompts, never seen in training),
+# staged scoring (crossed / approached / picked / placed; success =
+# crossed AND picked AND placed), 1700-tick budget. Zero-shot may
+# legitimately be ~0 -- a null is reportable. Default off = every
+# existing path byte-identical.
+COMP = "--comp" in sys.argv
+COMP_PROMPT = ("fly through the gate and hover over the {obj}, "
+               "then pick up the {obj} and put it in the wooden box")
+COMP_TICKS = 1700
+assert not (COMP and (SOLO or OODPOS or NOVELDIST or PARAPHRASE
+                      or SYNONYMS or POLICY_ARM or "--exec" in sys.argv)), \
+    "the comp probe composes with nothing except --assist/--learned-servo"
 HORIZON = 50
 # E1 (pre-registered 2026-09-05): actions EXECUTED per 50-step chunk
 # before re-inferring. Default 50 = the frozen naive baseline -- with
@@ -169,6 +184,16 @@ if LSERVO is not None:
 # guidance" condition). No frozen file is edited; default absent =>
 # every existing path untouched.
 NAIVE_PAYLOAD = "--naive-payload" in sys.argv
+# TRUE-PAG arm (registered 2026-09-08 as the redesigned experiment
+# after the trim falsification; built 2026-09-15): --pag updates the
+# PD's total_mass by the payload's subtree mass at the weld instant
+# (and back at release) -- the variable the PD's thrust AND arm
+# gravity-moment feed-forwards actually read (the falsified trim
+# bumped only the orphaned nominal_hover_thrust). Paired vs the
+# shipped stack on identical scenes = what genuine payload-aware
+# control buys (carry sag / settle / place accuracy from traj logs).
+PAG = "--pag" in sys.argv
+assert not (PAG and NAIVE_PAYLOAD), "pick one payload condition"
 RTC = "--rtc" in sys.argv
 if RTC:
     assert EXEC < HORIZON, "--rtc needs --exec < %d (chunk overlap)" % HORIZON
@@ -254,6 +279,7 @@ print("PROV " + json.dumps(dict(
     naive_payload=NAIVE_PAYLOAD, policy_type=PTYPE, solo=SOLO,
     paraphrase=PARAPHRASE, policy_arm=POLICY_ARM,
     synonyms=SYNONYMS, oodpos=OODPOS, novel_distractor=NOVELDIST,
+    comp=COMP, pag=PAG,
     actor_sha=(hashlib.sha256(open(LSERVO, "rb").read())
                .hexdigest()[:12] if LSERVO else None),
     ckpt=CKPT, argv=sys.argv[1:], torch_seed=TORCHSEED,
@@ -261,6 +287,19 @@ print("PROV " + json.dumps(dict(
     when=time.strftime("%Y-%m-%dT%H:%M:%S"))), flush=True)
 
 r = V.V2Runner(SCENE_SEED)
+if PAG:
+    _weld0 = r.weld_grasp
+
+    def _pag_weld(on):
+        pre = r._ff_on
+        _weld0(on)
+        sub = float(r.model.body_subtreemass[r.cur["body"]])
+        if on and not pre:
+            r.ctrl.mppi.total_mass += sub
+        elif (not on) and pre:
+            r.ctrl.mppi.total_mass -= sub
+    r.weld_grasp = _pag_weld
+    print("PAG: total_mass payload update ACTIVE", flush=True)
 if NAIVE_PAYLOAD:
     # bypass V2Runner's feed-forward override: weld seats, trim never
     # engages, _ff_on stays False (so end-of-episode FF cleanup is a
@@ -380,6 +419,90 @@ def run_pick(i):
     return res
 
 
+def run_comp(i):
+    """C1 composite episode: gate -> commanded object -> box, one
+    instruction, staged scoring. Structure mirrors run_pick with the
+    nav spawn/crossing tracking of run_nav; assist/learned-servo
+    compose exactly as in picks (the servo is phase-agnostic)."""
+    _dp_hist.clear()
+    obj, start, alt, tgt = r.reset_scene_v2(comp=True)
+    task = COMP_PROMPT.format(obj=obj)
+    yaw0 = float(2 * np.arctan2(r.data.qpos[6], r.data.qpos[3]))
+    if LSERVO is not None:
+        plat = V2PlatformLearned(r, start, yaw0, assist_r=ASSIST,
+                                 actor_path=LSERVO)
+    else:
+        plat = V2Platform(r, start, yaw0, assist_r=ASSIST)
+    adr = r.cur["adr"]
+    gx = r._gate_x
+    crossed = False
+    y_prev = float(r.data.qpos[1])
+    miss = 1e9
+    lifted = False
+    frames_n = 0
+    traj = []
+    vid = (imageio.get_writer("v2vid_%s_comp%02d.mp4" % (TAG, i),
+                              fps=10, codec="libx264", quality=8,
+                              macro_block_size=1) if VIDEO else None)
+    prev_tail = None
+    for chunk_i in range(COMP_TICKS // EXEC):
+        with torch.no_grad():
+            batch = PRE(obs_batch(task))
+            chunk, prev_tail = infer_chunk(batch, prev_tail)
+        for a in chunk[:EXEC]:
+            plat.tick(a)
+            frames_n += 1
+            if vid is not None and frames_n % 2 == 0:
+                f2 = r.frame(task)
+                vid.append_data(np.concatenate(
+                    [f2["observation.images.camera1"],
+                     f2["observation.images.camera2"],
+                     f2["observation.images.camera3"]], axis=1))
+            y = float(r.data.qpos[1])
+            if (y_prev < -0.6 <= y
+                    and abs(float(r.data.qpos[0]) - gx) < 0.45
+                    and 0.38 < float(r.data.qpos[2]) < 1.44):
+                crossed = True
+            y_prev = y
+            aim, _ = r.live_target()
+            miss = min(miss, float(np.linalg.norm(r.jaws() - aim)))
+            oz = float(r.data.qpos[adr + 2])
+            if oz > A.MAT_TOP + 0.12 and bool(
+                    r.data.eq_active[r.weld]):
+                lifted = True
+            if frames_n % 3 == 0:
+                traj.append([round(float(x), 3) for x in
+                             (*r.data.qpos[0:3], plat.yaw, *r.jaws())])
+    if vid is not None:
+        vid.close()
+    ended_welded = bool(r.data.eq_active[r.weld])
+    if r._ff_on:
+        r.weld_grasp(False)
+    oxy = r.data.qpos[adr:adr + 2]
+    d_bin = float(np.linalg.norm(oxy - r.bin_xy))
+    placed = bool(d_bin <= 0.15
+                  and float(r.data.qpos[adr + 2]) < A.MAT_TOP + 0.25)
+    res = dict(kind="comp", ep=i, obj=obj, tag=TAG,
+               crossed=bool(crossed), approached=bool(miss < 0.300),
+               miss_mm=round(miss * 1000, 1), picked=bool(lifted),
+               placed=placed,
+               success=bool(crossed and lifted and placed),
+               d_bin_mm=round(d_bin * 1000, 1),
+               gate_hits=r._gate_hits, table_hits=r._table_hits,
+               obj_hits=r._obj_hits, weld_tick=plat.weld_tick,
+               ended_welded=ended_welded,
+               assisted=bool(plat.took_tick is not None),
+               assist_tick=plat.took_tick,
+               assist_ticks=plat.assist_ticks, frames=frames_n)
+    with open("eval_v2_traj.jsonl", "a") as fh:
+        fh.write(json.dumps(dict(tag=TAG, kind="comp", ep=i, obj=obj,
+                                 tgt=[round(float(x), 3) for x in tgt],
+                                 bin_xy=[round(float(x), 3)
+                                         for x in r.bin_xy],
+                                 traj=traj)) + "\n")
+    return res
+
+
 def run_nav(i):
     _dp_hist.clear()                     # fresh obs history per episode
     obj, start, alt, tgt = r.reset_scene_v2(nav=True)
@@ -432,7 +555,7 @@ def run_nav(i):
 
 results = []
 for i in range(N_PICK):
-    res = run_pick(i)
+    res = run_comp(i) if COMP else run_pick(i)
     results.append(res)
     print("EVAL " + json.dumps(res), flush=True)
 for i in range(N_NAV):
@@ -440,6 +563,15 @@ for i in range(N_NAV):
     results.append(res)
     print("EVAL " + json.dumps(res), flush=True)
 
+comps = [x for x in results if x["kind"] == "comp"]
+if comps:
+    print("COMP SUMMARY: n=%d crossed %d approached %d picked %d "
+          "placed %d SUCCESS %d"
+          % (len(comps), sum(x["crossed"] for x in comps),
+             sum(x["approached"] for x in comps),
+             sum(x["picked"] for x in comps),
+             sum(x["placed"] for x in comps),
+             sum(x["success"] for x in comps)), flush=True)
 picks = [x for x in results if x["kind"] == "pick"]
 if picks:
     mm = sorted(x["miss_mm"] for x in picks)
