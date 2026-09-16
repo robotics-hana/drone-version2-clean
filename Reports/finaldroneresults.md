@@ -1672,6 +1672,22 @@ definition per table.
   ladder metrics. Answers Q6 ("does payload compensation reduce
   payload-induced disturbance?") in its honest post-falsification
   form.
+- **PAG FULL RESULT (2026-09-16, job 347001, PAGFULL-EXIT=0) —
+  GENUINE PAYLOAD COMPENSATION IS BEHAVIORALLY NEUTRAL AT THIS
+  PAYLOAD SCALE:** ladder metrics at parity with canonical E5C
+  (35 grasped / 28 placed / 46 flew, 12.8 general / 10.4 true vs
+  36 / 27 / 45, 12.8 / 10.1). Trajectory mining (36 vs 35 welds):
+  post-weld carry sag **median ~0 mm in BOTH arms** (3-tick
+  sampling), p90 36.5 vs 43.6 mm, max 138 vs 181 mm; place d_bin
+  medians 32.8 vs 68.7 mm — all differences within unpaired
+  flow-noise variance. **Reading: at 4-9% mass fraction (45-100 g
+  on 1.097 kg) the PD's conditional z-integral absorbs the weld
+  transient before feed-forward could matter; the reference
+  paper's guidance premise targets the ≥200 g sag regime.** Q6
+  answered: no measurable payload-induced disturbance remains for
+  compensation to remove at this scale. Caveats: runs are
+  policy-stochastic (fresh flow noise, not tick-paired); sag from
+  actual altitude at 3-tick stride.
 
 ### DISSERTATION-SUPPORT ERRATA LOG (2026-09-15, figure/bullet
 ### audit against this ledger)
