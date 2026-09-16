@@ -1937,6 +1937,12 @@ noise is unseeded per call, so pairing captures scene effects, not
 a full common-random-numbers design — tests are valid, just
 conservative.
 
+### E5 ACTOR PUSHED TO HF (2026-09-16): hanapasta/airvla_e5_actor
+### rev 1ecad1056485 — actor + rl_nets.py (architecture) +
+### rl_env.py (obs/action contract). Third copy (Myriad, GitHub,
+### HF). Large-checkpoint backups still blocked on the private-
+### storage-limit decision.
+
 ### DISSERTATION-SUPPORT ERRATA LOG (2026-09-15, figure/bullet
 ### audit against this ledger)
 
