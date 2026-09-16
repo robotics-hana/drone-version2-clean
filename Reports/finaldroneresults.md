@@ -1566,6 +1566,20 @@ definition per table.
   14.7 mm. Even where the target's lateral position exceeds every
   training draw, the system converts half its attempts at mini
   scale. Full n=60 auto-released (345161).
+- **OOD-P FULL RESULT (2026-09-16 night, job 345161,
+  OODPFULL-EXIT=0) — SPATIAL OOD DEGRADES ACQUISITION, NOT
+  TERMINAL SKILL:** n=60 out-of-band targets: **18 grasped (30%),
+  12 placed (20%), flew-to-target 31/60 (52%)**, general median
+  295.2 mm, **target-true median 11.2 mm** (canonical E5C:
+  36/27/45, 12.8/10.1). Reading: once the drone reaches the
+  eccentric target the servo converts at normal precision
+  (11.2 mm!); the loss is entirely in FLYING TO a target parked
+  outside every trained lateral draw (75%→52%). Prediction
+  scorecard: grasps 18 < the registered 24-34 range — missed low;
+  the acquisition drop was underestimated. Confound note (as
+  pre-registered): under --oodpos the target is always the outer
+  object, so the salience/selection prior compounds the spatial
+  novelty; the wrong-band growth mirrors the flew-to-target drop.
 
 ### DAGGER COLLECTION LANDED THE TARGET (2026-09-15/16, through
 ### the Myriad login outage)
