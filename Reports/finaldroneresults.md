@@ -1560,6 +1560,17 @@ definition per table.
   348343 (train) → 348344 (val)**; one sequencing slip (smoke
   submitted before its gate was retargeted) caught and fixed by
   qdel+resubmit before anything ran.
+- **Attempts 2-3 (348338, 348363):** each fixed the previous
+  failure and found the next: attempt 2 = FileExistsError on
+  attempt 1's partial destination (fix: clear the wholly-derived
+  destination first); attempt 3 = **aggregation + split SUCCEEDED
+  (1,110 episodes / 512,577 frames; train 888 / val 222, dagger
+  160/40)** then 401 Unauthorized at the hub push — the job's
+  HF_HOME redirect hides the login token; the D-era merges solved
+  this with HF_TOKEN_PATH, which v2dagmerge.job lacked. Fix:
+  export HF_TOKEN_PATH (pointer only; token never read/printed,
+  per the standing rule). **Attempt 4 = chain 348385→348388**,
+  idempotent re-aggregate then authenticated push.
 - **OOD-D `--novel-distractor` (345162→345163):** the v1-era
   mustard bottle (in the XML, absent from every v2 training
   frame) dropped on a third table spot by a DETERMINISTIC
