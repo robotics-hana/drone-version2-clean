@@ -123,7 +123,25 @@ assert not (SOLO and (OODPOS or NOVELDIST)), "not pre-registered"
 # crossed AND picked AND placed), 1700-tick budget. Zero-shot may
 # legitimately be ~0 -- a null is reportable. Default off = every
 # existing path byte-identical.
+# NOVEL-TARGET probe (Hana 2026-09-16, "can you test if it would
+# grasp the mustard bottle?"): --novel-target commands the v1-era
+# mustard bottle — never a target in any v2-family training — on the
+# OOD-D scenes (bottle placed by the same deterministic rule, scenes
+# byte-identical to the OOD-D arm; ONLY the instruction differs).
+# True grasp cannot be scored (no weld machinery / aperture window
+# for the bottle — the weld exists because the 0.2-0.5 N physical
+# grip is solver-unreliable), so scoring is APPROACH-level:
+# flew-to-bottle, closest jaw-to-cap distance, which object was
+# approached instead, plus any physical bottle displacement/lift.
+NOVELTGT = "--novel-target" in sys.argv
+NOVELTGT_PROMPT = "pick up the mustard bottle and put it in the wooden box"
+BOTTLE_CAP_H = 0.191            # cap height above support (v1 D8a)
+assert not (NOVELTGT and (SOLO or PARAPHRASE or SYNONYMS or OODPOS)), \
+    "novel-target is a pure-policy approach probe"
+assert not (NOVELTGT and "--assist" in sys.argv), \
+    "servo machinery is keyed to trained objects; novel-target runs pure"
 COMP = "--comp" in sys.argv
+assert not (NOVELTGT and COMP), "one probe at a time"
 COMP_PROMPT = ("fly through the gate and hover over the {obj}, "
                "then pick up the {obj} and put it in the wooden box")
 COMP_TICKS = 1700
@@ -279,7 +297,7 @@ print("PROV " + json.dumps(dict(
     naive_payload=NAIVE_PAYLOAD, policy_type=PTYPE, solo=SOLO,
     paraphrase=PARAPHRASE, policy_arm=POLICY_ARM,
     synonyms=SYNONYMS, oodpos=OODPOS, novel_distractor=NOVELDIST,
-    comp=COMP, pag=PAG,
+    comp=COMP, pag=PAG, novel_target=NOVELTGT,
     actor_sha=(hashlib.sha256(open(LSERVO, "rb").read())
                .hexdigest()[:12] if LSERVO else None),
     ckpt=CKPT, argv=sys.argv[1:], torch_seed=TORCHSEED,
@@ -339,9 +357,14 @@ _dp_hist = {}
 
 def run_pick(i):
     _dp_hist.clear()                     # fresh obs history per episode
-    obj, start, alt, tgt = r.reset_scene_v2(solo=SOLO, oodpos=OODPOS,
-                                            novel_distractor=NOVELDIST)
-    if SYNONYMS:
+    obj, start, alt, tgt = r.reset_scene_v2(
+        solo=SOLO, oodpos=OODPOS,
+        novel_distractor=(NOVELDIST or NOVELTGT))
+    if NOVELTGT:
+        task = NOVELTGT_PROMPT
+        _madr = r.model.joint("mustard_free_joint").qposadr[0]
+        _bx0 = np.array(r.data.qpos[_madr:_madr + 3])
+    elif SYNONYMS:
         task = A.PROMPT_MANIP.format(obj=SYN_SET[obj][i % 3])
     else:
         task = (PARA_SET[i % len(PARA_SET)] if PARAPHRASE
@@ -355,6 +378,8 @@ def run_pick(i):
     adr = r.cur["adr"]
     miss = 1e9
     lifted = False
+    miss_bottle = 1e9
+    miss_other = 1e9
     frames_n = 0
     traj = []
     vid = (imageio.get_writer("v2vid_%s_pick%02d.mp4" % (TAG, i),
@@ -377,6 +402,15 @@ def run_pick(i):
             aim, _ = r.live_target()
             d = float(np.linalg.norm(r.jaws() - aim))
             miss = min(miss, d)
+            if NOVELTGT:
+                cap = np.array(r.data.qpos[_madr:_madr + 3]) \
+                    + np.array([0, 0, 0.12])
+                miss_bottle = min(miss_bottle, float(
+                    np.linalg.norm(r.jaws() - cap)))
+                other = [o for k, o in r.objs.items() if k != obj][0]
+                miss_other = min(miss_other, float(np.linalg.norm(
+                    r.jaws()[0:2]
+                    - r.data.qpos[other["adr"]:other["adr"] + 2])))
             oz = float(r.data.qpos[adr + 2])
             if oz > A.MAT_TOP + 0.12 and bool(
                     r.data.eq_active[r.weld]):
@@ -409,7 +443,18 @@ def run_pick(i):
                assist_tick=plat.took_tick,
                assist_ticks=plat.assist_ticks,
                frames=frames_n,
-               **({"prompt": task} if (PARAPHRASE or SYNONYMS) else {}))
+               **({"prompt": task} if (PARAPHRASE or SYNONYMS) else {}),
+               **({"kind_override": "ntgt",
+                   "miss_bottle_mm": round(miss_bottle * 1000, 1),
+                   "flew_bottle": bool(miss_bottle < 0.300),
+                   "miss_trained_cmd_mm": round(miss * 1000, 1),
+                   "miss_trained_other_mm": round(miss_other * 1000, 1),
+                   "bottle_moved_mm": round(1000 * float(np.linalg.norm(
+                       np.array(r.data.qpos[_madr:_madr + 2])
+                       - _bx0[0:2])), 1),
+                   "bottle_lifted": bool(
+                       float(r.data.qpos[_madr + 2]) - _bx0[2] > 0.08)}
+                  if NOVELTGT else {}))
     with open("eval_v2_traj.jsonl", "a") as fh:
         fh.write(json.dumps(dict(tag=TAG, kind="pick", ep=i, obj=obj,
                                  tgt=[round(float(x), 3) for x in tgt],
@@ -563,6 +608,21 @@ for i in range(N_NAV):
     results.append(res)
     print("EVAL " + json.dumps(res), flush=True)
 
+if NOVELTGT:
+    nt = [x for x in results if x["kind"] == "pick"]
+    if nt:
+        mb = sorted(x["miss_bottle_mm"] for x in nt)
+        print("NTGT SUMMARY: n=%d flew-to-bottle %d  bottle-median "
+              "%.1f mm  bottle-moved %d  bottle-lifted %d  "
+              "went-to-trained-instead %d"
+              % (len(nt), sum(x["flew_bottle"] for x in nt),
+                 mb[len(mb) // 2],
+                 sum(x["bottle_moved_mm"] > 50 for x in nt),
+                 sum(x["bottle_lifted"] for x in nt),
+                 sum((not x["flew_bottle"])
+                     and min(x["miss_trained_cmd_mm"],
+                             x["miss_trained_other_mm"]) < 300
+                     for x in nt)), flush=True)
 comps = [x for x in results if x["kind"] == "comp"]
 if comps:
     print("COMP SUMMARY: n=%d crossed %d approached %d picked %d "

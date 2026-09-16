@@ -1792,6 +1792,36 @@ definition per table.
   sag column to the weld-transient dip (computed, comparable), or
   a one-flag setpoint-logging re-run for the strict definition.
 
+### NOVEL-TARGET PROBE PRE-REGISTRATION (2026-09-16, Hana: "can
+### you test if it would grasp the mustard bottle?")
+
+- **Question:** commanded a NEVER-TRAINED object by name ("pick up
+  the mustard bottle and put it in the wooden box"), does the
+  policy fly to it — or fall back to the objects it knows?
+- **Design:** `--novel-target` — the OOD-D scenes byte-identical
+  (same deterministic bottle placement, same frozen 97000 draws)
+  with ONLY the instruction changed: the OOD-D arm and this arm
+  differ in one sentence, so together they isolate instruction-
+  driven attention to the novel object. PURE POLICY ONLY (servo
+  machinery is keyed to trained objects — asserted off). Scoring
+  is APPROACH-level, honestly: flew-to-bottle (<300 mm of the
+  cap), closest jaw-to-cap distance, which trained object was
+  approached instead, bottle displacement >50 mm, physical lift
+  >80 mm. TRUE GRASP IS NOT SCORABLE (no weld/aperture machinery
+  for the bottle — welds exist because the 0.2-0.5 N grip is
+  solver-unreliable); any physical lift is reported as bonus
+  observation, not success.
+- **Arms:** 047500 first (mini 352352 → gated full 352353, n=30,
+  tag ntgtmini/ntgtfull); C-lineage arm queued after the retrain
+  passes its equivalence gates. eval_v2 sha 4e101e0f62b7 mirrored
+  (backup of pre-edit cluster copy kept).
+- **Prediction (registered, honestly uncertain):** π₀'s language
+  backbone knows "mustard bottle"; the object is visually salient
+  → SOME instruction-driven approaches expected (10-40%); the
+  alternative outcome (total fallback to trained objects) would
+  show grounding is closed over the trained object set. Either
+  answers the question.
+
 ### INCIDENT: C-15000 DELETED BY JANITOR SYMLINK-FOLLOW
 ### (2026-09-16 — agent error, full disclosure; recovery running)
 
