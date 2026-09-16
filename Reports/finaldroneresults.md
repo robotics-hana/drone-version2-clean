@@ -1792,6 +1792,45 @@ definition per table.
   sag column to the weld-transient dip (computed, comparable), or
   a one-flag setpoint-logging re-run for the strict definition.
 
+### INCIDENT: C-15000 DELETED BY JANITOR SYMLINK-FOLLOW
+### (2026-09-16 — agent error, full disclosure; recovery running)
+
+- **What happened:** the quota-crisis janitor (needed after
+  dagtrain died at its step-5000 save on ENOSPC) iterated
+  `checkpoints/*/` and ran `rm -rf` on `pi0_d_out/checkpoints/
+  000000/` — a SYMLINK to C-15000 (the D-val baseline link).
+  `rm -rf path/` with a trailing slash on a symlink-to-directory
+  FOLLOWS the link: it emptied the target. **C-15000 —
+  the Plan C checkpoint under E5C/H1C and every C-based result —
+  was a single-copy artifact (never hub-pushed) and is gone from
+  disk.** The `last -> 020000` symlinks were followed the same
+  way, harmlessly (those targets were scheduled for deletion).
+- **Containment:** every OTHER selected checkpoint verified
+  intact (047500, D-15000, DKI-5000, V3-025000, E5 actor,
+  **C-20000** — the same run's sibling — and all datasets).
+  **All banked results stand**: they were produced with the
+  original artifact under recorded PROV shas. Affected going
+  forward: FT-DAG (initializes from C-15000) is blocked until
+  recovery.
+- **Recovery (jobs submitted immediately):** (1) **352132** —
+  deterministic FT-C retrain (seed 1000, list seed 424244,
+  airvla_v21 from hub, from the intact 047500, recipe verbatim,
+  output pi0_e3c_r_out). GPU nondeterminism ⇒ statistically
+  equivalent, not bit-identical; **equivalence gates before any
+  use**: pinned-noise val row vs the recorded 7.68e-5 combined /
+  0.881-era flavour rows, then a closed-loop mini vs C's banked
+  mini (109.3 mm median, nav 3/4). FT-DAG then restarts from the
+  validated C-15000-r with the substitution documented wherever
+  it cites its base. (2) **352133** — immediate HF backup of
+  every surviving single-copy checkpoint (D-15000, DKI-5000,
+  V3-025000, C-20000), read-back verified.
+- **Rules adopted:** janitor deletions must never glob
+  `dir/*/` — enumerate with `find -maxdepth 1 -type d` (excludes
+  symlinks) and act on real directories only; every SELECTED
+  checkpoint is pushed to the hub AT SELECTION TIME (single-copy
+  artifacts are one mistake from gone); quota headroom is checked
+  before training jobs, not after they die.
+
 ### DISSERTATION-SUPPORT ERRATA LOG (2026-09-15, figure/bullet
 ### audit against this ledger)
 
