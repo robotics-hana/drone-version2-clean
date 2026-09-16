@@ -1,4 +1,6 @@
 """collect_dagger.py -- FT-DAG on-policy corrective collection
+(NOTE 2026-09-16: merge-stage sibling v2_merge_dag.py lives
+cluster-side; its v21 pre-download fix is recorded in the ledger.)
 (pre-registered 2026-09-14, Hana: "let's try this").
 
 Roll-in policy, roll-out expert: Plan C (C-15000) drives the

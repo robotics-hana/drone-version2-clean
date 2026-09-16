@@ -1548,6 +1548,18 @@ definition per table.
   Prediction: modest degradation (grasp 24-34/60) — the servo is
   position-agnostic; risk is the POLICY's approach at unseen
   lateral eccentricity.
+- **MERGE ATTEMPT 1 FAILED, ENV NOT DATA (job 347002,
+  DAGMERGE-EXIT=1):** all four sources discovered clean (200
+  banked), but the local writer-created airvla_v21 had been lost
+  in the quota-janitor sweep, so aggregate resolved it through
+  the hub cache whose lazy snapshot held only metadata —
+  av.FileNotFoundError on the first video. Fix: the merge script
+  now ensures a FULL local v21 snapshot first (+ strips the
+  legacy download marker, the v3-smoke lesson). Chain rebuilt
+  **348338 (merge, log v2dagmerge2.log) → 348342 (smoke) →
+  348343 (train) → 348344 (val)**; one sequencing slip (smoke
+  submitted before its gate was retargeted) caught and fixed by
+  qdel+resubmit before anything ran.
 - **OOD-D `--novel-distractor` (345162→345163):** the v1-era
   mustard bottle (in the XML, absent from every v2 training
   frame) dropped on a third table spot by a DETERMINISTIC
