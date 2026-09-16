@@ -1887,6 +1887,56 @@ definition per table.
   artifacts are one mistake from gone); quota headroom is checked
   before training jobs, not after they die.
 
+### STATISTICS ANNEX (2026-09-16, computed from banked per-episode
+### logs; scipy on the pinned env; paired tests use the shared
+### frozen scenes, exact McNemar on discordants, Wilcoxon on
+### distances, 10k-resample bootstrap for median CIs, Wilson for
+### proportions)
+
+**Significant:** H1C vs E5C grasp (discordant 2/14, p=0.0042) ·
+canonical vs OOD-P grasp (36 vs 18/60, Fisher p=0.0017) · FT-C vs
+ACT flew (47 vs 28, discordant 23/4, p=0.0003) · FT-C vs DP flew
+(47 vs 35, 19/7, p=0.029) · C solo-vs-paired flew (29/30 vs 47/60,
+Fisher p=0.030). Baselines' solo≈paired supported (ACT p=0.66, DP
+p=0.82; base p=0.12).
+
+**Robustness arms (parity = no detectable difference):** E5C vs
+paraphrase picked discordant 6/6 (p=1.0) · vs OOD-N 7/8 (p=1.0) ·
+vs OOD-D 15/12 (p=0.70); paired distance Wilcoxons all p>0.35.
+
+**NOT significant — phrase as point estimates/convergent evidence
+only:** base vs FT-C flew (7/12, p=0.36) · FT-C vs FT-D flew
+(12/5, p=0.14) · E5C vs E5D picked (15/7, p=0.13) · E5C vs E5-DKI
+picked (12/9, p=0.66) · base vs E2 flew (15/9, p=0.31) · **base vs
+V3 flew (13/9, p=0.52) — "worse on every axis" must be stated as
+consistent point estimates, not significance** · base vs FT-C
+distance restricted to both-target-true episodes (n=35, p=0.26).
+Primary base-vs-FT-C paired distance: Wilcoxon p=0.059, median
+paired diff 34.4 mm, bootstrap 95% CI [3.2, 69.8] (excludes 0).
+
+**Wilson 95% CIs (headline):** pure grasp 1/60 [0.3, 8.9]% · H1C
+24/60 [28.6, 52.6] · E5C 36/60 [47.4, 71.4] · E5C placed [33.1,
+57.5] · flew: base [57.5, 80.1], FT-C [66.4, 86.9], FT-D [54.1,
+77.3], DKI [59.2, 81.5], V3 [50.7, 74.4], ACT [34.6, 59.1], DP
+[45.7, 69.9] · OOD-P grasp [19.9, 42.5] · solo C flew 29/30
+[83.3, 99.4] · nav (n=20, wide): base [25.8, 65.8], FT-C [38.7,
+78.1] · comp mini crossing 10/10 [72.2, 100].
+
+**Bootstrap median CIs (gen | true, mm):** base 170.8
+[124.7-219.7] | 115.3 [79.4-160.7] · FT-C 134.2* [84.4-186.6] |
+87.6 [68.1-145.8] · FT-D 196.4* [120.9-279.9] | 110.3 · DKI 115.5*
+[93.9-172.2] | 88.2 [56.7-101.3] · H1C 19.1* | 14.8 · E5C 12.8
+[10.1-16.9] | 10.1 [8.8-12.2] · OOD-P true 11.2 [9.1-188.2]
+(bimodal tail — quote with care).
+*CONVENTION NOTE: np.median interpolates even n (FT-C 134.2);
+the ladder tables use the upper-middle element (145.8). The thesis
+must state ONE convention and apply it throughout.
+
+**Caveat (all paired tests):** scenes are paired but policy flow
+noise is unseeded per call, so pairing captures scene effects, not
+a full common-random-numbers design — tests are valid, just
+conservative.
+
 ### DISSERTATION-SUPPORT ERRATA LOG (2026-09-15, figure/bullet
 ### audit against this ledger)
 
