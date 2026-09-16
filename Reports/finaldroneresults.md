@@ -1822,6 +1822,32 @@ definition per table.
   show grounding is closed over the trained object set. Either
   answers the question.
 
+### COMPOSITE FULL APPROVED AS DOCUMENTED DEVIATION (2026-09-16,
+### Hana: "run a full evaluation ... for composite task")
+
+- The pre-registered null STANDS as the registered outcome; the
+  n=60 composite full runs as an explicitly exploratory extension
+  for STAGE RATES (crossing/approach/grasp at scale; the mini's
+  4/10 grasp and the loiter-drop phenomenon need n≈20+ grasps).
+- Blocked on the C-15000 recovery ⇒ chained behind it:
+  **e3crval 353248** (pinned-noise val row for the retrained
+  checkpoint; compare vs the original's recorded 7.68e-5) +
+  **e3crmini 353249** (10+4 closed-loop vs the banked C mini:
+  109.3 mm median, nav 3/4) → **compfull2 353250** (E5C-r,
+  n=60 composite). Equivalence judgment on the val/mini numbers
+  is reviewed before results are read; compfull2 is qdel'd if
+  equivalence fails.
+- **Comp drop analysis (trajectory-mined):** in the 3 composite
+  mid-carry drops the drone closed only 0.11-0.24 m of a
+  0.75-1.14 m gap to the box before releasing — LOITERING at the
+  grasp site, unlike in-distribution drops (en route). Consistent
+  with CLAUSE-LEVEL CONDITIONING (the composite's satisfied
+  first clause "hover over the {obj}" holding the policy
+  post-grasp) rather than box perception (box framing is
+  designed into camera3; same policy reaches the box 27/36
+  in-distribution). Discriminating future experiment recorded:
+  prompt-switch at the weld instant.
+
 ### INCIDENT: C-15000 DELETED BY JANITOR SYMLINK-FOLLOW
 ### (2026-09-16 — agent error, full disclosure; recovery running)
 
