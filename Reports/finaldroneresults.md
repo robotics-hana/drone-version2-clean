@@ -1740,6 +1740,26 @@ definition per table.
   policy-stochastic (fresh flow noise, not tick-paired); sag from
   actual altitude at 3-tick stride.
 
+### CARRY-TRAJECTORY METRICS (2026-09-16, mined from banked
+### trajectories — no re-run; definitions matter)
+
+- From eval_v2_traj.jsonl (drone+jaw xyz every 3 ticks) + EVAL
+  weld ticks, for all four hybrid systems' carried episodes:
+  **release proximity** (min jaw-to-box-centre after weld, mm,
+  med/p90): H1C 9/66 · E5C 12/570 · E5D 17/891 · E5-DKI 21/385
+  (tails = the known mid-carry-drop episodes). **Weld-transient
+  dip** (altitude lost ≤120 ticks post-weld — the trim-relevant
+  quantity): median ~0 all systems, p90 36.5 (E5C) / 43.6
+  (E5-DKI) mm.
+- **Definitional finding:** "sag vs the COMMANDED hover altitude"
+  is NOT computable from these logs (actual altitude only, no
+  setpoint); behavioural proxies conflate loaded-turn settling
+  and the deliberate place descent (attained-cruise reference
+  yields 124-155 mm medians — not comparable to the expert's
+  commanded-reference 5 mm). Thesis options recorded: swap the
+  sag column to the weld-transient dip (computed, comparable), or
+  a one-flag setpoint-logging re-run for the strict definition.
+
 ### DISSERTATION-SUPPORT ERRATA LOG (2026-09-15, figure/bullet
 ### audit against this ledger)
 
