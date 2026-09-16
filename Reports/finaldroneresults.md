@@ -1571,6 +1571,12 @@ definition per table.
   export HF_TOKEN_PATH (pointer only; token never read/printed,
   per the standing rule). **Attempt 4 = chain 348385→348388**,
   idempotent re-aggregate then authenticated push.
+- **MERGE COMPLETE (attempt 4, job 348385, DAGMERGE-EXIT=0):**
+  **airvla_v24 = 1,110 episodes / 512,577 frames**, split 888
+  train / 222 val (dagger 160/40, seed 424246), all five repos
+  pushed + read-back verified (v24 revision bd693b8065ee; dag1-4
+  banked to the hub too — the collection is now
+  outage-safe). Smoke running; train + val chained.
 - **OOD-D `--novel-distractor` (345162→345163):** the v1-era
   mustard bottle (in the XML, absent from every v2 training
   frame) dropped on a third table spot by a DETERMINISTIC
