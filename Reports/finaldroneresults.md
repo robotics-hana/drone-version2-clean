@@ -1581,6 +1581,34 @@ definition per table.
   object, so the salience/selection prior compounds the spatial
   novelty; the wrong-band growth mirrors the flew-to-target drop.
 
+### OOD-N + OOD-D FULL RESULTS (2026-09-16, jobs 345159/345163,
+### both exit 0) — THE OOD BLOCK COMPLETES: E5C SWEEPS THREE OF
+### FOUR AXES
+
+| OOD axis (n=60 each) | Grasped | Placed | Flew | Gen/true med |
+|---|---|---|---|---|
+| Canonical reference | 36 | 27 | 45 | 12.8 / 10.1 |
+| Paraphrase (wording) | 36 | 28 | 46 | 12.0 / 10.2 |
+| **OOD-N (unseen names)** | **37** | **28** | 46 | 11.4 / 9.9 |
+| **OOD-D (novel clutter)** | 33 | 23 | 45 | 15.2 / 11.6 |
+| OOD-P (unseen positions) | 18 | 12 | 31 | 295.2 / 11.2 |
+
+- **OOD-N: complete parity, nominally BETTER** (37/28) — the
+  grounding reads never-trained nouns ("dumbbell", "toy penguin",
+  "blue plush bird", "calibration weight") at full performance:
+  noun-level generalization, not token binding.
+- **OOD-D: essential parity** (33/23/45; prediction 38-45 flew →
+  landed 45, top of range) — a never-seen high-salience object on
+  the table does NOT hijack target selection, tempering the
+  salience-prior concern: the prior shows in wrong-object
+  DIRECTION between trained objects, not as capture by novel
+  clutter.
+- **The OOD story, complete:** robust to instruction wording,
+  object names, and novel clutter; the one measured weakness is
+  SPATIAL extrapolation (OOD-P: acquisition halves, terminal
+  precision intact at 11.2 mm). Language generalizes; geometry
+  is bounded by the training envelope.
+
 ### DAGGER COLLECTION LANDED THE TARGET (2026-09-15/16, through
 ### the Myriad login outage)
 
