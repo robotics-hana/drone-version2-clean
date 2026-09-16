@@ -1669,6 +1669,32 @@ definition per table.
   normalized sha parity all three (eval_v2 a1b1abdff108,
   collect_v2 fecc68d91923, comp_setcheck 80fd81759bda); compiled
   on the pinned env.
+### C1 COMPOSITIONAL RESULTS (2026-09-16, minis complete — the
+### PRE-REGISTERED NULL STANDS, WITH A RICH STAGE DECOMPOSITION)
+
+- **Pure C-15000 (compmini, 347073, exit 0):** crossed **10/10**,
+  approached 6/10, picked 0, placed 0. The never-trained composite
+  sentence CHAINS both trained behaviours — crossing even beats
+  the plain-nav rate (10/10 vs 12/20) — and the missing grasp is
+  the standard pure-policy terminal limit, not a composition
+  failure.
+- **E5C (compminis, 347074, exit 0):** crossed **10/10**,
+  approached 5/10, **picked 4/10** (servo converted 4 of 5
+  engagements on composite scenes), placed 0 → **composite
+  SUCCESS 0/10**. Film-grade decomposition of the 4 grasps: 3
+  MID-CARRY DROPS (weld ticks 358/473/616, ended un-welded,
+  d_bin 0.7-1.6 m — the documented post-grasp weakness, possibly
+  aggravated under the composite prompt: plain-pick carry
+  success is 27/36, here 0/3-with-time) + 1 clock truncation
+  (weld at 1636/1700). Budget amendment NOT warranted — the
+  failures are drops, not clock.
+- **Verdict per pre-registration:** zero composite successes in
+  either mini ⇒ compfull's null gate exits without the n=60 run.
+  **Compositionality moves from "untested" to a STAGED result:
+  navigation and approach compose zero-shot; grasp composes with
+  terminal assistance; the carry/place phase is where the
+  composite breaks** — a far stronger chapter than a bare null.
+
 - **SETCHECK ATTEMPT 1 FAILED 2/6 (job 346997, 2026-09-16
   night) — expert choreography, not harness:** crossing and hover
   6/6 and the staged scoring worked, but nav ends hovering OVER
