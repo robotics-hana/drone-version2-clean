@@ -30,7 +30,15 @@ amendments and provenance live in the dated sections below.
 | Paraphrase OOD (E5C, n=60) | Is grounding template memorization? | No — COMPLETE PARITY under 5 unseen phrasings (36/28/46 vs 36/27/45); wording brittleness falsified |
 | Latency (GB10) | Is the system real-time viable? | 235.9 ms median/inference, 4.72 ms/tick amortized at exec-50 — yes |
 | V3-arm (relabel + train) | Should the VLA control the arm? | **NO — measured**: v3full 38/60 flew, 139.4 mm true, 264.2 mm general, 7/20 nav, 0 picks — worse than 047500 on EVERY axis; the arm-as-platform design is vindicated by a one-variable experiment |
-| DAgger/FT-DAG (approved 2026-09-14) | Does on-policy corrective data fix the pure-VLA terminal? | Trial: mechanism validated (4/4 banked, 3 near-seams 181-213 mm); full collection in flight |
+| Synonym-noun OOD-N (E5C, n=60) | Does grounding survive unseen object nouns? | PARITY — 37/28/46 under "dumbbell/kettlebell/barbell weight, arctic bird" nouns; noun memorization falsified |
+| Position OOD-P (E5C, n=60) | Does the system work outside the trained ±0.35 m band? | Partial: 18/12 (vs 36/27), 31 flew — but true median 11.2 mm on reached targets ⇒ ACQUISITION degrades, precision intact; McNemar p=.0017 |
+| Distractor OOD-D (E5C, n=60) | Does an unseen distractor (mustard bottle) break selection? | PARITY — 33/23/45 on exactly-paired scenes; distractor-set memorization falsified |
+| Novel-target probe (047500, n=30) | Can the VLA fly to an object NEVER in training when commanded? | YES — 28/30 flew-to-bottle (163.4 mm), p=1.2e-9 vs salience ceiling; OOD-D pairing isolates instruction-not-salience; 0 lifts (servo is object-specific) |
+| Composite full (E5C-r, n=60) | Does zero-shot task composition exist? | RARE BUT REAL: 60/60 crossed, 24 picked, **3 full composite successes**; carry collapses post-grasp (Fisher p=3.4e-6) ⇒ clause-conditioning bottleneck |
+| True-PAG (mass-update at weld, n=60) | Does correct payload mass in the controller help? | NEUTRAL — sag ~0 both arms; PD-era stack already absorbs the 45 g step |
+| Statistics annex | Which claims survive formal tests? | Significant: H1C→E5C .0042, OOD-P .0017, C-vs-ACT .0003, C-vs-DP .029, C-solo .030; NOT significant (rephrased in thesis): base-vs-C flew .36, C-vs-D .14, E5C-vs-E5D .13 |
+| C-15000 incident + retrain | (Process) checkpoint deleted by janitor symlink-follow | Recovered by deterministic retrain; equivalence PASSED (val 7.7e-5 vs 7.679e-5 = 0.3%, mini in-band); new janitor + hub-push rules adopted |
+| DAgger/FT-DAG (approved 2026-09-14) | Does on-policy corrective data fix the pure-VLA terminal? | Collection COMPLETE (200/200 units, 70% near-seam takeovers), merged as airvla_v24 (648 train eps); smoke gate passed; **20k fine-tune RUNNING — the campaign's last open result** |
 
 ## The questions (defined before collecting)
 
@@ -1890,6 +1898,36 @@ definition per table.
 ### FT-DAG chain rewired to hold on the val job's COMPLETION
 ### (357137-39), so the equivalence band check runs against the
 ### full curve. Rows so far track the original to ≤4%.
+
+### C-15000-r EQUIVALENCE COMPLETE — GATE PASSED, FT-DAG TRAINING
+### LAUNCHED (2026-09-17 evening)
+
+- **Equivalence val curve COMPLETE (357136, E3CRVAL2-EXIT=0), all
+  8 rows** (pinned-noise val MSE, retrained curve): 002500
+  1.21e-4 · 005000 1.22e-4 · 007500 8.4e-5 · 010000 8.0e-5
+  (orig 8.13e-5) · 012500 7.8e-5 · **015000 7.7e-5 vs original
+  7.679e-5 — 0.3% apart, the decisive row** · 017500 7.9e-5 ·
+  020000 7.6e-5. Same shape, same knee, every row within the ≤4%
+  tracking band. Combined with the closed-loop mini gate (already
+  passed), **C-15000-r is declared equivalent to the deleted
+  original** for all downstream use; runs on it carry the
+  documented-substitution provenance note.
+- **Smoke gate auto-fired and PASSED (357137,
+  DAGSMOKE2-EXIT=0):** self-waiting gate matched
+  `ckpt 015000: val MSE 0.0000(7|8)` against the completed curve,
+  then the 200-step smoke confirmed the FT-DAG recipe end to end —
+  **`FTDAG list: 488 C-list + 160 dagger = 648` episodes, 313,994
+  frames**, loads C-15000-r, saves cleanly.
+- **FT-DAG 20k TRAINING RUNNING (357138, dagtrain2.log):** from
+  C-15000-r, lr 5e-6→5e-7, ~1.21 s/step → ~6.7 h total;
+  concurrent val scorer (357139, dagval2.log) waits on the first
+  checkpoint (002500) with baseline symlink → the retrained
+  015000. Registered predictions (unchanged from the 2026-09-14
+  pre-registration): success = frozen-full true median < 87.6 mm
+  (FT-C's) or grasp ≥ 4/60 (exits the 0–2/60 pure-VLA band);
+  null ⇒ the terminal deficit is perception/actuation
+  localization, not data support. Mini (10+4) gates the full as
+  always. This is the LAST open result of the campaign.
 
 ### COMPOSITE FULL RESULT (2026-09-17, job 353250 compfull2,
 ### exit 0) — THREE COMPLETE ZERO-SHOT COMPOSITES AT SCALE
