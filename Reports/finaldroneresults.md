@@ -1986,6 +1986,17 @@ paired diff 34.4 mm, bootstrap 95% CI [3.2, 69.8] (excludes 0).
 the ladder tables use the upper-middle element (145.8). The thesis
 must state ONE convention and apply it throughout.
 
+**Late additions (2026-09-17, novel-target + composite full):**
+novel-target flew-to-bottle 28/30 Wilson [78.7, 98.2]% (vs the
+registered 40% ceiling: binomial p=1.2e-9) · composite crossing
+60/60 [94.0, 100]% · composite success 3/60 [1.7, 13.7]% ·
+**carry conversion 3/24 composite vs 27/36 plain: Fisher
+p=3.4e-6 — the clause-conditioning bottleneck is the strongest
+significant effect of the late campaign** · composite grasp
+24/60 vs plain 36/60 p=0.044, but conditional-on-approach grasp
+is UNCHANGED (24/31=77% vs 36/45=80%) — the composite prompt
+costs approaches and carries, not grasp execution.
+
 **Caveat (all paired tests):** scenes are paired but policy flow
 noise is unseeded per call, so pairing captures scene effects, not
 a full common-random-numbers design — tests are valid, just
