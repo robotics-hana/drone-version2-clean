@@ -1929,6 +1929,31 @@ definition per table.
   localization, not data support. Mini (10+4) gates the full as
   always. This is the LAST open result of the campaign.
 
+### FT-DAG TRAINING IN FLIGHT — EARLY VAL ROWS + PRE-REGISTERED
+### ANALYSIS PLAN (2026-09-17 night, declared BEFORE the eval data
+### exists)
+
+- **Val rows so far (dagval 357139, pinned-noise MSE on the
+  airvla_v24 val split, 222 eps):** baseline 000000 = C-15000-r
+  scores **3.01e-4** on this dagger-augmented val set; FT-DAG
+  002500 **2.41e-4** · 005000 **2.46e-4** · 007500 **2.36e-4** —
+  ~20% below baseline and stable, so the fine-tune is absorbing
+  the corrective data without diverging. Training at 62%
+  (12500/20000 saved), ~2.5 h to completion.
+- **Checkpoint selection (pre-declared):** the standard rule —
+  the pinned-noise val-curve minimum over the saved ladder
+  (ties → earlier step). No closed-loop peeking before selection.
+- **Statistical battery (pre-declared, identical to the annex
+  conventions):** vs Plan C (C-15000-r) on the SAME frozen paired
+  scenes (seed 97000, n=60+20) — (1) exact McNemar on discordant
+  pairs for grasped, placed, flew-to-target, nav; (2) Wilcoxon
+  signed-rank on per-scene final distances + 10k-bootstrap CI on
+  the median difference; (3) Wilson 95% CIs on all headline
+  proportions. Success criteria unchanged from the 2026-09-14
+  pre-registration: true median < 87.6 mm (FT-C's) OR grasp
+  ≥ 4/60. Paired-but-unseeded-noise caveat applies as documented
+  in the annex.
+
 ### COMPOSITE FULL RESULT (2026-09-17, job 353250 compfull2,
 ### exit 0) — THREE COMPLETE ZERO-SHOT COMPOSITES AT SCALE
 
