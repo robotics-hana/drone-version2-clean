@@ -1848,6 +1848,60 @@ definition per table.
   in-distribution). Discriminating future experiment recorded:
   prompt-switch at the weld instant.
 
+### NOVEL-TARGET FULL RESULT (2026-09-17, job 352353,
+### NTGTFULL-EXIT=0) — OPEN-VOCABULARY GROUNDING CONFIRMED
+
+- **047500 commanded "pick up the mustard bottle" (never a target
+  in ANY training): flew-to-bottle 28/30 (93%)**, closest-approach
+  median 163.4 mm, bottle physically nudged in 3 episodes (0
+  lifts — no grasp machinery, as pre-registered), only 2/30
+  fell back to a trained object. Registered prediction was
+  10-40%; landed at 93%. **π₀'s pretrained open-vocabulary
+  grounding survives fine-tuning**: the policy resolves a novel
+  name to a novel object it has never been rewarded for
+  attending to. Approach is less precise than for trained
+  targets (163 vs ~120 mm) and never descends to grasp range —
+  attention transfers, terminal behaviour does not.
+- Pairing note: scenes byte-identical to OOD-D (same bottle, same
+  draws) — OOD-D showed the bottle does NOT capture attention
+  when a trained object is commanded (45/60 unchanged); this arm
+  shows it DOES receive attention when commanded. Together: the
+  instruction, not salience, directs attention. C-lineage arm
+  now optional (base-policy result is decisive).
+
+### C-15000 RECOVERY: RETRAIN COMPLETE, EQUIVALENCE STRONG
+### (2026-09-17)
+
+- **Retrain 352132 exit 0** (all 8 checkpoints). **Equivalence
+  gate 1 (pinned-noise val curve, running):** retrained rows
+  track the ORIGINAL curve to ~2% (e.g. ckpt 010000: 8.0e-5 vs
+  original 8.13e-5); the decisive 015000 row pending. **Gate 2
+  (closed-loop mini, job 353249, exit 0): 137.4 mm general /
+  132.8 true, flew 8/10, nav 3/4** vs the banked original C mini
+  (109.3 mm, nav 3/4, 0 welds) — within the documented mini noise
+  band (C's own mini→full swing was 109.3→145.8). Judged
+  equivalent pending the val row; FT-DAG restarts from
+  C-15000-r on its confirmation.
+
+### COMPOSITE FULL RESULT (2026-09-17, job 353250 compfull2,
+### exit 0) — THREE COMPLETE ZERO-SHOT COMPOSITES AT SCALE
+
+- **E5C-r, n=60 composite scenes: crossed 60/60 (100%),
+  approached 31/60, picked 24/60 (40%), placed 3 → 3/60 FULL
+  ZERO-SHOT COMPOSITE SUCCESSES (5%).** The n=10 null broke at
+  scale exactly as the exploratory extension anticipated.
+- Stage readings: **crossing is PERFECT at n=60** — the composite
+  instruction invokes the navigation program without exception;
+  grasp rate on composite scenes (40%) is near the plain-scene
+  servo band; the carry remains the broken stage (24 grasps → 3
+  places = 12.5% vs ~75% in-distribution), consistent with the
+  clause-conditioning analysis. Headline for the thesis:
+  zero-shot composition is REAL but bottlenecked at the
+  post-grasp phase — "rare but demonstrated" replaces the null.
+- Provenance note: run used the equivalence-gated retrained
+  C-15000-r (documented substitution); mini-gate passed before
+  launch, val-row confirmation tracking at ~2%.
+
 ### INCIDENT: C-15000 DELETED BY JANITOR SYMLINK-FOLLOW
 ### (2026-09-16 — agent error, full disclosure; recovery running)
 
