@@ -1883,6 +1883,14 @@ definition per table.
   equivalent pending the val row; FT-DAG restarts from
   C-15000-r on its confirmation.
 
+### EQUIVALENCE-VAL WALL-KILL + CHAIN REWIRE (2026-09-17):
+### e3crval (353248) was wall-killed at its 4 h limit after 4 of 8
+### rows (~50 min/checkpoint needs ~7 h) — sizing error, mine.
+### Resubmitted resumable with 10 h wall (357136, e3crval2.log);
+### FT-DAG chain rewired to hold on the val job's COMPLETION
+### (357137-39), so the equivalence band check runs against the
+### full curve. Rows so far track the original to ≤4%.
+
 ### COMPOSITE FULL RESULT (2026-09-17, job 353250 compfull2,
 ### exit 0) — THREE COMPLETE ZERO-SHOT COMPOSITES AT SCALE
 
