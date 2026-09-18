@@ -2290,6 +2290,34 @@ conservative.
   self-resubmission to 5 attempts, per-attempt logs) was not
   exercised beyond attempt 1, but is retained for future pushes.
 
+### OOD-N PER-VARIANT BREAKDOWN (2026-09-19, mined from the
+### banked oodnfull log — the prompt is recorded per episode)
+
+- Prompted by a methodological question on the OOD-N write-up:
+  only ONE of the six synonym variants ("dumbbell") shares no
+  token with the training instructions; "toy/stuffed penguin",
+  "metal/calibration weight" retain the trained head noun, and
+  "blue plush bird" retains the modifier "plush". If OOD-N parity
+  were driven by the token-retaining variants, the result would
+  be much weaker than it looks.
+- **It is not.** Per-variant (sums to the reported 46 flew /
+  37 grasped exactly):
+  | Variant | n | flew | grasped |
+  |---|---:|---:|---:|
+  | blue plush bird | 9 | 9 | 9 |
+  | dumbbell | 10 | 8 | 8 |
+  | calibration weight | 11 | 9 | 5 |
+  | metal weight | 11 | 7 | 5 |
+  | toy penguin | 10 | 7 | 5 |
+  | stuffed penguin | 9 | 6 | 5 |
+- **The two MOST novel variants are the two strongest.**
+  "dumbbell" (no shared token) grasps 8/10 and "blue plush bird"
+  (novel head noun) 9/9, both at or above the canonical
+  whole-run rates (45/60 flew, 36/60 grasped). No variant
+  collapses. Per-variant n is 9-11, so this supports "the parity
+  is not an artifact of token retention" rather than any ranking
+  among variants.
+
 ### DISSERTATION FACT-CHECK (2026-09-19, full pass over
 ### Hana_MSc_Dissertation_v10 against banked logs + HF metadata)
 
