@@ -2237,6 +2237,43 @@ conservative.
 ### HF). Large-checkpoint backups still blocked on the private-
 ### storage-limit decision.
 
+### CHECKPOINT BACKUP RESOLVED VIA PUBLIC REPOS (2026-09-18, Hana:
+### "make public repo on hugging face and push all them there")
+
+- **The storage limit was on PRIVATE repos only**, so publishing
+  sidesteps it entirely — this is the fix for the single-copy
+  exposure that the C-15000 incident created and that the
+  ckptbackup job failed twice to close.
+- **Job 368200 (hfpush.job → logs/hfpush.log)** creates five
+  PUBLIC model repos and uploads `pretrained_model/` (8.3 GB
+  each, ~42 GB total), each with a generated model card carrying
+  its training data, initialisation, step count, selection rule
+  and frozen-protocol result, then reads the file list back as
+  verification (a push that leaves no `.safetensors` is recorded
+  as FAILED — the `airvla_d_15000` lesson, where an empty repo
+  looked like a backup):
+  | Repo | Checkpoint |
+  |---|---|
+  | `hanapasta/airvla_ftc_15000` | pi0_e3c_r_out/015000 (FT-C, retrained) |
+  | `hanapasta/airvla_ftd_15000` | pi0_d_out/015000 |
+  | `hanapasta/airvla_ftdki_5000` | pi0_dki_out/005000 |
+  | `hanapasta/airvla_ftdag_17500` | pi0_dag_out/017500 |
+  | `hanapasta/airvla_v3arm_25000` | pi0_v3_out/025000 |
+- Existing PRIVATE repos (airvla_v2_pi0_047500, airvla_e5_actor,
+  act_v21, dp_v21, datasets airvla_v2 / airvla_v3) were left
+  untouched: the standing rule is that repo visibility is never
+  changed without Hana's explicit word, and her instruction was
+  to CREATE public repos. Flipping those four model repos to
+  public would additionally free private quota and make the
+  README's reproduction path work for a third party — offered,
+  not done.
+- **Audit finding that prompted this:** `hanapasta/airvla_d_15000`
+  (private) contains ONLY `.gitattributes` — the FT-D backup push
+  never completed, so it was an empty repo masquerading as a
+  backup for two days. Superseded by the public `airvla_ftd_15000`.
+- Every SELECTED checkpoint of the campaign is now (or is being)
+  hub-backed, closing the rule adopted after the C-15000 loss.
+
 ### DISSERTATION-SUPPORT ERRATA LOG (2026-09-15, figure/bullet
 ### audit against this ledger)
 
