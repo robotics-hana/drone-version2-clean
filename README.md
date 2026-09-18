@@ -189,6 +189,81 @@ python Mujoco/test1.py
 
 ---
 
+## AirVLA Pipeline (v2 campaign)
+
+The MSc-dissertation experiments — a π₀ vision-language-action policy
+flying the SkyGrip drone + 2-DoF arm in MuJoCo — live in
+`Sim'n'Real/Mujoco/`. The four stages below reproduce the system;
+results and full provenance are tracked in
+`Reports/finaldroneresults.md`.
+
+### 1. Expert demonstrations (training data)
+
+The scripted expert pilots the platform and banks accepted episodes
+as a LeRobot dataset:
+
+| File | Role |
+|---|---|
+| `collect_v2.py` | Main v2 collector: seeded scene randomisation, the expert pipeline (`nav_v2` → `pick_v2` → `place_v2`), acceptance gates (genuine seated grasp, zero table/gate contacts, placement inside the box), per-attempt manifest. Modes for standard picks, corrective picks and nav episodes. |
+| `collect_airvla.py` | Shared prompts and expert primitives used by every collector. |
+| `collect_dagger.py` | FT-DAG on-policy collector: the fine-tuned VLA rolls in (unrecorded); the scripted expert takes over at a sustained-near seam and completes the episode — only expert actions are banked. |
+
+Run on a GPU node in the pinned environment, e.g.
+`python collect_v2.py <seed> <n_units>` (see each file's docstring
+for arguments). Episodes upload to Hugging Face datasets
+(`hanapasta/airvla_v2*`).
+
+### 2. VLA training (π₀ fine-tune)
+
+Training uses [LeRobot](https://github.com/huggingface/lerobot)'s
+π₀ implementation on the UCL Myriad cluster; each configuration has
+a wrapper that pins the episode list, seed and hyper-parameters:
+
+| File | Configuration |
+|---|---|
+| cluster `v2train.job` (+ wrapper) | v2 Base: full fine-tune of π₀ on the 480-episode training split, batch 4, seed 1000. |
+| cluster `e3ctrain_wrapper.py` | FT-C: v2+F1 with rebalanced sampling via the episode list. |
+| `d_train_wrapper.py` / `dki_train_wrapper.py` | FT-D (from FT-C) and FT-D-KI (frozen VLM backbone). |
+| cluster `dag_train_wrapper.py` | FT-DAG: FT-C list + on-policy corrective episodes, initialised from FT-C. |
+| `act_train_wrapper.py` / `dp_train_wrapper.py` | From-scratch ACT and Diffusion Policy baselines. |
+
+Checkpoints are selected by the lowest pinned-noise validation MSE
+over the saved ladder (`valcurve` jobs), never by peeking at
+closed-loop results. Evaluation runs through the frozen harness
+`eval_v2.py` (additive, default-off flags only; every run records a
+PROV line).
+
+### 3. Scripted terminal servo ("Scripted hybrid", H1)
+
+The scripted closer lives in `platform_v2.py` and is enabled at
+evaluation time with `--assist 0.15`: when the jaws come within the
+0.15 m capture radius of the *commanded* object, control hands off
+to a deterministic terminal descend-align-close sequence. Because
+the trigger uses the instruction-named object, it cannot convert a
+wrong-target approach. `replay_h1_validation.py` replays expert
+episodes through the assist path to validate the handoff.
+
+### 4. Learned terminal servo ("Learned hybrid", E5)
+
+A small MLP (2×128 tanh, 18-D body-frame observation → 4 actions)
+replaces the scripted closer:
+
+| File | Role |
+|---|---|
+| `rl_env.py` | The terminal-phase environment contract (observation/action/episode definitions — imported, not copied, by every consumer). |
+| `rl_nets.py` | Actor-critic architecture. |
+| `rl_bc.py` | Stage 0: DAgger-clones the scripted servo into the actor (the 62%→90% conversion mechanism). |
+| `rl_train.py` | Stage 1: PPO polish against `rl_env.TerminalEnv`. |
+| `e5_actor/e5_actor_final.pt` | The final trained actor (also on HF: `hanapasta/airvla_e5_actor`). |
+| `replay_e5_validation.py` | Contract-parity validation before results count. |
+
+Deploy with
+`python eval_v2.py <ckpt> 60 20 --torchseed 1000 --assist 0.15 --learned-servo e5_actor/e5_actor_final.pt`.
+The best system (FT-C + learned servo, "E5C") reaches 60% grasp /
+45% full pick-and-place on the frozen n=60 protocol.
+
+---
+
 ## Contributing & Roadmap
 
 * ✅ Implemented: URDF/MJCF, real–sim sync, PWM/position modes, torque approx.
