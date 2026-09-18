@@ -1870,6 +1870,15 @@ definition per table.
   attending to. Approach is less precise than for trained
   targets (163 vs ~120 mm) and never descends to grasp range —
   attention transfers, terminal behaviour does not.
+- **Target-true decomposition (added 2026-09-18, computed from
+  the banked episodes, [n//2] convention):** over the 28
+  flew-to-bottle episodes, bottle-true median **127.0 mm**
+  (range 25.5–272.8) vs 047500's trained-object true median
+  121.5 mm — approach precision GIVEN commitment is essentially
+  trained-level; the all-30 median (163.4) is inflated by the 2
+  went-to-trained-instead episodes and the stricter 3-D
+  cap-point measurement. The open-vocabulary penalty is in
+  commitment and the tail, not approach quality.
 - Pairing note: scenes byte-identical to OOD-D (same bottle, same
   draws) — OOD-D showed the bottle does NOT capture attention
   when a trained object is commanded (45/60 unchanged); this arm
