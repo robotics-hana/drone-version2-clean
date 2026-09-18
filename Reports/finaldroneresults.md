@@ -1954,6 +1954,37 @@ definition per table.
   ≥ 4/60. Paired-but-unseeded-noise caveat applies as documented
   in the annex.
 
+### FT-DAG TRAINING COMPLETE + CHECKPOINT SELECTED (2026-09-18
+### 01:41, jobs 357138/357139 both exit clean)
+
+- **Train (357138): 20,000/20,000 steps in 7 h 56 m,
+  DAGTRAIN2-EXIT=0**, final loss 0.051, all 8 checkpoints saved
+  (optimizer state stripped from older ones by the in-job
+  janitor; pretrained_model dirs all intact).
+- **Full val curve (357139, pinned-noise MSE, airvla_v24 val
+  split, baseline = C-15000-r via 000000 symlink):** 000000
+  3.01e-4 · 002500 2.41e-4 · 005000 2.46e-4 · 007500 2.36e-4 ·
+  010000 2.36e-4 · 012500 2.33e-4 · 015000 2.23e-4 · **017500
+  2.119e-4 (MINIMUM)** · 020000 2.12e-4 (fractionally above
+  017500 at full precision). Monotone descent from 007500 on —
+  the corrective data is absorbed steadily, no overfit knee
+  within the budget. **SELECTED: 017500** by the pre-declared
+  argmin rule (recorded by the scorer itself in
+  dag_valcurve.json before any closed-loop contact).
+- **Process note (agent error, minor):** the pre-staged mini job
+  gated on a `DAGVAL2-EXIT=0` marker that dagval.job never
+  emits (its true completion marker is `DAGVAL-ALL-DONE`) — it
+  would have idled to a harmless timeout. Since selection was
+  already final and on record, the queued job was deleted
+  (own-job qdel) and resubmitted with the selected checkpoint
+  hardcoded: **dagmini 362537**, fresh log dagmini2.log,
+  standard 10+4 closed-loop mini, pure policy. Mini gates the
+  frozen full as always.
+- Hub-push-at-selection rule: BLOCKED by the account private-
+  storage limit (same as the 4 pending checkpoint backups) —
+  017500 stays multi-copy on Myriad only (full ladder retained)
+  until Hana decides the storage fix. Flagged, not forgotten.
+
 ### COMPOSITE FULL RESULT (2026-09-17, job 353250 compfull2,
 ### exit 0) — THREE COMPLETE ZERO-SHOT COMPOSITES AT SCALE
 
