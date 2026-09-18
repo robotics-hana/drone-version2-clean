@@ -19,3 +19,4 @@ Reports/v2_eval_videos/**/*.mp4
 Reports/*.mp4
 Sim'n'Real/Mujoco/*.ply
 Sim'n'Real/Mujoco/*.glb
+Sim'n'Real/Mujoco/rollout_videos/

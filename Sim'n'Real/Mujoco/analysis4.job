@@ -1,0 +1,89 @@
+#!/bin/bash -l
+#$ -l gpu=1
+#$ -ac allow=L
+#$ -pe smp 8
+#$ -l mem=6G
+#$ -l h_rt=8:0:0
+#$ -N pickhold_paired
+#$ -wd /home/ucabhe0/Scratch/skygrip/analysis/run_20260831_ckpt060000/logs
+#$ -o paired_$JOB_ID.log
+#$ -e paired_$JOB_ID.err
+#
+# STAGE 4: instrument audit, then noise-paired ablation.
+#
+# WHY THIS JOB EXISTS. Stage 3 (job 248198) returned refusal, band and random
+# all at the same place -- mean collateral 0.618 / 0.601 / 0.587, mean flip
+# +0.015 / +0.028 / +0.031. Band is the POSITIVE CONTROL (cross-validated
+# AUROC 0.969 vs a 0.512 null), so a null on band means the instrument, not
+# the checkpoint, is what produced the flat result.
+#
+# pi0 is a flow-matching policy: sample_actions() draws fresh unseeded noise
+# on every call, so stage 3's collateral statistic contained the policy's own
+# sampling variance on top of any causal effect. Stage 4 pins the noise so
+# baseline and intervened chunks differ ONLY by the projection.
+#
+# The audit runs FIRST and gates the sweeps: if pinning the noise does not
+# actually make the forward pass deterministic (null_paired ~ 0), then the
+# paired sweep would be no more interpretable than the unpaired one and there
+# is no point spending three GPU-hours on it.
+set -u
+S=/home/ucabhe0/Scratch/skygrip
+R=$S/analysis/run_20260831_ckpt060000
+BIN=/home/ucabhe0/Scratch/env-pin/bin
+CKPT=$S/pickhold_pi0_frozen_s1/checkpoints/060000/pretrained_model
+DROOT=$S/hf/lerobot/hanapasta/pick_hold_v4s_train
+META=$DROOT/episodes_meta.json
+NPZ=$R/results/decision_activations.npz
+PY=$R/code2/noise_paired_ablation.py
+export HF_HUB_CACHE=$S/hf/hub HF_LEROBOT_HOME=$S/hf/lerobot HF_HUB_OFFLINE=1
+
+hostname; nvidia-smi --query-gpu=name --format=csv,noheader
+for p in "$CKPT/model.safetensors" "$NPZ" "$META" "$PY"; do
+  [ -e "$p" ] || { echo "MISSING $p -- releasing GPU"; exit 0; }
+done
+
+common () {
+  echo --checkpoint "$CKPT" --dataset hanapasta/pick_hold_v4s_train \
+       --root "$DROOT" --npz "$NPZ" --meta "$META" --n_episodes 30
+}
+
+echo; echo "########## STAGE 4a: instrument audit ##########"
+$BIN/python "$PY" --stage audit $(common) --repeats 3 \
+  --out "$R/results/paired_audit.json"
+echo "audit exit=$?"
+
+# Gate. null_paired must be near zero for the paired sweep to mean anything.
+$BIN/python - "$R/results/paired_audit.json" <<'PYGATE'
+import json, sys, pathlib
+p = pathlib.Path(sys.argv[1])
+if not p.exists():
+    print("GATE-FAIL audit produced no json"); sys.exit(3)
+d = json.loads(p.read_text())
+paired = d["null_paired"]; unp = d["null_unpaired"]["mean"]
+print(f"GATE null_paired={paired:.6f}  null_unpaired={unp:.4f}")
+if paired > 0.02:
+    print("GATE-FAIL pinning the noise did not make the pass deterministic;"
+          " a paired sweep would be just as confounded. Not spending GPU.")
+    sys.exit(3)
+print(f"GATE-PASS sampling noise was {unp/max(paired,1e-6):.0f}x the residual"
+      " non-determinism; paired sweep is worth running.")
+PYGATE
+GATE=$?
+echo "gate exit=$GATE"
+if [ "$GATE" -ne 0 ]; then echo "STAGE4-ABORTED"; exit 0; fi
+
+run () {  # $1 sweep  $2 direction  $3 stack  $4 outfile
+  echo; echo "########## paired sweep=$1 direction=$2 stack=$3 ##########"
+  $BIN/python "$PY" --stage sweep --sweep "$1" --direction "$2" \
+    --stack "$3" $(common) --out "$R/results/$4"
+  echo "exit=$?"
+}
+
+# Same three arms as stage 3 so the paired and unpaired numbers can be put
+# side by side, plus the rank sweep that stage 3 never produced (it died on
+# the NL-vs-hookable IndexError, which is fixed in code2).
+run layer refusal expert paired_layer_refusal_expert.json
+run layer band    expert paired_layer_band_expert.json
+run layer random  expert paired_layer_random_expert.json
+run rank  refusal expert paired_rank_refusal_expert.json
+echo "STAGE4-DONE"

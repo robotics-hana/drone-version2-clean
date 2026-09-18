@@ -1,0 +1,49 @@
+#!/bin/bash -l
+#$ -l gpu=1
+#$ -ac allow=L
+#$ -pe smp 8
+#$ -l mem=6G
+#$ -l h_rt=6:0:0
+#$ -N pickhold_rollout900
+#$ -wd /home/ucabhe0/Scratch/skygrip/analysis/run_20260831_ckpt060000/logs
+#$ -o rollout900_$JOB_ID.log
+#$ -e rollout900_$JOB_ID.err
+#
+# STAGE 8b: re-run the closed-loop policy rollout with a FAIR frame budget.
+#
+# Stage 8a scored the policy 0/6, but every one of those six episodes
+# terminated at exactly 450 frames -- the --max_frames cap -- while the expert
+# needed 795 frames for its act episode and 660-663 for its refusals. The
+# policy was therefore given roughly 60% of the time the expert needed, and the
+# refusal verdicts in particular ("did not retreat to the safe hover") cannot be
+# distinguished from "had not arrived yet when the episode was cut off".
+#
+# The act failures are less ambiguous -- "lifted -0 mm" means nothing was ever
+# picked up -- but a 0/6 headline from a truncated horizon is not a fair test,
+# so it is re-run at 900 frames, comfortably above the expert's worst case.
+#
+# The expert pass is NOT repeated: stage 8a already scored it 3/3 through this
+# identical harness, which is the gate that makes a policy number interpretable.
+# Its videos and summary remain in the videos/ directory.
+set -u
+S=/home/ucabhe0/Scratch/skygrip
+R=$S/analysis/run_20260831_ckpt060000
+BIN=/home/ucabhe0/Scratch/env-pin/bin
+SIM=$S/sim
+CKPT=$S/pickhold_pi0_frozen_s1/checkpoints/060000/pretrained_model
+OUT=$R/videos900
+export HF_HUB_CACHE=$S/hf/hub HF_LEROBOT_HOME=$S/hf/lerobot HF_HUB_OFFLINE=1
+export MUJOCO_GL=egl PYOPENGL_PLATFORM=egl
+
+hostname; nvidia-smi --query-gpu=name --format=csv,noheader
+mkdir -p "$OUT"
+cd "$SIM" || { echo "no sim dir"; exit 0; }
+
+echo; echo "########## policy, 900-frame budget ##########"
+$BIN/python rollout_v4style.py --driver policy --checkpoint "$CKPT" \
+  --modes act,refuse_hazard,refuse_ungrounded --episodes 2 \
+  --exec_horizon 25 --max_frames 900 --seed 7 --out_dir "$OUT"
+echo "policy exit=$?"
+
+ls -la "$OUT"
+echo "STAGE8B-DONE"

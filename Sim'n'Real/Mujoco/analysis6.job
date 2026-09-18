@@ -1,0 +1,79 @@
+#!/bin/bash -l
+#$ -l gpu=1
+#$ -ac allow=L
+#$ -pe smp 8
+#$ -l mem=6G
+#$ -l h_rt=4:0:0
+#$ -N pickhold_steer
+#$ -wd /home/ucabhe0/Scratch/skygrip/analysis/run_20260831_ckpt060000/logs
+#$ -o steer_$JOB_ID.log
+#$ -e steer_$JOB_ID.err
+#
+# STAGE 6: causal SUFFICIENCY. Ablation (stages 3-4) asks whether a direction
+# is necessary; this asks whether it is sufficient.
+#
+# The hypothesis under test, assembled from stages 1 and 5:
+#   * the expert has ONE refusal axis -- the refuse_hazard and
+#     refuse_ungrounded directions have cosine +0.934
+#   * it separates refuse_ungrounded from act at 0.684 but refuse_hazard at
+#     0.551, i.e. chance
+#   * both refusal types have IDENTICAL demonstration targets (joint2 delta
+#     -0.8362 for each), so the difference is not in what was demonstrated,
+#     only in how hard the trigger is to compute
+#
+# Prediction: injecting the refusal axis into ACT episodes should push joint2
+# toward the demonstrated -0.836. If it does, the hazard failure is a failure
+# to ACTIVATE an existing axis rather than a missing representation. If it
+# does not -- and random does the same nothing -- the axis is descriptive
+# only. Both outcomes are informative; they are recorded before the run.
+#
+# WHY A SINGLE LAYER. alpha is scaled by the mean residual norm at the layer,
+# so steering all 18 layers at alpha=1 would add roughly 18x a typical
+# residual and simply destroy the forward pass. Each arm therefore steers one
+# layer and sweeps alpha, and the layer choice is then swept separately at
+# fixed alpha so the two factors are not confounded.
+set -u
+S=/home/ucabhe0/Scratch/skygrip
+R=$S/analysis/run_20260831_ckpt060000
+BIN=/home/ucabhe0/Scratch/env-pin/bin
+CKPT=$S/pickhold_pi0_frozen_s1/checkpoints/060000/pretrained_model
+DROOT=$S/hf/lerobot/hanapasta/pick_hold_v4s_train
+META=$DROOT/episodes_meta.json
+PY=$R/code2/steer_direction.py
+# Prefer the pinned extraction if stage 5 produced it: directions built from
+# noise-free activations are cleaner. Fall back to the original otherwise.
+NPZ=$R/results/decision_activations_pinned.npz
+[ -e "$NPZ" ] || NPZ=$R/results/decision_activations.npz
+export HF_HUB_CACHE=$S/hf/hub HF_LEROBOT_HOME=$S/hf/lerobot HF_HUB_OFFLINE=1
+
+hostname; nvidia-smi --query-gpu=name --format=csv,noheader
+echo "using npz: $NPZ"
+for p in "$CKPT/model.safetensors" "$META" "$NPZ" "$PY"; do
+  [ -e "$p" ] || { echo "MISSING $p -- releasing GPU"; exit 0; }
+done
+
+run () {  # $1 direction  $2 layers  $3 alphas  $4 outfile
+  echo; echo "########## steer dir=$1 layers=$2 alphas=$3 ##########"
+  $BIN/python "$PY" --direction "$1" --stack expert --layers "$2" \
+    --alphas "$3" --checkpoint "$CKPT" \
+    --dataset hanapasta/pick_hold_v4s_train --root "$DROOT" \
+    --npz "$NPZ" --meta "$META" --n_episodes 30 \
+    --refuse_mode refuse_hazard --out "$R/results/$4"
+  echo "exit=$?"
+}
+
+# Alpha sweep at a late layer (L17), where the ungrounded refusal contrast is
+# most readable on the expert stack.
+run ungrounded 17 0.25,0.5,1,2 steer_ungrounded_L17.json
+run refusal    17 0.25,0.5,1,2 steer_refusal_L17.json
+run band       17 0.25,0.5,1,2 steer_band_L17.json
+run random     17 0.25,0.5,1,2 steer_random_L17.json
+
+# Layer sweep at fixed alpha, for the encoded refusal axis and its control.
+# ONE LAYER PER INVOCATION. Passing "1,5,9,13,17" to a single run would steer
+# all five layers at once, which is a 5x perturbation rather than a sweep.
+for L in 1 5 9 13 17; do
+  run ungrounded "$L" 1 "steer_ungrounded_L${L}_a1.json"
+  run random     "$L" 1 "steer_random_L${L}_a1.json"
+done
+echo "STAGE6-DONE"

@@ -1,0 +1,71 @@
+#!/bin/bash -l
+#$ -l gpu=1
+#$ -ac allow=L
+#$ -pe smp 8
+#$ -l mem=6G
+#$ -l h_rt=4:0:0
+#$ -N pickhold_traj
+#$ -wd /home/ucabhe0/Scratch/skygrip/analysis/run_20260831_ckpt060000/logs
+#$ -o traj_$JOB_ID.log
+#$ -e traj_$JOB_ID.err
+#
+# STAGE 8c: instrumented rollout — does the policy even TRY to reach the object?
+#
+# The success flag cannot distinguish "reached the object and failed to hold
+# it" from "never went near it". Sampled video frames suggest the latter: the
+# policy hovers over the table without descending onto the block, and appears
+# to command the gripper SHUT (0.000) for the whole episode when 0.016 is fully
+# open. Frames are not a measurement, so this run logs, every frame:
+#
+#   jaw_obj_dist   distance from the JAW MIDPOINT to the target object. Not the
+#                  drone body -- the body can sit directly above the object
+#                  while the jaws are still 40 cm up, and the body-to-jaw offset
+#                  is 7.2 cm, wider than the object itself.
+#   grip cmd       the commanded aperture, to test the "jaws clamped shut"
+#                  reading directly.
+#
+# Both drivers run the SAME act episode (same seed, same scene), so the expert
+# row is the reference for what a successful approach looks like in these
+# units, rather than an abstract tolerance.
+set -u
+S=/home/ucabhe0/Scratch/skygrip
+R=$S/analysis/run_20260831_ckpt060000
+BIN=/home/ucabhe0/Scratch/env-pin/bin
+SIM=$S/sim
+CKPT=$S/pickhold_pi0_frozen_s1/checkpoints/060000/pretrained_model
+OUT=$R/videos_traj
+export HF_HUB_CACHE=$S/hf/hub HF_LEROBOT_HOME=$S/hf/lerobot HF_HUB_OFFLINE=1
+export MUJOCO_GL=egl PYOPENGL_PLATFORM=egl
+
+hostname; nvidia-smi --query-gpu=name --format=csv,noheader
+mkdir -p "$OUT"
+cd "$SIM" || { echo "no sim dir"; exit 0; }
+
+echo; echo "########## expert, act, instrumented (reference) ##########"
+$BIN/python rollout_v4style.py --driver expert --modes act --episodes 1 \
+  --seed 7 --out_dir "$OUT"
+echo "expert exit=$?"
+
+echo; echo "########## policy, act, instrumented, 900-frame budget ##########"
+$BIN/python rollout_v4style.py --driver policy --checkpoint "$CKPT" \
+  --modes act --episodes 1 --exec_horizon 25 --max_frames 900 \
+  --seed 7 --out_dir "$OUT"
+echo "policy exit=$?"
+
+echo; echo "=== approach summary ==="
+$BIN/python - "$OUT" <<'PYSUM'
+import json, pathlib, sys
+out = pathlib.Path(sys.argv[1])
+for d in ("expert", "policy"):
+    f = out / f"rollout_{d}.json"
+    if not f.exists():
+        continue
+    for r in json.loads(f.read_text()):
+        print(f"  {d:7s} {r['mode']:6s} success={str(r['success']):5s} "
+              f"closest jaw-obj {r['closest_jaw_obj_m']*1000:6.0f} mm "
+              f"(xy {r['closest_jaw_obj_xy_m']*1000:6.0f} mm)"
+              + (f"  grip {r['grip_cmd_min']:.4f}..{r['grip_cmd_max']:.4f}"
+                 if r.get('grip_cmd_max') is not None else "  grip n/a (expert)"))
+PYSUM
+ls -la "$OUT"
+echo "STAGE8C-DONE"

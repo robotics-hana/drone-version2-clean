@@ -1,0 +1,91 @@
+#!/bin/bash -l
+#$ -l gpu=1
+#$ -ac allow=L
+#$ -pe smp 8
+#$ -l mem=6G
+#$ -l h_rt=3:0:0
+#$ -N pickhold_pinned
+#$ -wd /home/ucabhe0/Scratch/skygrip/analysis/run_20260831_ckpt060000/logs
+#$ -o pinned_$JOB_ID.log
+#$ -e pinned_$JOB_ID.err
+#
+# STAGE 5: is the expert-side refusal null a property of the CHECKPOINT or of
+# the EXTRACTION?
+#
+# Stage 1 reported that the expert separates refuse_hazard from act at CV AUROC
+# 0.551 (null 0.496) -- chance -- while separating band at 0.969 and
+# refuse_ungrounded at 0.684. Those last two say the expert is not simply
+# unreadable, but they do not rule out that a weak refusal signal was buried:
+# pi0 is a flow-matching policy and its EXPERT stack consumes the noisy action
+# tokens, so probe_extract_pi0.py captured expert activations under one
+# unseeded noise draw per episode. The trunk cannot have this problem (it sees
+# images and language only), which makes it a built-in negative control.
+#
+# Two independent corrections are applied and reported as a 2x2 so they can be
+# told apart:
+#
+#   pinned noise   removes sampling variance from the captured activations
+#   selection-aware null  fixes probe_cv.py taking a MAX over 19 layers while
+#                  computing its permutation null at one fixed layer
+#
+# Neither correction can invent a representation; both can only reveal one that
+# was hidden or retract one that was an artefact.
+set -u
+S=/home/ucabhe0/Scratch/skygrip
+R=$S/analysis/run_20260831_ckpt060000
+BIN=/home/ucabhe0/Scratch/env-pin/bin
+CKPT=$S/pickhold_pi0_frozen_s1/checkpoints/060000/pretrained_model
+DROOT=$S/hf/lerobot/hanapasta/pick_hold_v4s_train
+META=$DROOT/episodes_meta.json
+NPZ_OLD=$R/results/decision_activations.npz
+NPZ_NEW=$R/results/decision_activations_pinned.npz
+export HF_HUB_CACHE=$S/hf/hub HF_LEROBOT_HOME=$S/hf/lerobot HF_HUB_OFFLINE=1
+
+hostname; nvidia-smi --query-gpu=name --format=csv,noheader
+for p in "$CKPT/model.safetensors" "$META" "$NPZ_OLD" \
+         "$R/code2/probe_extract_pinned.py" "$R/code2/probe_cv_strict.py"; do
+  [ -e "$p" ] || { echo "MISSING $p -- releasing GPU"; exit 0; }
+done
+
+echo; echo "########## 5a: pinned re-extraction + activation noise audit ##########"
+$BIN/python $R/code2/probe_extract_pinned.py \
+  --checkpoint "$CKPT" --dataset hanapasta/pick_hold_v4s_train --root "$DROOT" \
+  --meta "$META" --n_var 12 --repeats 4 \
+  --out "$NPZ_NEW" --audit "$R/results/activation_noise_audit.json"
+echo "extract exit=$?"
+
+# The trunk is the negative control: it cannot see the action noise, so its
+# noise fraction must be ~0. If it is not, the audit is broken and the expert
+# number it reports means nothing.
+$BIN/python - "$R/results/activation_noise_audit.json" <<'PYGATE'
+import json, sys, pathlib
+p = pathlib.Path(sys.argv[1])
+if not p.exists():
+    print("AUDIT-GATE-FAIL no audit json"); sys.exit(0)
+d = json.loads(p.read_text())["stacks"]
+t = d["trunk"]["noise_fraction_mean"]; e = d["expert"]["noise_fraction_mean"]
+print(f"AUDIT trunk noise_fraction={t:.5f} (control, expect ~0)")
+print(f"AUDIT expert noise_fraction={e:.5f}")
+print("AUDIT-GATE-FAIL trunk control is not ~0; audit unreliable"
+      if t > 0.02 else "AUDIT-GATE-PASS trunk control clean")
+PYGATE
+
+[ -e "$NPZ_NEW" ] || { echo "no pinned npz; stopping"; echo "STAGE5-DONE"; exit 0; }
+
+echo; echo "########## 5b: probe_cv.py on PINNED npz (same code as stage 1) ##########"
+# Run the ORIGINAL, unmodified probe_cv.py so this is a like-for-like
+# comparison in which the only thing that changed is the noise pinning.
+$BIN/python $R/code/probe_cv.py --npz "$NPZ_NEW" --meta "$META" \
+  --folds 5 --perms 20 --out "$R/results/probe_cv_pinned.json"
+echo "exit=$?"
+
+echo; echo "########## 5c: selection-aware null, ORIGINAL npz ##########"
+$BIN/python $R/code2/probe_cv_strict.py --npz "$NPZ_OLD" --meta "$META" \
+  --perms 100 --out "$R/results/probe_cv_strict_orig.json"
+echo "exit=$?"
+
+echo; echo "########## 5d: selection-aware null, PINNED npz + emitted chunk ##########"
+$BIN/python $R/code2/probe_cv_strict.py --npz "$NPZ_NEW" --meta "$META" \
+  --perms 100 --chunks --out "$R/results/probe_cv_strict_pinned.json"
+echo "exit=$?"
+echo "STAGE5-DONE"

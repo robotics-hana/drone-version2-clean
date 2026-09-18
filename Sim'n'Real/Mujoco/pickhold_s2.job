@@ -1,0 +1,188 @@
+#!/bin/bash -l
+#$ -l gpu=1
+#$ -ac allow=L
+#$ -pe smp 8
+#$ -l mem=6G
+#$ -l h_rt=48:0:0
+#$ -N pickhold_s2
+#$ -wd /home/ucabhe0/Scratch/skygrip/logs
+#$ -o s2_$JOB_ID.log
+#$ -e s2_$JOB_ID.err
+#
+# Continue training the frozen-trunk pi0, starting from the s1 060000 weights.
+#
+# WHY, in two numbers. The s1 run did 60000 steps at batch 4 = 240,000 samples
+# against a 298,294-frame dataset -- 0.80 EPOCHS. The policy has not yet seen
+# the data once. And its cosine schedule had num_decay_steps=30000 while the
+# run went to 60000, so the learning rate sat at its 2.5e-6 floor for the
+# entire second half. Both are fixed here:
+#
+#   batch 4 -> 16          100k steps = 5.4 epochs, 6.7x s1's sample count
+#   decay_steps -> 100000  the schedule now spans the run instead of ending
+#                          halfway through it
+#   lr 2.5e-5 -> 5e-5      sqrt scaling for the 4x larger batch
+#
+# The trunk stays FROZEN (train_expert_only=true). That is the design decision
+# this whole study rests on, and it is not revisited here: the frozen trunk
+# already separates the hazard condition at CV AUROC 0.778, so the information
+# the expert needs is present in its inputs -- what is missing is gradient
+# steps, not features.
+#
+# Started from the 060000 WEIGHTS rather than --resume, deliberately. Resuming
+# would restore the s1 optimizer state and its exhausted decay schedule, which
+# is the thing being fixed.
+#
+# Chain-safe: later links resume from `last` and exit 0 once STEPS is reached,
+# so a surplus link releases its GPU immediately instead of idling it.
+#
+# --dataset.root is REQUIRED: snapshot_download leaves .cache/huggingface
+# inside the dataset dir, which lerobot reads as a legacy hub mirror and
+# re-fetches -- fatal under HF_HUB_OFFLINE on a compute node.
+set -u
+
+BASE=/home/ucabhe0/Scratch/skygrip
+BIN=/home/ucabhe0/Scratch/env-pin/bin
+OUT=$BASE/pickhold_pi0_frozen_s2
+INIT=$BASE/pickhold_pi0_frozen_s1/checkpoints/060000/pretrained_model
+STEPS=100000
+BATCH=16
+
+export HF_HUB_CACHE=$BASE/hf/hub
+export HF_LEROBOT_HOME=$BASE/hf/lerobot
+export HF_HUB_OFFLINE=1
+
+hostname
+nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+echo "job=$JOB_ID slots=${NSLOTS:-1}"
+
+# --- guards: never idle a GPU on missing inputs -----------------------------
+[ -d "$HF_LEROBOT_HOME/hanapasta/pick_hold_v4s_train" ] || {
+  echo "MISSING DATASET -- releasing GPU"; exit 0; }
+[ -e "$INIT/model.safetensors" ] || {
+  echo "MISSING s1 060000 weights -- releasing GPU"; exit 0; }
+
+STEP=0
+SJ=$OUT/checkpoints/last/training_state/training_step.json
+if [ -f "$SJ" ]; then
+  STEP=$($BIN/python -c "import json,sys;print(json.load(open(sys.argv[1]))['step'])" "$SJ" 2>/dev/null || echo 0)
+fi
+echo "resume point: step $STEP of $STEPS"
+if [ "$STEP" -ge "$STEPS" ]; then
+  echo "already at $STEPS -- releasing GPU"; exit 0
+fi
+
+# --- checkpoint preservation (started before EITHER training path) ----------
+# save_freq=10000 over 100k steps means TEN checkpoints at 9.5 GB each = 95 GB.
+# The filesystem had 66 GB free (863 GB of it belongs to the airvla work, which
+# is not mine to touch), so writing them all would fill the disk and kill the
+# run around checkpoint seven.
+#
+# Because the trunk is frozen, only 0.64 GB of each 8.9 GB checkpoint actually
+# changes -- measured between s1 050000 and 060000: 173 of 778 tensors moved,
+# the other 8.26 GB byte-identical. So every 10k checkpoint is preserved
+# LOSSLESSLY as a delta against the s1 060000 reference, 6.4 GB for all ten,
+# and any of them can be reconstructed exactly with `checkpoint_slim.py
+# restore`. The two most recent full checkpoints are always kept intact so
+# training can resume from `last`.
+SLIM=$BASE/analysis/run_20260831_ckpt060000/code2/checkpoint_slim.py
+STORE=$BASE/pickhold_pi0_frozen_s2_deltas
+SLIM_PID=""
+if [ -f "$SLIM" ]; then
+  mkdir -p "$STORE"
+  $BIN/python "$SLIM" watch --reference "$INIT" \
+    --checkpoints "$OUT/checkpoints" --store "$STORE" \
+    --keep_full 2 --until_step $STEPS --poll 180 &
+  SLIM_PID=$!
+  echo "checkpoint slimmer running as pid $SLIM_PID -> $STORE"
+else
+  echo "WARNING: $SLIM missing -- checkpoints will accumulate at 9.5 GB each"
+fi
+trap '[ -n "$SLIM_PID" ] && kill $SLIM_PID 2>/dev/null' EXIT
+
+CFG=$OUT/checkpoints/last/pretrained_model/train_config.json
+if [ -f "$CFG" ]; then
+  echo "--- resuming from $CFG ---"
+  $BIN/lerobot-train --config_path="$CFG" --resume=true
+  RC=$?
+  echo "TRAIN-EXIT=$RC"
+  # Final sweep: catch checkpoints the watcher had protected as most-recent.
+  [ -n "$SLIM_PID" ] && kill $SLIM_PID 2>/dev/null
+  $BIN/python "$SLIM" watch --reference "$INIT" \
+    --checkpoints "$OUT/checkpoints" --store "$STORE" \
+    --keep_full 1 --until_step 0 --poll 1 || true
+  echo "=== preserved deltas ==="; ls -la "$STORE"
+  du -sh "$STORE" "$OUT" 2>/dev/null
+  exit 0
+fi
+
+RENAME='{"observation.images.camera3": "observation.images.base_0_rgb", "observation.images.camera1": "observation.images.left_wrist_0_rgb", "observation.images.camera2": "observation.images.right_wrist_0_rgb"}'
+
+# --- preflight: does batch 16 fit in 40 GB? ---------------------------------
+# 20 steps to a scratch dir. An OOM here costs ten minutes; an OOM two hours
+# into the real run costs the queue slot.
+PROBE=$BASE/_probe_s2
+rm -rf "$PROBE"
+echo "--- preflight: 20 steps at batch $BATCH ---"
+$BIN/lerobot-train \
+  --dataset.repo_id=hanapasta/pick_hold_v4s_train \
+  --dataset.root="$HF_LEROBOT_HOME/hanapasta/pick_hold_v4s_train" \
+  --policy.path="$INIT" \
+  --rename_map="$RENAME" \
+  --output_dir="$PROBE" \
+  --batch_size=$BATCH --steps=20 --save_freq=1000000 --num_workers=7 \
+  --seed=1000 --policy.device=cuda --policy.dtype=bfloat16 \
+  --policy.train_expert_only=true --wandb.enable=false \
+  --policy.push_to_hub=false
+PROBE_RC=$?
+nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader
+rm -rf "$PROBE"
+echo "preflight exit=$PROBE_RC"
+if [ "$PROBE_RC" -ne 0 ]; then
+  echo "PREFLIGHT FAILED at batch $BATCH -- not starting the long run."
+  echo "Resubmit with BATCH=8 (and STEPS doubled to keep the epoch count)."
+  exit 0
+fi
+
+echo "--- fresh start from s1 060000 weights, batch $BATCH, $STEPS steps ---"
+$BIN/lerobot-train \
+  --dataset.repo_id=hanapasta/pick_hold_v4s_train \
+  --dataset.root="$HF_LEROBOT_HOME/hanapasta/pick_hold_v4s_train" \
+  --policy.path="$INIT" \
+  --rename_map="$RENAME" \
+  --output_dir="$OUT" \
+  --batch_size=$BATCH \
+  --steps=$STEPS \
+  --save_freq=10000 \
+  --num_workers=7 \
+  --seed=1000 \
+  --policy.device=cuda \
+  --policy.dtype=bfloat16 \
+  --policy.train_expert_only=true \
+  --policy.optimizer_lr=5e-5 \
+  --policy.scheduler_warmup_steps=2000 \
+  --policy.scheduler_decay_steps=$STEPS \
+  --policy.scheduler_decay_lr=2.5e-6 \
+  --wandb.enable=false \
+  --policy.push_to_hub=false
+RC=$?
+echo "TRAIN-EXIT=$RC"
+
+# Final sweep: the watcher deliberately protects the two most recent
+# checkpoints while training runs, so slim them now that nothing will resume
+# from them in this job. keep_full 1 leaves `last` intact for a follow-on link.
+[ -n "$SLIM_PID" ] && kill $SLIM_PID 2>/dev/null
+if [ -f "$SLIM" ]; then
+  $BIN/python "$SLIM" watch --reference "$INIT" \
+    --checkpoints "$OUT/checkpoints" --store "$STORE" \
+    --keep_full 1 --until_step 0 --poll 1 || true
+fi
+echo "=== every-10k checkpoints preserved as deltas ==="
+ls -la "$STORE" 2>/dev/null
+for d in "$STORE"/*/; do
+  [ -f "$d/delta_manifest.json" ] && $BIN/python -c "
+import json,sys;m=json.load(open(sys.argv[1]))
+print(f\"  {sys.argv[2]:>8s}  {m['changed_tensors']:4d} tensors  {m['changed_gb']:.2f} GB\")" \
+    "$d/delta_manifest.json" "$(basename $d)"
+done
+du -sh "$STORE" "$OUT" 2>/dev/null
+df -h /home/ucabhe0/Scratch | tail -1

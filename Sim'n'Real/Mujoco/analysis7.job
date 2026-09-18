@@ -1,0 +1,93 @@
+#!/bin/bash -l
+#$ -l gpu=1
+#$ -ac allow=L
+#$ -pe smp 8
+#$ -l mem=6G
+#$ -l h_rt=6:0:0
+#$ -N pickhold_rollout
+#$ -wd /home/ucabhe0/Scratch/skygrip/analysis/run_20260831_ckpt060000/logs
+#$ -o rollout_$JOB_ID.log
+#$ -e rollout_$JOB_ID.err
+#
+# STAGE 8: closed-loop rollout with video, all three episode modes.
+#
+# Everything measured so far is open-loop -- one action chunk at the decision
+# frame, compared against the demonstration. Whether this policy actually picks
+# anything up has never been tested. This job tests it and records video.
+#
+# THE EXPERT PASS IS A GATE, NOT A COURTESY. An earlier evaluation in this
+# project returned 0/20 and the cause was harness defects rather than the
+# policy. A harness that has never produced a success cannot distinguish "the
+# policy failed" from "the harness is broken", so the expert driver runs first
+# through the identical scene, scoring and video path, using
+# collect_demos.run_episode -- code already validated by the 480 collected
+# episodes. If the expert does not succeed here, the policy pass is skipped
+# because its result would be uninterpretable.
+set -u
+S=/home/ucabhe0/Scratch/skygrip
+R=$S/analysis/run_20260831_ckpt060000
+BIN=/home/ucabhe0/Scratch/env-pin/bin
+SIM=$S/sim
+CKPT=$S/pickhold_pi0_frozen_s1/checkpoints/060000/pretrained_model
+OUT=$R/videos
+export HF_HUB_CACHE=$S/hf/hub HF_LEROBOT_HOME=$S/hf/lerobot HF_HUB_OFFLINE=1
+# MuJoCo must render offscreen on a headless node.
+export MUJOCO_GL=egl
+export PYOPENGL_PLATFORM=egl
+
+hostname; nvidia-smi --query-gpu=name --format=csv,noheader
+mkdir -p "$OUT"
+cd "$SIM" || { echo "no sim dir"; exit 0; }
+for p in vla_drone.xml rollout_v4style.py "$CKPT/model.safetensors"; do
+  [ -e "$p" ] || [ -e "$CKPT/model.safetensors" ] || { echo "MISSING $p"; exit 0; }
+done
+
+# Confirm EGL actually works on this node before spending time on episodes.
+$BIN/python - <<'PYEGL'
+import mujoco, numpy as np
+m = mujoco.MjModel.from_xml_path("vla_drone.xml")
+d = mujoco.MjData(m)
+mujoco.mj_forward(m, d)
+r = mujoco.Renderer(m, height=240, width=320)
+r.update_scene(d, camera="scene_cam")
+img = r.render()
+print(f"EGL-OK render {img.shape} mean={img.mean():.1f}")
+PYEGL
+echo "egl exit=$?"
+
+echo; echo "########## 8a: EXPERT driver (harness validation) ##########"
+$BIN/python rollout_v4style.py --driver expert \
+  --modes act,refuse_hazard,refuse_ungrounded --episodes 1 \
+  --seed 7 --out_dir "$OUT"
+echo "expert exit=$?"
+
+# Gate on the expert act episode specifically: refusals succeed by holding
+# station, which a broken grasp path would still pass.
+$BIN/python - "$OUT/rollout_expert.json" <<'PYGATE'
+import json, sys, pathlib
+p = pathlib.Path(sys.argv[1])
+if not p.exists():
+    print("GATE-FAIL expert produced no summary"); sys.exit(3)
+rows = json.loads(p.read_text())
+for r in rows:
+    print(f"  expert {r['mode']:18s} success={r['success']}  {r['why']}")
+acts = [r for r in rows if r["mode"] == "act"]
+if not acts or not any(a["success"] for a in acts):
+    print("GATE-FAIL the expert cannot complete an ACT episode in this harness;"
+          " a policy score here would be uninterpretable. Not running policy.")
+    sys.exit(3)
+print("GATE-PASS harness can produce a successful act; policy result is"
+      " interpretable.")
+PYGATE
+GATE=$?
+echo "gate exit=$GATE"
+if [ "$GATE" -ne 0 ]; then echo "STAGE8-ABORTED"; exit 0; fi
+
+echo; echo "########## 8b: POLICY driver ##########"
+$BIN/python rollout_v4style.py --driver policy --checkpoint "$CKPT" \
+  --modes act,refuse_hazard,refuse_ungrounded --episodes 2 \
+  --exec_horizon 25 --max_frames 450 --seed 7 --out_dir "$OUT"
+echo "policy exit=$?"
+
+echo; echo "=== videos produced ==="; ls -la "$OUT"
+echo "STAGE8-DONE"

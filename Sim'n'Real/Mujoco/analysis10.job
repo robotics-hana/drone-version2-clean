@@ -1,0 +1,82 @@
+#!/bin/bash -l
+#$ -l gpu=1
+#$ -ac allow=L
+#$ -pe smp 8
+#$ -l mem=6G
+#$ -l h_rt=3:0:0
+#$ -N pickhold_ablact
+#$ -wd /home/ucabhe0/Scratch/skygrip/analysis/run_20260831_ckpt060000/logs
+#$ -o ablact_$JOB_ID.log
+#$ -e ablact_$JOB_ID.err
+#
+# STAGE 9: does ablating the refusal direction on ACT episodes push the arm
+# back out?
+#
+# The paired sweep already shows the effect is large and specific -- removing
+# the refusal direction displaces act-episode chunks by 0.298 at expert L16
+# against 0.004 for a norm-matched random direction. But displacement is a
+# norm, and cannot say WHICH WAY the behaviour moved.
+#
+# The hypothesis: the refusal axis is partially active on act episodes rather
+# than cleanly gated off, and is therefore pulling joint2 toward the abstain
+# pose on episodes where the drone should be reaching. That would explain the
+# arm under-extension (+0.099 commanded against +0.373 demonstrated) and the
+# 55 mm lateral miss in closed loop as a consequence of a leaky refusal
+# representation, rather than as a generic failure to fit the channel.
+#
+#   joint2 moves UP toward +0.3733  -> the axis leaks into act episodes
+#   joint2 barely moves or drops    -> it does not, and the displacement is in
+#                                      channels that carry no decision
+#
+# Controls: band (encoded, but not the decision variable) and a norm-matched
+# random direction. If joint2 rises under every arm, the effect is generic.
+set -u
+S=/home/ucabhe0/Scratch/skygrip
+R=$S/analysis/run_20260831_ckpt060000
+BIN=/home/ucabhe0/Scratch/env-pin/bin
+CKPT=$S/pickhold_pi0_frozen_s1/checkpoints/060000/pretrained_model
+DROOT=$S/hf/lerobot/hanapasta/pick_hold_v4s_train
+META=$DROOT/episodes_meta.json
+# Prefer the pinned extraction if present: cleaner directions.
+NPZ=$R/results/decision_activations_pinned.npz
+[ -e "$NPZ" ] || NPZ=$R/results/decision_activations.npz
+PY=$R/code2/ablate_on_act.py
+export HF_HUB_CACHE=$S/hf/hub HF_LEROBOT_HOME=$S/hf/lerobot HF_HUB_OFFLINE=1
+
+hostname; nvidia-smi --query-gpu=name --format=csv,noheader
+echo "npz: $NPZ"
+for p in "$CKPT/model.safetensors" "$NPZ" "$META" "$PY"; do
+  [ -e "$p" ] || { echo "MISSING $p"; exit 0; }
+done
+
+run () {  # $1 direction  $2 layers  $3 outfile
+  echo; echo "########## ablate $1 on ACT, layers $2 ##########"
+  $BIN/python "$PY" --direction "$1" --stack expert --layers "$2" \
+    --checkpoint "$CKPT" --dataset hanapasta/pick_hold_v4s_train \
+    --root "$DROOT" --npz "$NPZ" --meta "$META" --n_episodes 40 \
+    --out "$R/results/$3"
+  echo "exit=$?"
+}
+
+# The late layers, where both the ablation sweep and the steering result put
+# the effect.
+run refusal    16,17 ablact_refusal_L1617.json
+run ungrounded 16,17 ablact_ungrounded_L1617.json
+run band       16,17 ablact_band_L1617.json
+run random     16,17 ablact_random_L1617.json
+# All layers, as the strongest version of the manipulation.
+run refusal    0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17 ablact_refusal_all.json
+run random     0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17 ablact_random_all.json
+
+echo; echo "=== joint2 summary (demonstrated act = +0.3733) ==="
+$BIN/python - "$R/results" <<'PYSUM'
+import json, pathlib, sys
+d = pathlib.Path(sys.argv[1])
+for f in sorted(d.glob("ablact_*.json")):
+    r = json.loads(f.read_text())
+    j = r["per_channel"]["joint2"]
+    print(f"  {f.stem:28s} L{len(r['layers']):2d}  joint2 {j['baseline']:+.4f}"
+          f" -> {j['ablated']:+.4f}  ({j['delta']:+.4f})"
+          f"  displacement {r['displacement']:.4f}")
+PYSUM
+echo "STAGE9-DONE"
