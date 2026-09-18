@@ -262,28 +262,51 @@ rm -rf ~/hf_cache/lerobot/hanapasta/airvla_v21/.cache
 
 #### 2.2 Trained weights
 
+Each π₀ checkpoint is ~8.3 GB (7 files: `model.safetensors`, the
+pre/post-processor normalizer tensors, and their JSON configs).
+
 | Configuration | Hugging Face | Cluster path (Myriad) |
 |---|---|---|
-| **Base** (π₀, step 47500) | `hanapasta/airvla_v2_pi0_047500` (private) | `~/Scratch/airvla/pi0_v2_out/checkpoints/047500/pretrained_model` |
-| **FT-C** (step 15000) | *not on hub* — see note | `~/Scratch/airvla/pi0_e3c_r_out/checkpoints/015000/pretrained_model` |
-| **FT-D** (step 15000) | `hanapasta/airvla_d_15000` — **empty repo, push failed** | `~/Scratch/airvla/pi0_d_out/checkpoints/015000/pretrained_model` |
-| **FT-D-KI** (step 5000) | *not on hub* | `~/Scratch/airvla/pi0_dki_out/checkpoints/005000/pretrained_model` |
-| **FT-DAG** (step 17500) | *not on hub* | `~/Scratch/airvla/pi0_dag_out/checkpoints/017500/pretrained_model` |
-| **V3-arm** (step 25000) | *not on hub* | `~/Scratch/airvla/pi0_v3_out/checkpoints/025000/pretrained_model` |
-| **Learned terminal servo** | `hanapasta/airvla_e5_actor` (private) — actor + `rl_env.py` + `rl_nets.py` | `~/Scratch/airvla/e5_out/e5_actor_final.pt` |
-| **ACT baseline** | `hanapasta/act_v21` (private) | `~/Scratch/airvla/act_ckpt/pretrained_model` |
-| **Diffusion Policy baseline** | `hanapasta/dp_v21` (private) | `~/Scratch/airvla/dp_ckpt` |
+| **Base** (π₀, step 47500) | `hanapasta/airvla_v2_pi0_047500` — *private* | `~/Scratch/airvla/pi0_v2_out/checkpoints/047500/pretrained_model` |
+| **FT-C** (step 15000) | **`hanapasta/airvla_ftc_15000`** — public | `~/Scratch/airvla/pi0_e3c_r_out/checkpoints/015000/pretrained_model` |
+| **FT-D** (step 15000) | **`hanapasta/airvla_ftd_15000`** — public | `~/Scratch/airvla/pi0_d_out/checkpoints/015000/pretrained_model` |
+| **FT-D-KI** (step 5000) | **`hanapasta/airvla_ftdki_5000`** — public | `~/Scratch/airvla/pi0_dki_out/checkpoints/005000/pretrained_model` |
+| **FT-DAG** (step 17500) | **`hanapasta/airvla_ftdag_17500`** — public | `~/Scratch/airvla/pi0_dag_out/checkpoints/017500/pretrained_model` |
+| **V3-arm** (step 25000) | **`hanapasta/airvla_v3arm_25000`** — public | `~/Scratch/airvla/pi0_v3_out/checkpoints/025000/pretrained_model` |
+| **Learned terminal servo** | `hanapasta/airvla_e5_actor` — *private*; actor + `rl_env.py` + `rl_nets.py` | `~/Scratch/airvla/e5_out/e5_actor_final.pt` |
+| **ACT baseline** | `hanapasta/act_v21` — *private* | `~/Scratch/airvla/act_ckpt/pretrained_model` |
+| **Diffusion Policy baseline** | `hanapasta/dp_v21` — *private* | `~/Scratch/airvla/dp_ckpt` |
 
-> **Backup status (honest note).** Several π₀ checkpoints are
-> cluster-only: hub backups are blocked by a Hugging Face private-repo
-> storage limit, and `hanapasta/airvla_d_15000` currently contains only
-> `.gitattributes` from a failed push. The FT-C checkpoint in the table
-> is `pi0_e3c_r_out`, a deterministic **retrain** of the original
-> C-15000, which was lost to a cleanup error and reproduced under
-> equivalence gates (validation MSE 7.7×10⁻⁵ vs the original
-> 7.679×10⁻⁵, plus a matching closed-loop mini). The full incident and
-> recovery are documented in the ledger. Until the storage limit is
-> resolved, **these weights exist in one place only.**
+Fetch a checkpoint and evaluate it:
+
+```bash
+huggingface-cli download hanapasta/airvla_ftc_15000 --local-dir ./ftc_15000
+python eval_v2.py ./ftc_15000 60 20 --torchseed 1000 --tag ftc --video
+```
+
+Each public repo carries a model card recording its training data,
+initialisation, step count, checkpoint-selection rule and
+frozen-protocol result.
+
+> **Provenance note on FT-C.** The published FT-C checkpoint is
+> `pi0_e3c_r_out`, a deterministic **retrain** of the original C-15000,
+> which was destroyed by a cleanup script that followed a baseline
+> symlink. It was accepted only after equivalence gates: pinned-noise
+> validation MSE 7.7×10⁻⁵ against the original's 7.679×10⁻⁵ (0.3%),
+> plus a matching closed-loop evaluation. Every result in the ledger
+> attributed to FT-C was produced by the original checkpoint under
+> recorded provenance hashes; runs made after the loss are marked as
+> using the retrain. The incident and recovery are documented in full.
+>
+> **Repos still private.** The Base policy, the E5 actor and the two
+> from-scratch baselines remain private, as do the `airvla_v2` and
+> `airvla_v3` datasets — a third party following this guide can
+> reproduce the FT-C/FT-D/FT-DAG line but not the Base policy or a
+> collection-from-scratch run until those are published.
+>
+> **Disregard `hanapasta/airvla_d_15000`** — an earlier private FT-D
+> backup whose push never completed; it holds only `.gitattributes`.
+> It is superseded by the public `airvla_ftd_15000` above.
 
 #### 2.3 Evaluation videos and logs
 
