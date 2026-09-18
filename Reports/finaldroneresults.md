@@ -1869,6 +1869,36 @@ definition per table.
   the pilot's ~50-60%, grasp 0-2 (the plain-task pure band),
   success at or near 0/60. Exploratory, like extension #1; the
   pre-registered pilot null remains the registered outcome.
+- **RESULT (COMPFULLC-EXIT=0): crossed 60/60 (100%), approached
+  23/60, picked 0/60, placed 0 → 0/60 composite successes.**
+  Registered expectation met on every stage except approach,
+  which came in below the pilot's 6/10 (23/60 = 38%).
+- **Paired stage comparison vs the E5C composite full (identical
+  scenes, exact McNemar on discordants):** crossed 60 vs 60,
+  **p = 1** — gate traversal under the composite instruction is
+  entirely policy-side and servo-independent; approached 31 vs
+  23, 8 discordant scenes ALL E5C-only, **p = .0078**; picked 24
+  vs 0, 24 discordants all E5C-only, **p = 1.2e-7**; placed 3 vs
+  0, **p = .25** (only 3 events).
+- **Definitional caveat that the pure arm exposes (important for
+  the write-up):** `approached` is scored as closest
+  jaw-to-target < 300 mm, and the learned servo DRIVES the jaws
+  the final 150 mm — so the servo itself converts marginal
+  approaches into counted ones. The 31-vs-23 gap is therefore
+  NOT evidence that the servo improves the VLA's approach; it is
+  partly the servo's own contribution to the scored quantity.
+  The genuinely servo-independent composite stage is **crossing
+  (60/60 both arms, p = 1)**. Conclusions that need a
+  servo-free approach measure should cite the pure arm's 23/60.
+- **Reading:** the composite bottleneck ordering is now measured
+  end to end. Navigation composes zero-shot in BOTH arms without
+  exception; grasping on composite scenes exists ONLY with
+  terminal assistance (0/60 vs 24/60, p = 1.2e-7) exactly as the
+  plain-task ladder predicts; and the carry remains the stage
+  that breaks even when grasping succeeds. Pure FT-C's composite
+  success rate is 0/60 (Wilson 95% CI [0, 6.0]%), which
+  retrospectively justifies extension #1 having been run on the
+  hybrid arm only.
 
 ### NOVEL-TARGET FULL RESULT (2026-09-17, job 352353,
 ### NTGTFULL-EXIT=0) — OPEN-VOCABULARY GROUNDING CONFIRMED
