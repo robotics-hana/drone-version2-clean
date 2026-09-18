@@ -2271,8 +2271,53 @@ conservative.
   (private) contains ONLY `.gitattributes` — the FT-D backup push
   never completed, so it was an empty repo masquerading as a
   backup for two days. Superseded by the public `airvla_ftd_15000`.
-- Every SELECTED checkpoint of the campaign is now (or is being)
-  hub-backed, closing the rule adopted after the C-15000 loss.
+- **COMPLETE (2026-09-18 23:55, job 368211, HFPUSH-EXIT=0,
+  HFPUSH-ALL-DONE): ok=5 fail=0**, ~44.5 GB in 9 minutes.
+  Independently verified from the hub side (not merely the job's
+  own readback): all five repos PUBLIC, each holding the complete
+  7-file checkpoint set + model card, 8.9 GB each.
+  | Repo | Status |
+  |---|---|
+  | `hanapasta/airvla_ftc_15000` | public, complete |
+  | `hanapasta/airvla_ftd_15000` | public, complete |
+  | `hanapasta/airvla_ftdki_5000` | public, complete |
+  | `hanapasta/airvla_ftdag_17500` | public, complete |
+  | `hanapasta/airvla_v3arm_25000` | public, complete |
+- **Every SELECTED checkpoint of the campaign is now hub-backed**,
+  closing the rule adopted after the C-15000 loss. No campaign
+  artifact is single-copy any more.
+- The hardened job (retries, resume-by-completeness, preflight,
+  self-resubmission to 5 attempts, per-attempt logs) was not
+  exercised beyond attempt 1, but is retained for future pushes.
+
+### DISSERTATION FACT-CHECK (2026-09-19, full pass over
+### Hana_MSc_Dissertation_v10 against banked logs + HF metadata)
+
+- ~150 numbers checked; every results table verifies exactly
+  (4.1/4.2/4.3/4.4, 5.1, 5.2, 6.1, 7.1, 7.2, 8.1, 9.1, 10.1,
+  10.2, 12.1, A.2.1, A.3.1, C.7.1), including all internal
+  consistency relations (flew+wrong=60 per row, failure
+  decomposition sums, engagement conversions) and all p-values.
+  Dataset progression confirmed against HF metadata itself
+  (v2 600/239,520 · v21 910 · v22 1,358 · v24 1,110; FT-DAG
+  648 eps/313,994 frames matches the training log).
+- **TWO DATA ERRORS FOUND:** (1) Discussion §2 cites FT-D
+  2.75e-4 / FT-D-KI 3.54e-4 validation MSE; the banked
+  valcurve JSONs give **6.80e-5 (D, ckpt 015000)** and
+  **7.26e-5 (D-KI, ckpt 005000)** — the argument's direction
+  survives (D < D-KI, and both below FT-C's 7.73e-5 on the same
+  272-episode partition) but the printed values are ~4x wrong.
+  (2) Figure 4.2's histogram carries the phantom-value error from
+  the superseded distribution list: correct bins are
+  **7 / 4 / 8 / 7 / 16 / 18** (document shows 9 and 15 in the
+  60-100 and 150-300 bins). Totals and the caption's claims are
+  unaffected.
+- Structural issues reported: the platform chapter lost its
+  `\chapter` (7 "Chapter 7" references resolve to Chapter II
+  section 7); a `§??` broken reference; duplicate table/figure
+  numbers across chapters (Table 6.1 appears three times);
+  Table 7.4 omits FT-DAG; the Open Resources section still says
+  weights are private (now superseded by the public repos above).
 
 ### DISSERTATION-SUPPORT ERRATA LOG (2026-09-15, figure/bullet
 ### audit against this ledger)
