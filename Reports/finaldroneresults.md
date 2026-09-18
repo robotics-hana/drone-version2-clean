@@ -1856,6 +1856,20 @@ definition per table.
   in-distribution). Discriminating future experiment recorded:
   prompt-switch at the weld instant.
 
+### COMPOSITE EXPLORATORY EXTENSION #2 (2026-09-18, Hana: "can
+### you run ftc-pure compositional task 60 episodes") — PURE FT-C
+### ARM AT SCALE
+
+- **Job 366425 (compfullc.log), C-15000-r pure, n=60 composite
+  scenes, sceneseed 95000 — the SAME scenes as the E5C full
+  (compfull2), no assist/servo.** Purpose: populate the pure-VLA
+  column of the composite stage table at n=60 (pilot was 10/10
+  crossed, 6/10 approached, 0 grasps). Registered expectation
+  (recorded BEFORE the result): crossing ~60/60, approach near
+  the pilot's ~50-60%, grasp 0-2 (the plain-task pure band),
+  success at or near 0/60. Exploratory, like extension #1; the
+  pre-registered pilot null remains the registered outcome.
+
 ### NOVEL-TARGET FULL RESULT (2026-09-17, job 352353,
 ### NTGTFULL-EXIT=0) — OPEN-VOCABULARY GROUNDING CONFIRMED
 
