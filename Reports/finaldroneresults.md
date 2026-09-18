@@ -38,7 +38,7 @@ amendments and provenance live in the dated sections below.
 | True-PAG (mass-update at weld, n=60) | Does correct payload mass in the controller help? | NEUTRAL — sag ~0 both arms; PD-era stack already absorbs the 45 g step |
 | Statistics annex | Which claims survive formal tests? | Significant: H1C→E5C .0042, OOD-P .0017, C-vs-ACT .0003, C-vs-DP .029, C-solo .030; NOT significant (rephrased in thesis): base-vs-C flew .36, C-vs-D .14, E5C-vs-E5D .13 |
 | C-15000 incident + retrain | (Process) checkpoint deleted by janitor symlink-follow | Recovered by deterministic retrain; equivalence PASSED (val 7.7e-5 vs 7.679e-5 = 0.3%, mini in-band); new janitor + hub-push rules adopted |
-| DAgger/FT-DAG (approved 2026-09-14) | Does on-policy corrective data fix the pure-VLA terminal? | Collection COMPLETE (200/200 units, 70% near-seam takeovers), merged as airvla_v24 (648 train eps); smoke gate passed; **20k fine-tune RUNNING — the campaign's last open result** |
+| DAgger/FT-DAG (approved 2026-09-14) | Does on-policy corrective data fix the pure-VLA terminal? | NULL on grasp (1/60, in-band) ⇒ deficit is perception/actuation, not data — vindicates the servo design; best pure true median 82.0 mm but SIGNIFICANT grounding regression (flew 47→37, McNemar p=.013): the overdose trade, now on-policy |
 
 ## The questions (defined before collecting)
 
@@ -2009,6 +2009,47 @@ definition per table.
   decision per the pre-registered criteria (true median
   < 87.6 mm OR grasp ≥ 4/60); stats battery per the pre-declared
   plan on landing.
+
+### FT-DAG FULL RESULT (2026-09-18, job 362574, DAGFULL-EXIT=0)
+### — THE CAMPAIGN'S LAST RESULT: PRECISION CRITERION MET, GRASP
+### NULL, AND A SIGNIFICANT GROUNDING REGRESSION
+
+- **FT-DAG-017500, frozen n=60 picks + 20 nav (seed 97000 paired
+  scenes): picked 1/60 · placed 1/60 · general median 196.0 mm ·
+  flew-to-target 37/60 · TRUE median 82.0 mm · nav 12/20.**
+  Plan C (banked v2e3cfull, same scenes): 1/60 · 1/60 · 145.8 ·
+  47/60 · 87.6 · 12/20.
+- **Against the pre-registered criteria:** (A) true median
+  82.0 < 87.6 mm — MET, best pure-policy target-true precision
+  of the campaign; (B) grasp 1/60 — NOT met, squarely inside the
+  0–2/60 pure-VLA band. The registered null reading therefore
+  stands: on-policy corrective data does NOT unlock the pure-VLA
+  terminal — the deficit localizes to perception/actuation, not
+  data support. This is the direct on-policy confirmation of the
+  E5/servo design choice.
+- **Pre-declared stats battery (vs Plan C, paired scenes):**
+  flew-to-target REGRESSION IS SIGNIFICANT — discordants 12
+  C-only vs 2 dag-only, exact McNemar **p = .0129**; distances
+  Wilcoxon W=618 **p = .0288** in C's favor (general medians
+  196.0 vs 145.8; 10k-bootstrap median-diff CI [−40.0, +146.5]
+  mm includes 0 — report the McNemar/Wilcoxon pair, not the
+  bootstrap, as primary). Grasped/placed/nav all p = 1
+  (discordants 1v1, 1v1, 1v1). Wilson CIs: dag flew 37/60
+  [49.0, 72.9]%, C flew 47/60 [66.4, 86.9]%, dag grasp 1/60
+  [0.3, 8.9]%.
+- **Interpretation (echoes the F2/D overdose):** DAgger's
+  pick-flavored corrective mass sharpens terminal precision on
+  reached targets (87.6 → 82.0 true) but significantly erodes
+  target selection (47 → 37 flew) — the same
+  precision-up/grounding-down trade as corrective-pair scaling,
+  now demonstrated with on-policy data. Dissertation phrasing:
+  "criterion A met, but the trade-off means FT-DAG is not
+  preferred over Plan C as a system; its value is diagnostic."
+- Mini→full note: the mini's alarming nav 0/4 did NOT replicate
+  (12/20 at scale, identical to C, p = 1) — mini nav n=4 noise,
+  consistent with the documented mini→full swing history.
+- **THE FROZEN-LADDER CAMPAIGN IS NOW COMPLETE.** Every
+  registered arm has a banked full result.
 
 ### COMPOSITE FULL RESULT (2026-09-17, job 353250 compfull2,
 ### exit 0) — THREE COMPLETE ZERO-SHOT COMPOSITES AT SCALE
