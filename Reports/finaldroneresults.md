@@ -2163,6 +2163,14 @@ paired diff 34.4 mm, bootstrap 95% CI [3.2, 69.8] (excludes 0).
 the ladder tables use the upper-middle element (145.8). The thesis
 must state ONE convention and apply it throughout.
 
+**Late additions (2026-09-18, FT-C vs E5C paired tests — computed
+from v2e3cfull/v2e5cfull per-episode logs for the dissertation's
+hybrid-effect table):** grasp discordants 35 E5C-only vs 0 C-only,
+exact McNemar p = 5.8e-11; place 26 vs 0, p = 3.0e-8. The single
+scene pure C grasped/placed also succeeded under E5C (zero C-only
+discordants — the hybrid strictly dominates on outcomes).
+Flew-to-target (47 vs 45) and nav (12 vs 11/20) not significant.
+
 **Late additions (2026-09-17, novel-target + composite full):**
 novel-target flew-to-bottle 28/30 Wilson [78.7, 98.2]% (vs the
 registered 40% ceiling: binomial p=1.2e-9) · composite crossing
