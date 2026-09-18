@@ -1985,6 +1985,31 @@ definition per table.
   017500 stays multi-copy on Myriad only (full ladder retained)
   until Hana decides the storage fix. Flagged, not forgotten.
 
+### FT-DAG MINI RESULT (2026-09-18, job 362537, DAGMINI-EXIT=0)
+### — GATE PASSED ON HARNESS VALIDITY; MIXED BEHAVIORAL PREVIEW
+
+- **FT-DAG-017500, 10 picks + 4 nav, pure policy:** general
+  median 226.6 mm · **target-true median 86.2 mm** (flew 6/10) ·
+  picked 0 · nav 0/4. All pick episodes ran the full 1200 ticks
+  with zero table/object contacts; miss distribution is the
+  familiar bimodal (19–113 mm on flew episodes, 300–560 mm
+  wrong-object) — no harness anomaly, gate PASSED, full
+  submitted.
+- Read against the banked minis: true precision IMPROVES (86.2 vs
+  C-r's 132.8 mini-true) and sits below the 87.6 mm registered
+  criterion at mini scale; target selection dips (flew 6/10 vs
+  8/10 — mini-noise-sized, n too small); **nav regresses
+  sharply: 4/4 crossed but 0/4 held the hover** (C-r mini 3/4).
+  Hypothesis for the full: the dagger corrective mass (all
+  pick-flavored, hover-at-seam states re-labeled as approach)
+  eroded the hover-hold termination — if nav ≤ ~4/20 at full,
+  FT-DAG trades navigation for terminal precision.
+- **FROZEN FULL SUBMITTED: job 362574 (dagfull.log), n=60+20,
+  tag dagfull**, seed 97000 paired scenes, torchseed 1000 —
+  decision per the pre-registered criteria (true median
+  < 87.6 mm OR grasp ≥ 4/60); stats battery per the pre-declared
+  plan on landing.
+
 ### COMPOSITE FULL RESULT (2026-09-17, job 353250 compfull2,
 ### exit 0) — THREE COMPLETE ZERO-SHOT COMPOSITES AT SCALE
 
