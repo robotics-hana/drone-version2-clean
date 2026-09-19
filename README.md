@@ -23,13 +23,13 @@ pick-and-place (45%)**.
 
 | Evidence | Location |
 |---|---|
-| Experimental ledger — pre-registrations, amendments, every result with job IDs and provenance | [`Reports/finaldroneresults.md`](Reports/finaldroneresults.md) |
+| Experimental ledger: pre-registrations, amendments, every result with job IDs and provenance | [`Reports/finaldroneresults.md`](Reports/finaldroneresults.md) |
 | Figures used in the dissertation | [`Reports/`](Reports/) (`*.png`) |
 | Learned-servo training progression | [`Reports/e5_training_progression.png`](Reports/e5_training_progression.png) |
-| Per-episode evaluation records | `~/Scratch/airvla/logs/*.log` (cluster) — one `EVAL {json}` line per episode |
-| Trajectory dumps | `~/Scratch/airvla/sim/eval_v2_traj.jsonl` (cluster) — drone + jaw pose every 3 ticks |
-| Collection manifests | `v2_manifest_<seed>.jsonl`, `dag_manifest_<seed>.jsonl` — one line per attempt, accepted or rejected |
-| Rendered evaluation episodes | `Reports/v2_eval_videos/` — 206 MP4s, ~4.6 GB, **git-ignored** (local only) |
+| Per-episode evaluation records | `~/Scratch/airvla/logs/*.log` (cluster). One `EVAL {json}` line per episode |
+| Trajectory dumps | `~/Scratch/airvla/sim/eval_v2_traj.jsonl` (cluster). Drone and jaw pose every 3 ticks |
+| Collection manifests | `v2_manifest_<seed>.jsonl`, `dag_manifest_<seed>.jsonl`. One line per attempt, accepted or rejected |
+| Rendered evaluation episodes | `Reports/v2_eval_videos/`. 206 MP4s, ~4.6 GB, **git-ignored** (local only) |
 
 The ledger is the authoritative record: it was written before each experiment
 (pre-registration) and amended with dated entries, including disclosed errors
@@ -92,8 +92,8 @@ Key files in `Sim'n'Real/Mujoco/`:
 | `collect_v2.py` | Main demonstration collector (expert pipeline + acceptance gates) |
 | `collect_airvla.py` | Shared prompts and expert primitives |
 | `collect_dagger.py` | On-policy corrective collector (FT-DAG) |
-| `relabel_v3.py` | Rewrites action dims 3–4 as arm-joint deltas (arm ablation) |
-| `eval_v2.py` | Frozen evaluation harness — all experiments are additive, default-off flags |
+| `relabel_v3.py` | Rewrites action dims 3-4 as arm-joint deltas (arm ablation) |
+| `eval_v2.py` | Frozen evaluation harness; all experiments are additive, default-off flags |
 | `platform_v2.py` | Flight platform and the scripted terminal servo |
 | `pd_flight.py` | Cascaded PID position / PD attitude flight controller |
 | `rl_env.py`, `rl_nets.py`, `rl_bc.py`, `rl_train.py` | Learned terminal servo (contract, architecture, DAgger, PPO) |
@@ -133,11 +133,11 @@ creating one, and is released over the delivery box.
 | Task | Description |
 |---|---|
 | **Pick and place** | Two objects on the table (blue penguin, grey calibration weight); the instruction names which to collect and place in the box |
-| **Gate navigation** | Fly through a gate and hover over the named object — no grasping |
+| **Gate navigation** | Fly through a gate and hover over the named object, without grasping |
 | **Compositional** | Gate traversal followed by pick-and-place in one instruction. **Never demonstrated in training**; reserved for evaluation |
 
 Task objects: calibration weight (16 mm graspable width, 100 g) and plush
-penguin (22 mm head, 45 g), against a 32 mm jaw opening — leaving 8 mm and 5 mm
+penguin (22 mm head, 45 g), against a 32 mm jaw opening, leaving 8 mm and 5 mm
 of clearance per side respectively.
 
 ---
@@ -148,13 +148,13 @@ All datasets are in LeRobot format and hosted on Hugging Face.
 
 | Dataset | Contents | Episodes / frames |
 |---|---|---|
-| [`hanapasta/airvla_v2`](https://huggingface.co/datasets/hanapasta/airvla_v2) *(private)* | v2 baseline: 360 pick + 240 navigation demonstrations | 600 / 239,520 |
-| [`hanapasta/airvla_v21`](https://huggingface.co/datasets/hanapasta/airvla_v21) | v2 + F1 terminal-corrective — trains **FT-C** | 910 / 391,750 |
-| [`hanapasta/airvla_v22`](https://huggingface.co/datasets/hanapasta/airvla_v22) | v2 + F1 + F2 paired-command scaling — trains **FT-D / FT-D-KI** | 1,358 / 622,801 |
-| [`hanapasta/airvla_v24`](https://huggingface.co/datasets/hanapasta/airvla_v24) | v21 + on-policy DAgger — trains **FT-DAG** | 1,110 / 512,577 |
-| [`hanapasta/airvla_v3`](https://huggingface.co/datasets/hanapasta/airvla_v3) *(private)* | v2 relabelled with arm-joint deltas — trains the arm ablation | 600 / 239,520 |
-| [`airvla_dag1`](https://huggingface.co/datasets/hanapasta/airvla_dag1) – [`dag4`](https://huggingface.co/datasets/hanapasta/airvla_dag4) | Raw DAgger collection shards (merged into v24) | — |
-| [`airvla_v2_d2`](https://huggingface.co/datasets/hanapasta/airvla_v2_d2) – [`d4`](https://huggingface.co/datasets/hanapasta/airvla_v2_d4), [`airvla_v2_e3`](https://huggingface.co/datasets/hanapasta/airvla_v2_e3) | Plan D and F1 collection shards | — |
+| [`hanapasta/airvla_v2`](https://huggingface.co/datasets/hanapasta/airvla_v2) | v2 baseline: 360 pick + 240 navigation demonstrations | 600 / 239,520 |
+| [`hanapasta/airvla_v21`](https://huggingface.co/datasets/hanapasta/airvla_v21) | v2 + F1 terminal-corrective; trains **FT-C** | 910 / 391,750 |
+| [`hanapasta/airvla_v22`](https://huggingface.co/datasets/hanapasta/airvla_v22) | v2 + F1 + F2 paired-command scaling; trains **FT-D / FT-D-KI** | 1,358 / 622,801 |
+| [`hanapasta/airvla_v24`](https://huggingface.co/datasets/hanapasta/airvla_v24) | v21 + on-policy DAgger; trains **FT-DAG** | 1,110 / 512,577 |
+| [`hanapasta/airvla_v3`](https://huggingface.co/datasets/hanapasta/airvla_v3) | v2 relabelled with arm-joint deltas; trains the arm ablation | 600 / 239,520 |
+| [`airvla_dag1`](https://huggingface.co/datasets/hanapasta/airvla_dag1) to [`dag4`](https://huggingface.co/datasets/hanapasta/airvla_dag4) | Raw DAgger collection shards (merged into v24) | n/a |
+| [`airvla_v2_d2`](https://huggingface.co/datasets/hanapasta/airvla_v2_d2) to [`d4`](https://huggingface.co/datasets/hanapasta/airvla_v2_d4), [`airvla_v2_e3`](https://huggingface.co/datasets/hanapasta/airvla_v2_e3) | Plan D and F1 collection shards | n/a |
 
 ```bash
 huggingface-cli download hanapasta/airvla_v21 --repo-type dataset \
@@ -174,15 +174,15 @@ frozen-protocol result.
 
 | Configuration | Hugging Face |
 |---|---|
-| **Base** (π₀, step 47500) | [`hanapasta/airvla_v2_pi0_047500`](https://huggingface.co/hanapasta/airvla_v2_pi0_047500) *(private)* |
-| **FT-C** (step 15000) — strongest pure policy | [`hanapasta/airvla_ftc_15000`](https://huggingface.co/hanapasta/airvla_ftc_15000) |
+| **Base** (π₀, step 47500) | [`hanapasta/airvla_v2_pi0_047500`](https://huggingface.co/hanapasta/airvla_v2_pi0_047500) |
+| **FT-C** (step 15000), the strongest pure policy | [`hanapasta/airvla_ftc_15000`](https://huggingface.co/hanapasta/airvla_ftc_15000) |
 | **FT-D** (step 15000) | [`hanapasta/airvla_ftd_15000`](https://huggingface.co/hanapasta/airvla_ftd_15000) |
 | **FT-D-KI** (step 5000, frozen backbone) | [`hanapasta/airvla_ftdki_5000`](https://huggingface.co/hanapasta/airvla_ftdki_5000) |
 | **FT-DAG** (step 17500, on-policy corrective) | [`hanapasta/airvla_ftdag_17500`](https://huggingface.co/hanapasta/airvla_ftdag_17500) |
 | **V3-arm** (step 25000, policy-controlled arm) | [`hanapasta/airvla_v3arm_25000`](https://huggingface.co/hanapasta/airvla_v3arm_25000) |
-| **Learned terminal servo** | [`hanapasta/airvla_e5_actor`](https://huggingface.co/hanapasta/airvla_e5_actor) *(private)* — actor + `rl_env.py` + `rl_nets.py` |
-| **ACT baseline** | [`hanapasta/act_v21`](https://huggingface.co/hanapasta/act_v21) *(private)* |
-| **Diffusion Policy baseline** | [`hanapasta/dp_v21`](https://huggingface.co/hanapasta/dp_v21) *(private)* |
+| **Learned terminal servo** | [`hanapasta/airvla_e5_actor`](https://huggingface.co/hanapasta/airvla_e5_actor); actor + `rl_env.py` + `rl_nets.py` |
+| **ACT baseline** | [`hanapasta/act_v21`](https://huggingface.co/hanapasta/act_v21) |
+| **Diffusion Policy baseline** | [`hanapasta/dp_v21`](https://huggingface.co/hanapasta/dp_v21) |
 
 > The published FT-C checkpoint is a deterministic **retrain** of the original,
 > which was destroyed by a cleanup script that followed a baseline symlink. It
@@ -190,7 +190,7 @@ frozen-protocol result.
 > 7.7 × 10⁻⁵ against the original's 7.679 × 10⁻⁵, plus a matching closed-loop
 > evaluation. The incident and recovery are documented in full in the ledger.
 >
-> Ignore `hanapasta/airvla_d_15000` — an earlier backup whose push never
+> Ignore `hanapasta/airvla_d_15000`, an earlier backup whose push never
 > completed; it holds only `.gitattributes` and is superseded by
 > `airvla_ftd_15000`.
 
@@ -231,7 +231,7 @@ Wilson intervals on proportions.
 | `--policy-arm` | Ablation: policy commands the arm joints |
 | `--pag` | Payload-mass compensation ablation |
 
-Run a 10+4 episode mini first — it gates the full run for harness validity,
+Run a 10+4 episode mini first; it gates the full run for harness validity,
 never for conclusions.
 
 ---
@@ -302,7 +302,7 @@ Frozen protocol, n = 60 pick-and-place + 20 navigation, paired scenes.
 
 Adding the learned terminal controller to FT-C is significant on the paired
 scenes (exact McNemar *p* = 5.8 × 10⁻¹¹ for grasping, *p* = 3.0 × 10⁻⁸ for
-placement), while target selection and navigation are unchanged — the gain is
+placement), while target selection and navigation are unchanged, so the gain is
 specific to terminal conversion.
 
 **Out-of-distribution** (FT-C + Learned): performance is unchanged under
@@ -337,7 +337,7 @@ Single **NVIDIA A100-PCIE-40GB** per job (UCL Myriad).
 
 ## Physical Platform
 
-The physical testbed uses a Volador II VX6 frame powered by a 4S–6S LiPo
+The physical testbed uses a Volador II VX6 frame powered by a 4S-6S LiPo
 battery, with a KM60A BLHeli-32 ESC and four 2207, 1900 kV brushless motors.
 Flight control, sensor fusion and low-level stabilisation run on a Paparazzi
 Tawaki V2 board; high-level processing runs on a Raspberry Pi 5. A two-DoF arm
@@ -363,7 +363,7 @@ collision risk during manipulation. Together these reduced end-effector mass by
 about 70 g and cleared the view of the grasp region. Design files are in
 [`3D Model/`](3D%20Model/) and [`SkyGrip_URDF/`](SkyGrip_URDF/).
 
-**The learned policy was never deployed on hardware** — every result in this
+**The learned policy was never deployed on hardware.** Every result in this
 repository is from simulation. See Research Boundary.
 
 ---
@@ -382,9 +382,9 @@ Adopted after failures that silently corrupted earlier results:
   the best-looking validation curve and the worst closed-loop behaviour.
 - **Additive, default-off flags with provenance hashes**, so the frozen harness
   stays frozen.
-- **One log file per job**, never reused — a reused log makes a gate read a
+- **One log file per job**, never reused, because a reused log makes a gate read a
   previous run's result.
-- **Never delete checkpoints with a globbed `rm -rf dir/*/`** — it follows
+- **Never delete checkpoints with a globbed `rm -rf dir/*/`**, because it follows
   baseline symlinks and destroys their targets. Enumerate with
   `find -maxdepth 1 -type d` instead, and push every selected checkpoint to the
   hub at selection time.
@@ -410,7 +410,7 @@ protocol described above. Three constraints bound every claim:
 - **No physical deployment.** The hardware exists and was brought up, but the
   learned system has never flown. Sim-to-real performance is unknown.
 - **Privileged terminal-controller inputs.** Both terminal controllers read
-  simulator state rather than onboard sensing — the scripted controller uses the
+  simulator state rather than onboard sensing. The scripted controller uses the
   target position, the learned controller an aim-to-jaw vector derived from
   ground truth. Their gains do not demonstrate a perception-driven system.
 - **Simplified grasp retention.** A weld constraint holds the object after a
@@ -433,7 +433,7 @@ LeRobot and MuJoCo carry their own licences.
 
 ## Author
 
-**Hana Emma Hadidi** — MSc Artificial Intelligence for Sustainable Development,
+**Hana Emma Hadidi**, MSc Artificial Intelligence for Sustainable Development,
 Department of Computer Science, University College London. Supervised by
 **Dr Valerio Modugno**.
 
@@ -450,7 +450,7 @@ for the facilities and computational resources that supported this research, and
 to those at UCL East who helped with the development and preparation of the
 physical drone platform.
 
-The aerial manipulator hardware — the drone airframe and two-link arm — was
+The aerial manipulator hardware (the drone airframe and two-link arm) was
 inherited from a previous student project and was extended here with a
 replacement gripper, a custom gripper-to-arm adapter and shortened landing legs.
 
