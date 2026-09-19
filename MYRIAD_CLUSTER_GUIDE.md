@@ -1,8 +1,10 @@
-# Myriad cluster guide for Claude agents
+# Myriad cluster guide
 
-Instructions for any Claude agent using UCL's Myriad cluster on this
-account. The AirVLA dissertation experiments have priority through early
-September 2026; your jobs queue AFTER them (§5). Written 2026-08-30.
+Operational notes for running work on UCL's Myriad cluster from this
+account: access, scheduler syntax, environment constraints and the UCL
+policy rules that must not be broken. The AirVLA dissertation
+experiments have priority through early September 2026; other jobs queue
+after them (§5). Written 2026-08-30.
 
 ## 1. Access and lay of the land
 

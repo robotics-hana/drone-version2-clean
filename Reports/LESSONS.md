@@ -90,7 +90,7 @@ assumption the day you make it.
 | `dataset_tests/REPORT.md`, `REPORT2.md` | The five pre-registered dataset tests with decision rules stated before numbers. | proposing any new data collection |
 | `v2_design/CONFIRMATION.md` | The v2 collection spec: camera pose (measured), spawn envelope, terminal law, corrective episodes, composition — each change traced to a measurement. | collecting v2 (requires sign-off first) |
 | `Sim'n'Real/Mujoco/harness_audit/README.md` | Experiment → script → log map and the seed inventory. | re-running any audit-era analysis |
-| `MYRIAD_AGENT_GUIDE.md` | Cluster rules, queue etiquette, login-node limits, the queue-behind snippet. | touching Myriad at all |
+| `MYRIAD_CLUSTER_GUIDE.md` | Cluster rules, queue etiquette, login-node limits, the queue-behind snippet. | touching Myriad at all |
 | `Reports/LESSONS.md` | This file. | starting the redo |
 
 ## Part 3 — Corrections index: things once believed that are WRONG
