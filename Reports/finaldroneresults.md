@@ -2290,6 +2290,47 @@ conservative.
   self-resubmission to 5 attempts, per-attempt logs) was not
   exercised beyond attempt 1, but is retained for future pushes.
 
+### COMPUTE-COST VALIDATION (2026-09-19, from SGE accounting
+### (`qacct ru_wallclock`) + in-log elapsed counters — for the
+### dissertation's cost/reproducibility reporting)
+
+- **Collection, v2 600 episodes: 17.8 h** in the completing run
+  (job 258624 `airvla_v2col`, 2026-09-02 13:15:45 → 09-03
+  07:05:24, ru_wallclock 64,179 s, exit 0, in-log
+  "BANKED 600/600 (600 attempts, 17.8 h elapsed)").
+  **Caveat: a first attempt was wall-killed** (job 257145, exit
+  137, 43,448 s = 12.1 h, reached 440/600), so total compute
+  spent on the v2 dataset was **~30 h**. Same failure family as
+  the documented LeRobot writer wall-kill.
+- **Collection, F1 310 episodes: 7.5 h** (v2e3collect, 310/310).
+  **Plan D**: 28.5 h to reach 450/600 — the 5.4 min/ep regime.
+- **Training wall time** (tqdm totals, all single GPU):
+  | Run | Steps | Wall |
+  |---|---:|---|
+  | Base, first 30k | 30,000 | 10 h 09 m |
+  | Base, 30k→60k extension | 30,000 | 12 h 19 m |
+  | **Base total** | **60,000** | **~22.5 h** |
+  | FT-C | 20,000 | 8 h 01 m |
+  | FT-D | 20,000 | 8 h 47 m |
+  | FT-D-KI (backbone frozen) | 20,000 | **5 h 13 m** |
+  | FT-DAG | 20,000 | 8 h 05 m |
+  | FT-C retrain | 20,000 | 8 h 03 m |
+  | V3-arm | 30,000 | 12 h 07 m |
+- Two incidental findings worth citing: **freezing the backbone
+  cut training time ~35%** (5h13m vs 8h01m for the same 20k
+  steps) — a real efficiency argument for knowledge insulation
+  beyond its behavioural effect; and **the FT-C retrain took
+  8h03m vs the original's 8h01m**, a further consistency check on
+  the deterministic-retrain claim.
+- **Learned servo PPO: ~8 h** (bc_init.pt 01:31:12 →
+  e5_actor_final.pt 09:37:15, 71 iterations), preceded by the
+  DAgger/BC stage (300 closed-loop episodes across 4 rounds).
+- Evaluation cost is approximate (no clean start marker in the
+  eval logs): observed ~1.4 min/episode on the frozen protocol,
+  so a full n=60+20 run is **~2 h plus ~35 min model load**;
+  composite runs (1700 ticks vs 1200) are proportionally longer.
+  Cite as approximate or omit.
+
 ### RTC TARGET-TRUE RETRO-COMPUTATION (2026-09-19) — FILLS THE
 ### LAST GAP IN THE LADDER, AND FINDS A THIRD DOCUMENT ERROR
 
