@@ -2322,6 +2322,27 @@ conservative.
   beyond its behavioural effect; and **the FT-C retrain took
   8h03m vs the original's 8h01m**, a further consistency check on
   the deterministic-retrain claim.
+- **HARDWARE: 1 x NVIDIA A100-PCIE-40GB per job.** Directly
+  named in 10 log occurrences (`nvidia-smi --query-gpu=name`);
+  **no other GPU model appears in any log**. Every training job
+  requests `-l gpu=1 -ac allow=L` (one Myriad node class), so the
+  later job scripts that dropped the nvidia-smi line ran the same
+  hardware. Corroborated by per-step rate: V3 (A100 confirmed in
+  its own log) ran 1.454 s/step, against FT-C 1.443, FT-DAG
+  1.455 and the FT-C retrain 1.449 — indistinguishable.
+  | Run | s/step |
+  |---|---:|
+  | Base first 30k | 1.218 |
+  | Base 30k→60k | 1.478 |
+  | FT-C | 1.443 |
+  | FT-D | 1.581 |
+  | FT-D-KI | 0.939 |
+  | FT-DAG | 1.455 |
+  | FT-C retrain | 1.449 |
+  | V3-arm | 1.454 |
+  The Base first-30k rate (1.218) is the one outlier and predates
+  the gradient-checkpointing setting visible in later logs, which
+  trades speed for memory — plausible cause, not verified.
 - **Learned servo PPO: ~8 h** (bc_init.pt 01:31:12 →
   e5_actor_final.pt 09:37:15, 71 iterations), preceded by the
   DAgger/BC stage (300 closed-loop episodes across 4 rounds).
