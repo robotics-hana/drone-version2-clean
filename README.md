@@ -1,4 +1,4 @@
-# SkyGrip — Vision-Language-Action Control for a Quadcopter with a Manipulator
+# VLA Application for a Quadcopter with Manipulator for Pick-and-Place Tasks
 
 A pretrained **π₀ vision-language-action (VLA) policy** adapted to a quadcopter
 carrying a two-degree-of-freedom arm and a parallel gripper, evaluated in
@@ -6,11 +6,11 @@ MuJoCo. The policy receives three RGB camera streams, proprioception and a
 written instruction, and outputs drone motion and gripper commands; the arm
 follows deterministic task-phase logic.
 
-This repository contains the simulation environment, the demonstration
-collectors, the training and evaluation pipeline, the terminal controllers, and
-the mechatronic design files for the physical platform. It supports the MSc
-dissertation *VLA Application for a Quadcopter with Manipulator for
-Pick-and-Place Tasks* (UCL, September 2026).
+This repository accompanies the MSc dissertation of the same title
+(University College London, September 2026). It contains the simulation
+environment, the demonstration collectors, the training and evaluation
+pipeline, the scripted and learned terminal controllers, and the mechatronic
+design files for the physical platform.
 
 **Headline result.** The pure VLA reliably selects and approaches the commanded
 object but rarely grasps it (1/60). Assigning the final 0.15 m to a specialised
@@ -335,41 +335,36 @@ Single **NVIDIA A100-PCIE-40GB** per job (UCL Myriad).
 
 ---
 
-## Hardware Platform and Real–Sim Sync
+## Physical Platform
 
-The physical testbed uses a Volador II VX6 frame, KM60A BLHeli-32 ESC, four
-2207 1900 kV motors, a Paparazzi Tawaki V2 flight board and a Raspberry Pi 5,
-with a two-DoF arm and a 30 g Pololu Micro Gripper. Four aerial systems were
-assembled at UCL East. **The learned policy was not deployed on hardware** —
-see Research Boundary.
+The physical testbed uses a Volador II VX6 frame powered by a 4S–6S LiPo
+battery, with a KM60A BLHeli-32 ESC and four 2207, 1900 kV brushless motors.
+Flight control, sensor fusion and low-level stabilisation run on a Paparazzi
+Tawaki V2 board; high-level processing runs on a Raspberry Pi 5. A two-DoF arm
+is mounted beneath the airframe with a motorised parallel gripper at its
+end-effector.
 
-The framework below supports simulation–hardware synchronisation for the
-Dynamixel-driven arm.
+| Component | Mass |
+|---|---:|
+| Frame, ESCs, motors, Raspberry Pi 5 | 386 g |
+| Battery | 350 g |
+| *Subtotal (base airframe)* | *736 g* |
+| Manipulator (two links) | 331 g |
+| Gripper (Pololu Micro Gripper Kit) | 30 g |
+| **Total all-up mass** | **1097 g** |
 
-**Controller API.** `send_joint_positions([deg…])` (position mode),
-`send_pwm([p…])` (PWM mode), `send_torque([τ…])` (Nm → PWM via `max_torque` and
-`max_pwm`), `get_joint_state() -> (qpos_rad[], qvel_rad_s[])`. The PWM–torque
-mapping is not perfectly linear; start from an approximate mapping and
-calibrate.
+**Platform development.** Four aerial systems were assembled and brought up at
+UCL East, including soldering, flight-board checks and motor/thrust
+verification. The original four-claw gripper (~100 g) obstructed the
+wrist-camera view of the grasp region and was replaced with a 30 g Pololu Micro
+Gripper Kit with position-feedback servo; a custom adapter was designed to
+connect it to the existing arm, and the landing legs were shortened to reduce
+collision risk during manipulation. Together these reduced end-effector mass by
+about 70 g and cleared the view of the grasp region. Design files are in
+[`3D Model/`](3D%20Model/) and [`SkyGrip_URDF/`](SkyGrip_URDF/).
 
-**Injecting real state into simulation:**
-
-```python
-def apply_real_state_to_sim(model, data, qpos, qvel):
-    data.qpos[:len(qpos)] = qpos
-    data.qvel[:len(qvel)] = qvel
-    mujoco.mj_forward(model, data)   # recompute derived quantities
-```
-
-**Modelling pipeline.** SolidWorks → URDF (SW2URDF exporter, with mass, inertia
-and STL meshes) → MJCF. MuJoCo ignores `<transmission>`, so actuators must be
-added manually in MJCF. Rotate `<body>` rather than `<geom>` so children follow.
-
-**Debug checklist.** For jitter, keep `mass` ≥ 0.02 kg and `diaginertia` ≥ 1e-5,
-add `damping` (0.05–0.2) and some `frictionloss`, and check `data.cfrc_ext` for
-contact spikes. For orientation mismatches, combine quaternions by
-multiplication. For the sim–real gap, run a periodic reverse-torque experiment
-and compare `qpos` curves.
+**The learned policy was never deployed on hardware** — every result in this
+repository is from simulation. See Research Boundary.
 
 ---
 
@@ -436,18 +431,27 @@ LeRobot and MuJoCo carry their own licences.
 
 ---
 
-## Authors and Acknowledgements
+## Author
 
-AirVLA experiments, simulation environment, collectors, training and evaluation
-pipeline, terminal controllers and platform modifications: **Hana Emma Hadidi**
-(MSc Artificial Intelligence for Sustainable Development, UCL), supervised by
+**Hana Emma Hadidi** — MSc Artificial Intelligence for Sustainable Development,
+Department of Computer Science, University College London. Supervised by
 **Dr Valerio Modugno**.
 
-The underlying SkyGrip whole-body control framework and the Dynamixel real–sim
-synchronisation code are by **Zhuohang Wu** (zhuohang2024@163.com). The drone
-and arm were inherited from a previous student project and extended here with a
-replacement gripper, a custom gripper-to-arm adapter and shortened landing legs.
+This work comprises the MuJoCo simulation environment, the scripted expert and
+demonstration collectors, the flight controller, the grasp and delivery
+protocol, all dataset campaigns, the π₀ fine-tuning and evaluation pipeline, the
+scripted and learned terminal controllers, and the analysis reported in
+[`Reports/finaldroneresults.md`](Reports/finaldroneresults.md).
+
+## Acknowledgements
 
 With thanks to the Department of Computer Science at UCL East and Holistic AI
-for facilities and computational resources, and to the MuJoCo, LeRobot and
-Dynamixel SDK communities.
+for the facilities and computational resources that supported this research, and
+to those at UCL East who helped with the development and preparation of the
+physical drone platform.
+
+The aerial manipulator hardware — the drone airframe and two-link arm — was
+inherited from a previous student project and was extended here with a
+replacement gripper, a custom gripper-to-arm adapter and shortened landing legs.
+
+Built on MuJoCo, LeRobot and the openly released π₀ checkpoint.
