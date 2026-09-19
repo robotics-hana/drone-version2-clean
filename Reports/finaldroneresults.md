@@ -2316,6 +2316,27 @@ conservative.
   | FT-DAG | 20,000 | 8 h 05 m |
   | FT-C retrain | 20,000 | 8 h 03 m |
   | V3-arm | 30,000 | 12 h 07 m |
+- **DEFINED TOTALS (cite these; do not re-add components).**
+  The 64 h 41 m figure **INCLUDES the Base run** — both halves.
+  | Aggregate | Wall | Composition |
+  |---|---|---|
+  | Base training alone | **22 h 28 m** | 10h09m + 12h19m (two 30k halves) |
+  | **T1 — π₀ campaign training** | **64 h 41 m** | Base (both halves) + FT-C + FT-D + FT-D-KI + FT-DAG + V3-arm. **Excludes** the FT-C retrain. |
+  | T2 — T1 + incident recovery | **72 h 44 m** | T1 + FT-C retrain (8h03m) |
+  | Fine-tunes only | 42 h 13 m | T1 minus Base — use ONLY if Base is reported separately |
+- **Double-counting guard:** T1 already contains Base's 22 h 28 m.
+  Quoting "64 h 41 m of training plus 22 h for the base policy"
+  would count Base twice. Either cite T1 alone, or cite Base
+  (22 h 28 m) plus fine-tunes (42 h 13 m), which sum to T1.
+- **What T1/T2 do NOT cover** (add separately if a whole-project
+  figure is wanted): **ACT and Diffusion Policy training — not
+  performed on Myriad** (no training logs or job files exist;
+  only their eval jobs, and the ckpt dirs date to 2026-09-11,
+  matching the act_v21/dp_v21 hub timestamps — trained
+  off-cluster, duration unrecorded); the learned servo
+  (DAgger + ~8 h PPO); ALL data collection (v2 17.8 h, F1 7.5 h,
+  Plan D 28.5 h, DAgger collection); and ALL evaluation (~2 h per
+  frozen n=60+20 run, of which there were dozens).
 - Two incidental findings worth citing: **freezing the backbone
   cut training time ~35%** (5h13m vs 8h01m for the same 20k
   steps) — a real efficiency argument for knowledge insulation
