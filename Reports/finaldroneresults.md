@@ -2290,6 +2290,33 @@ conservative.
   self-resubmission to 5 attempts, per-attempt logs) was not
   exercised beyond attempt 1, but is retained for future pushes.
 
+### RTC TARGET-TRUE RETRO-COMPUTATION (2026-09-19) — FILLS THE
+### LAST GAP IN THE LADDER, AND FINDS A THIRD DOCUMENT ERROR
+
+- Context: RTC (e2full) is the ONLY unassisted arm without a
+  flew-to-target count in the dissertation (Table 4.1 shows a
+  dash). Cause: its run predates the target-true metric, so its
+  summary line has no TARGET-TRUE row. It was simply missed in
+  the retro-computation pass that produced the figures for Base,
+  FT-C, FT-D, FT-D-KI, ACT and DP — all of which were likewise
+  computed after the fact from the per-episode `miss_mm` records.
+- **RTC retro-computed (n=60): flew-to-target 36/60,
+  target-true median 86.3 mm** (general 215.8, picked 1, nav
+  6/20 — all unchanged).
+- **The same selection/precision dissociation as FT-DAG.**
+  vs Base (42/60, 121.5 mm true): RTC reaches the commanded
+  object LESS often (36 vs 42) but is MORE precise when it does
+  (86.3 vs 121.5). The general-median worsening (170.8 → 215.8)
+  is therefore a selection effect, not degraded approach control.
+  The selection difference is NOT significant (discordants 9
+  RTC-only vs 15 Base-only, exact McNemar p = .31) — consistent
+  with the annex's existing base-vs-E2 row.
+- **THIRD DOCUMENT ERROR (§6):** the chapter states RTC produced
+  "more approaches within 60 mm (14 versus 11)". Recomputed with
+  no boundary ambiguity (nearest values 58.6 and 62.2):
+  **RTC within 60 mm is 15, not 14**; Base 11 is correct, and the
+  within-30 mm counts (4 vs 7) are both correct.
+
 ### OOD-N PER-VARIANT BREAKDOWN (2026-09-19, mined from the
 ### banked oodnfull log — the prompt is recorded per episode)
 
