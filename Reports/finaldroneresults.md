@@ -2400,6 +2400,56 @@ conservative.
   **RTC within 60 mm is 15, not 14**; Base 11 is correct, and the
   within-30 mm counts (4 vs 7) are both correct.
 
+### STRICT TARGET-SELECTION RECOMPUTATION (2026-09-19) —
+### ANSWERS THE "flew-to-target IS NOT A SELECTION METRIC"
+### CRITIQUE, AND SHARPENS THE GROUNDING STORY
+
+- **Critique:** flew-to-target fires at <300 mm of the commanded
+  object without requiring it to be nearer than the distractor;
+  since pair separation is >=400 mm, a policy hovering midway is
+  within 300 mm of BOTH and scores a hit. Predicts an
+  instruction-blind policy would score near 60/60.
+- **Geometric resolution (no re-runs needed).** Pair separation
+  is >=0.40 m by construction. By the triangle inequality, any
+  episode ending within **200 mm** of the commanded object is
+  necessarily >=200 mm from the distractor, hence provably nearer
+  the commanded object. Episodes in the 200-300 mm band are the
+  only ambiguous ones.
+  | Config | flew (<300) | strict (<200) | ambiguous |
+  |---|---:|---:|---:|
+  | Base | 42 | **35** | 7 |
+  | RTC | 36 | 28 | 8 |
+  | FT-C | 47 | **42** | 5 |
+  | FT-D | 40 | **30** | 10 |
+  | FT-D-KI | 43 | 39 | 4 |
+  | FT-DAG | 37 | 32 | 5 |
+  | ACT | 28 | **22** | 6 |
+  | DP | 35 | **24** | 11 |
+  | FT-C + Learned | 45 | 41 | 4 |
+- **The critique's hypothesis is empirically FALSIFIED by data
+  already in the thesis:** ACT and DP ARE instruction-blind and
+  score 28 and 35 (loose), 22 and 24 (strict) — *below* chance,
+  not near 60/60. The degenerate midpoint-hover does not occur.
+- **Strict-criterion statistics (exact tests):**
+  vs chance 30/60 — Base 35 p=.245 (NOT sig), **FT-C 42 p=.0027
+  (sig)**, FT-D 30 p=1.0 (exactly chance), ACT 22 p=.052, DP 24
+  p=.155. Paired McNemar — FT-C vs Base 17/10 p=.248 (n.s., as
+  before); FT-C vs ACT 26/6 **p=.00054**; FT-C vs DP 26/8
+  **p=.0029**; Base vs ACT 20/7 p=.019; **FT-C vs FT-D 17/5
+  p=.0169 — SIGNIFICANT under the strict metric** (reported as
+  p=.14 n.s. under the loose one).
+- **TWO THESIS CLAIMS MUST CHANGE:** (1) §5.2 "The Base policy
+  exceeded this chance level (42/60, p=0.0027)" is FALSE under
+  the strict metric (35/60, p=.245). (2) FT-D sits at exactly
+  chance (30/60). **ONE CLAIM STRENGTHENS:** the FT-C-vs-FT-D
+  overdose finding becomes statistically significant.
+- **Net reading, which is sharper than the current text:** FT-C
+  is the ONLY pure policy whose target selection is significantly
+  above chance; scaling paired-command data in F2 returns
+  grounding to exactly chance; and both language-blind baselines
+  sit at or below chance. Recommend reporting the strict column
+  alongside flew-to-target in Tables 4.1/4.2.
+
 ### OOD-N PER-VARIANT BREAKDOWN (2026-09-19, mined from the
 ### banked oodnfull log — the prompt is recorded per episode)
 
