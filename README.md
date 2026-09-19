@@ -1,505 +1,453 @@
-# SkyGrip
+# SkyGrip — Vision-Language-Action Control for a Quadcopter with a Manipulator
 
-**Whole-Body Control for Quadcopter + Manipulator**  
-A unified dynamics-based framework for **simulation–real robot synchronization**, supporting MuJoCo physics simulation, URDF/MJCF modeling, (optional) PyTorch for optimization/learning, and direct control of real Dynamixel servos with position, PWM, or torque commands.
+A pretrained **π₀ vision-language-action (VLA) policy** adapted to a quadcopter
+carrying a two-degree-of-freedom arm and a parallel gripper, evaluated in
+MuJoCo. The policy receives three RGB camera streams, proprioception and a
+written instruction, and outputs drone motion and gripper commands; the arm
+follows deterministic task-phase logic.
 
-> ✅ Highlights:  
-> - **MuJoCo** real-time simulation (direct URDF load, or MJCF with actuators)  
-> - **Real–Sim sync**: read joint state from hardware, inject into simulation; send sim torques → real PWM  
-> - **Complete control modes**: position, PWM, torque (Nm → PWM approx.)  
-> - **3D modeling pipeline**: SolidWorks → URDF (STL meshes) → MJCF  
-> - **(Optional) PyTorch**: for MPPI/MPC, neural policies, residual models
+This repository contains the simulation environment, the demonstration
+collectors, the training and evaluation pipeline, the terminal controllers, and
+the mechatronic design files for the physical platform. It supports the MSc
+dissertation *VLA Application for a Quadcopter with Manipulator for
+Pick-and-Place Tasks* (UCL, September 2026).
+
+**Headline result.** The pure VLA reliably selects and approaches the commanded
+object but rarely grasps it (1/60). Assigning the final 0.15 m to a specialised
+terminal controller raises this to **36/60 grasps (60%) and 27/60 complete
+pick-and-place (45%)**.
 
 ---
 
-## Project Structure
+## Evidence Structure
 
+| Evidence | Location |
+|---|---|
+| Experimental ledger — pre-registrations, amendments, every result with job IDs and provenance | [`Reports/finaldroneresults.md`](Reports/finaldroneresults.md) |
+| Figures used in the dissertation | [`Reports/`](Reports/) (`*.png`) |
+| Learned-servo training progression | [`Reports/e5_training_progression.png`](Reports/e5_training_progression.png) |
+| Per-episode evaluation records | `~/Scratch/airvla/logs/*.log` (cluster) — one `EVAL {json}` line per episode |
+| Trajectory dumps | `~/Scratch/airvla/sim/eval_v2_traj.jsonl` (cluster) — drone + jaw pose every 3 ticks |
+| Collection manifests | `v2_manifest_<seed>.jsonl`, `dag_manifest_<seed>.jsonl` — one line per attempt, accepted or rejected |
+| Rendered evaluation episodes | `Reports/v2_eval_videos/` — 206 MP4s, ~4.6 GB, **git-ignored** (local only) |
+
+The ledger is the authoritative record: it was written before each experiment
+(pre-registration) and amended with dated entries, including disclosed errors
+and their recovery. This README is the operational guide.
+
+---
+
+## Quick Start
+
+The simulator version is **load-bearing**: all training data and every frozen
+evaluation were produced under **MuJoCo 3.3.4**. A different MuJoCo changes
+contact behaviour enough to invalidate comparison with the banked results.
+
+```bash
+conda create -n airvla python=3.10 -y && conda activate airvla
+pip install mujoco==3.3.4 numpy scipy torch imageio imageio-ffmpeg
+pip install lerobot huggingface_hub
+export MUJOCO_GL=egl        # headless rendering on cluster nodes
 ```
 
+Working directory for all commands below: `Sim'n'Real/Mujoco/`.
+
+View the simulated scene and task objects:
+
+```bash
+python objects_viewer.py
+```
+
+Run a frozen evaluation of the best system:
+
+```bash
+huggingface-cli download hanapasta/airvla_ftc_15000 --local-dir ./ftc_15000
+python eval_v2.py ./ftc_15000 60 20 --torchseed 1000 --tag e5c \
+  --assist 0.15 --learned-servo e5_actor/e5_actor_final.pt
+```
+
+---
+
+## Repository Layout
+
+```
 .
-├─ 3D Model/           # CAD assets (SolidWorks / STL)
-├─ Mujoco/             # MuJoCo simulation scripts & model demos (e.g. test1.py)
-├─ PyBullet/           # PyBullet simulation scripts
-├─ SkyGrip_URDF/       # Manipulator URDF and STL meshes
-└─ Reports/            # Notes, reports, parameter tuning logs
+├─ Sim'n'Real/Mujoco/     # simulation, collectors, training wrappers, evaluation
+├─ Reports/               # experimental ledger, figures, analysis
+├─ cluster_jobs/          # cluster submission scripts
+├─ 3D Model/              # CAD assets (SolidWorks / STL)
+├─ SkyGrip_URDF/          # manipulator URDF and STL meshes
+├─ v2_design/             # v2 platform design files
+├─ onboard_Raspi5/        # onboard compute (Raspberry Pi 5)
+├─ cam3_rerender/         # external-camera re-rendering
+├─ dataset_tests/         # dataset integrity checks
+└─ Medias/                # photographs and renders
+```
 
-````
+Key files in `Sim'n'Real/Mujoco/`:
+
+| File | Role |
+|---|---|
+| `SkyGrip_airvla.xml` | The MuJoCo scene used for all experiments |
+| `collect_v2.py` | Main demonstration collector (expert pipeline + acceptance gates) |
+| `collect_airvla.py` | Shared prompts and expert primitives |
+| `collect_dagger.py` | On-policy corrective collector (FT-DAG) |
+| `relabel_v3.py` | Rewrites action dims 3–4 as arm-joint deltas (arm ablation) |
+| `eval_v2.py` | Frozen evaluation harness — all experiments are additive, default-off flags |
+| `platform_v2.py` | Flight platform and the scripted terminal servo |
+| `pd_flight.py` | Cascaded PID position / PD attitude flight controller |
+| `rl_env.py`, `rl_nets.py`, `rl_bc.py`, `rl_train.py` | Learned terminal servo (contract, architecture, DAgger, PPO) |
+| `objects_viewer.py` | Interactive viewer for the task objects |
 
 ---
 
-## Environment & Dependencies
+## Simulation Environment
 
-### 1) Python & Conda
+The MuJoCo model was built from the measured physical platform: an all-up mass
+of **1097 g** (736 g airframe, 331 g two-link arm, 30 g Pololu parallel
+gripper), giving a hover thrust requirement of about 10.8 N.
+
+The scene was reconstructed photogrammetrically from the physical laboratory
+(Polycam, ~1.01 × 10⁶ points) and reproduced in MuJoCo, including the 40 mm
+raised working mat. A fixed table, a navigation gate and a delivery box on the
+floor complete the workspace.
+
+**Sensing** follows a three-view arrangement: a forearm-mounted camera looking
+down at the grasp region, a forward-facing camera for navigation, and a fixed
+external third-person view. Frames are stored at 512×512 and recorded at 10 Hz
+alongside a ten-dimensional proprioceptive vector (pose, gripper aperture, both
+arm joint angles).
+
+**Flight control** is cascaded: a PID position loop whose integral term engages
+only within 0.15 m of the setpoint (preventing wind-up during transit), feeding
+a PD attitude loop with exact feed-forward compensation of the moment created by
+the arm's offset centre of mass.
+
+**Grasping** uses a weld constraint that activates only when the gripper closes
+with validated alignment, height and aperture relative to the object, measured
+from simulator state. It maintains an already-successful grasp rather than
+creating one, and is released over the delivery box.
+
+### Task Definitions
+
+| Task | Description |
+|---|---|
+| **Pick and place** | Two objects on the table (blue penguin, grey calibration weight); the instruction names which to collect and place in the box |
+| **Gate navigation** | Fly through a gate and hover over the named object — no grasping |
+| **Compositional** | Gate traversal followed by pick-and-place in one instruction. **Never demonstrated in training**; reserved for evaluation |
+
+Task objects: calibration weight (16 mm graspable width, 100 g) and plush
+penguin (22 mm head, 45 g), against a 32 mm jaw opening — leaving 8 mm and 5 mm
+of clearance per side respectively.
+
+---
+
+## Datasets
+
+All datasets are in LeRobot format and hosted on Hugging Face.
+
+| Dataset | Contents | Episodes / frames |
+|---|---|---|
+| [`hanapasta/airvla_v2`](https://huggingface.co/datasets/hanapasta/airvla_v2) *(private)* | v2 baseline: 360 pick + 240 navigation demonstrations | 600 / 239,520 |
+| [`hanapasta/airvla_v21`](https://huggingface.co/datasets/hanapasta/airvla_v21) | v2 + F1 terminal-corrective — trains **FT-C** | 910 / 391,750 |
+| [`hanapasta/airvla_v22`](https://huggingface.co/datasets/hanapasta/airvla_v22) | v2 + F1 + F2 paired-command scaling — trains **FT-D / FT-D-KI** | 1,358 / 622,801 |
+| [`hanapasta/airvla_v24`](https://huggingface.co/datasets/hanapasta/airvla_v24) | v21 + on-policy DAgger — trains **FT-DAG** | 1,110 / 512,577 |
+| [`hanapasta/airvla_v3`](https://huggingface.co/datasets/hanapasta/airvla_v3) *(private)* | v2 relabelled with arm-joint deltas — trains the arm ablation | 600 / 239,520 |
+| [`airvla_dag1`](https://huggingface.co/datasets/hanapasta/airvla_dag1) – [`dag4`](https://huggingface.co/datasets/hanapasta/airvla_dag4) | Raw DAgger collection shards (merged into v24) | — |
+| [`airvla_v2_d2`](https://huggingface.co/datasets/hanapasta/airvla_v2_d2) – [`d4`](https://huggingface.co/datasets/hanapasta/airvla_v2_d4), [`airvla_v2_e3`](https://huggingface.co/datasets/hanapasta/airvla_v2_e3) | Plan D and F1 collection shards | — |
+
 ```bash
-conda create -n wbc python=3.10 -y
-conda activate wbc
-````
+huggingface-cli download hanapasta/airvla_v21 --repo-type dataset \
+  --local-dir ~/hf_cache/lerobot/hanapasta/airvla_v21
+# Training offline? Remove the legacy download marker or LeRobot forces a
+# hub re-sync and fails under HF_HUB_OFFLINE=1:
+rm -rf ~/hf_cache/lerobot/hanapasta/airvla_v21/.cache
+```
 
-### 2) Core packages
+---
+
+## Trained Models
+
+Each π₀ checkpoint is ~8.3 GB. Every public repository carries a model card
+recording its training data, initialisation, step count, selection rule and
+frozen-protocol result.
+
+| Configuration | Hugging Face |
+|---|---|
+| **Base** (π₀, step 47500) | [`hanapasta/airvla_v2_pi0_047500`](https://huggingface.co/hanapasta/airvla_v2_pi0_047500) *(private)* |
+| **FT-C** (step 15000) — strongest pure policy | [`hanapasta/airvla_ftc_15000`](https://huggingface.co/hanapasta/airvla_ftc_15000) |
+| **FT-D** (step 15000) | [`hanapasta/airvla_ftd_15000`](https://huggingface.co/hanapasta/airvla_ftd_15000) |
+| **FT-D-KI** (step 5000, frozen backbone) | [`hanapasta/airvla_ftdki_5000`](https://huggingface.co/hanapasta/airvla_ftdki_5000) |
+| **FT-DAG** (step 17500, on-policy corrective) | [`hanapasta/airvla_ftdag_17500`](https://huggingface.co/hanapasta/airvla_ftdag_17500) |
+| **V3-arm** (step 25000, policy-controlled arm) | [`hanapasta/airvla_v3arm_25000`](https://huggingface.co/hanapasta/airvla_v3arm_25000) |
+| **Learned terminal servo** | [`hanapasta/airvla_e5_actor`](https://huggingface.co/hanapasta/airvla_e5_actor) *(private)* — actor + `rl_env.py` + `rl_nets.py` |
+| **ACT baseline** | [`hanapasta/act_v21`](https://huggingface.co/hanapasta/act_v21) *(private)* |
+| **Diffusion Policy baseline** | [`hanapasta/dp_v21`](https://huggingface.co/hanapasta/dp_v21) *(private)* |
+
+> The published FT-C checkpoint is a deterministic **retrain** of the original,
+> which was destroyed by a cleanup script that followed a baseline symlink. It
+> was accepted only after equivalence gates: pinned-noise validation MSE
+> 7.7 × 10⁻⁵ against the original's 7.679 × 10⁻⁵, plus a matching closed-loop
+> evaluation. The incident and recovery are documented in full in the ledger.
+>
+> Ignore `hanapasta/airvla_d_15000` — an earlier backup whose push never
+> completed; it holds only `.gitattributes` and is superseded by
+> `airvla_ftd_15000`.
+
+---
+
+## Evaluation Protocol
+
+`eval_v2.py` is frozen. Every experimental condition is an **additive,
+default-off flag**; with no flags the code path is byte-identical to the frozen
+version, and each run records a `PROV` line with script and dependency hashes.
+
+| Setting | Value |
+|---|---|
+| Pick-and-place | 60 episodes, maximum 1200 control steps |
+| Navigation | 20 episodes, maximum 500 control steps |
+| Evaluation scenes | Seed family 97000, disjoint from collection and development probes |
+| Paired comparison | Every configuration sees the same scene at a given episode index |
+| Default execution | Predict H = 50 actions, execute E = 50 before replanning |
+| Torch seed | 1000 |
+
+Because scenes are paired, configurations are compared with **exact McNemar
+tests** on discordant scenes, Wilcoxon signed-rank on per-scene distances, and
+Wilson intervals on proportions.
+
+### Experiment Flags
+
+| Flag | Experiment |
+|---|---|
+| `--assist 0.15` | Scripted terminal servo |
+| `--learned-servo <actor.pt>` | Learned terminal servo |
+| `--exec 10` / `--rtc` | Shortened execution horizon / Real-Time Chunking |
+| `--paraphrase` / `--synonyms` | OOD: unseen instruction wordings / unseen object names |
+| `--oodpos --sceneseed 96000` | OOD: target outside the trained ±0.35 m band |
+| `--novel-distractor` | OOD: unseen mustard bottle added as clutter |
+| `--novel-target` | Open-vocabulary probe: the bottle commanded as target |
+| `--comp --sceneseed 95000` | Held-out composite instruction |
+| `--solo --sceneseed 99000` | Single-object competence probe |
+| `--policy-arm` | Ablation: policy commands the arm joints |
+| `--pag` | Payload-mass compensation ablation |
+
+Run a 10+4 episode mini first — it gates the full run for harness validity,
+never for conclusions.
+
+---
+
+## Reproducing the Experiments
+
+**1. Collect demonstrations.** A scripted expert flies the platform and banks
+only episodes passing every acceptance gate (genuine seated grasp, object
+retained through transport, placement inside the box, zero table/gate/non-grasp
+contacts). Collection seed family is 71000, disjoint from every evaluation seed.
 
 ```bash
-pip install mujoco numpy scipy
-# Optional: learning / optimization
-pip install torch
-# For Dynamixel hardware
-pip install dynamixel-sdk
+python collect_v2.py <seed> <n_units>
 ```
 
-> MuJoCo ≥ 3.1 supports `pip install mujoco` directly — no need for the old `mujoco-py`.
+Size collection jobs under the wall clock: a wall-killed job loses the entire
+dataset, because LeRobot writes its footer only at close.
+
+**2. Fine-tune π₀.** All configurations use π₀ base, batch 4, seed 1000, full
+fine-tune unless stated.
+
+| Configuration | Dataset | Initialised from | Steps |
+|---|---|---|---|
+| Base | `airvla_v2` (480-episode training split) | π₀ base | 47,500 |
+| FT-C | `airvla_v21`, F1 up-weighted via the episode list | π₀ base | 15,000 |
+| FT-D | `airvla_v22` | FT-C | 15,000 |
+| FT-D-KI | `airvla_v22`, VLM backbone frozen | FT-C | 5,000 |
+| FT-DAG | `airvla_v24` | FT-C | 20,000, lr 5e-6→5e-7 |
+| V3-arm | `airvla_v3` | π₀ base | 25,000 |
+| ACT / DP | `airvla_v21` | from scratch | 50,000 |
+
+Wrappers: `d_train_wrapper.py`, `dki_train_wrapper.py`, `act_train_wrapper.py`,
+`dp_train_wrapper.py`. Always run a 200-step smoke job first.
+
+**3. Select a checkpoint.** By **lowest pinned-noise validation MSE** over the
+saved ladder (`valcurve_v2.py`), never by inspecting closed-loop results.
+Pinning the noise matters: π₀ draws fresh flow noise per call, so an unpinned
+comparison measures sampling variance rather than the intervention.
+
+**4. Evaluate.** See the protocol above.
+
+**5. Terminal controllers.** The **scripted servo** (`platform_v2.py`,
+`--assist 0.15`) hands off when the jaws enter a 0.15 m capture radius of the
+*instruction-named* object, so it cannot rescue a wrong-target approach. The
+**learned servo** is a 2×128 tanh MLP mapping an 18-D body-frame observation to
+4 actions, trained by DAgger cloning of the scripted closer (`rl_bc.py`)
+followed by PPO refinement (`rl_train.py`).
 
 ---
 
-## Quick Start (MuJoCo)
+## Included Results
 
-### A. Direct URDF load
+Frozen protocol, n = 60 pick-and-place + 20 navigation, paired scenes.
 
-```python
-import mujoco
-from mujoco import viewer
+| Configuration | Correct target | Grasped | Placed | Median (mm) | Nav. |
+|---|---|---|---|---|---|
+| Base (π₀ 47500) | 42/60 | 1/60 | 1/60 | 170.8 | 9/20 |
+| FT-C | 47/60 | 1/60 | 1/60 | 145.8 | 12/20 |
+| FT-D | 40/60 | 1/60 | 1/60 | 204.9 | 10/20 |
+| FT-D-KI | 43/60 | 0/60 | 0/60 | 117.8 | 12/20 |
+| FT-DAG | 37/60 | 1/60 | 1/60 | 196.0 | 12/20 |
+| ACT | 28/60 | 1/60 | 1/60 | 313.5 | 10/20 |
+| Diffusion Policy | 35/60 | 0/60 | 0/60 | 249.8 | 0/20 |
+| Base + Scripted | 41/60 | 21/60 | 19/60 | 18.2 | 10/20 |
+| FT-C + Scripted | 46/60 | 24/60 | 22/60 | 19.2 | 11/20 |
+| **FT-C + Learned** | 45/60 | **36/60** | **27/60** | **12.8** | 11/20 |
+| FT-D-KI + Learned | 46/60 | 33/60 | 26/60 | 14.9 | 12/20 |
 
-model = mujoco.MjModel.from_xml_path("URDF/mppi/mppi.urdf")
-data = mujoco.MjData(model)
+Adding the learned terminal controller to FT-C is significant on the paired
+scenes (exact McNemar *p* = 5.8 × 10⁻¹¹ for grasping, *p* = 3.0 × 10⁻⁸ for
+placement), while target selection and navigation are unchanged — the gain is
+specific to terminal conversion.
 
-with viewer.launch_passive(model, data) as v:
-    while v.is_running():
-        mujoco.mj_step(model, data)
-        v.sync()
-```
+**Out-of-distribution** (FT-C + Learned): performance is unchanged under
+paraphrased instructions (36/60 grasps), unseen object names (37/60) and a novel
+visual distractor (33/60), but falls under spatial extrapolation (18/60, target
+outside the trained band). Target-true precision on reached targets stays at
+11.2 mm, so the failure is in *acquiring* out-of-range targets, not in terminal
+control.
 
-> URDF is fine for visualization, but MuJoCo **will not auto-create actuators** from `<transmission>` — add them manually in MJCF for control.
+**Composite task** (never demonstrated): both configurations cross the gate in
+60/60 episodes. Pure FT-C achieves no grasps; the hybrid achieves 24/60 grasps
+and **3/60 complete composite successes**, with post-grasp carry the limiting
+stage.
 
-### B. MJCF with actuators (recommended for control)
+Full results, statistics and provenance:
+[`Reports/finaldroneresults.md`](Reports/finaldroneresults.md).
 
-1. Load URDF in MuJoCo Viewer → “Save XML” → `mppi.xml`
-2. Add:
+### Compute Cost
 
-```xml
-<actuator>
-  <motor joint="Joint_1" ctrlrange="-1 1" gear="1"/>
-  <motor joint="Joint_2" ctrlrange="-1 1" gear="1"/>
-</actuator>
-```
+Single **NVIDIA A100-PCIE-40GB** per job (UCL Myriad).
 
-3. Run:
-
-```python
-model = mujoco.MjModel.from_xml_path("Mujoco/mppi.xml")
-data = mujoco.MjData(model)
-
-with viewer.launch_passive(model, data) as v:
-    while v.is_running():
-        data.ctrl[:] = [0.2, -0.1]  # example torque commands
-        mujoco.mj_step(model, data)
-        v.sync()
-```
+| Stage | Cost |
+|---|---|
+| v2 collection (600 episodes) | 17.8 h |
+| F1 collection (310 episodes) | 7.5 h |
+| Base training (60,000 steps) | ~22.5 h |
+| Each fine-tune (20,000 steps) | ~8 h (5 h 13 m with the backbone frozen) |
+| Learned-servo PPO (71 iterations) | ~8 h |
+| One frozen evaluation (60 + 20) | ~2 h |
 
 ---
 
-## Dynamixel Control & Real–Sim Sync
+## Hardware Platform and Real–Sim Sync
 
-### 1) Controller API (excerpt)
+The physical testbed uses a Volador II VX6 frame, KM60A BLHeli-32 ESC, four
+2207 1900 kV motors, a Paparazzi Tawaki V2 flight board and a Raspberry Pi 5,
+with a two-DoF arm and a 30 g Pololu Micro Gripper. Four aerial systems were
+assembled at UCL East. **The learned policy was not deployed on hardware** —
+see Research Boundary.
 
-* **Position control**: `send_joint_positions([deg1, deg2, ...])` (auto-switch to Position mode)
-* **PWM control**: `send_pwm([p1, p2, ...])` (auto-switch to PWM mode)
-* **Torque control**: `send_torque([τ1, τ2, ...])` (Nm → PWM via `max_torque` & `max_pwm`)
-* **Read state**: `get_joint_state() -> (qpos_rad[], qvel_rad_s[])`
+The framework below supports simulation–hardware synchronisation for the
+Dynamixel-driven arm.
 
-⚠ PWM–torque mapping is **not perfectly linear**; use an approximate mapping first, then calibrate.
+**Controller API.** `send_joint_positions([deg…])` (position mode),
+`send_pwm([p…])` (PWM mode), `send_torque([τ…])` (Nm → PWM via `max_torque` and
+`max_pwm`), `get_joint_state() -> (qpos_rad[], qvel_rad_s[])`. The PWM–torque
+mapping is not perfectly linear; start from an approximate mapping and
+calibrate.
 
-### 2) Sync real robot state into sim
+**Injecting real state into simulation:**
 
 ```python
 def apply_real_state_to_sim(model, data, qpos, qvel):
     data.qpos[:len(qpos)] = qpos
     data.qvel[:len(qvel)] = qvel
-    mujoco.mj_forward(model, data)  # recompute derived quantities
+    mujoco.mj_forward(model, data)   # recompute derived quantities
 ```
 
-Call before each sim step if doing frame-by-frame sync.
+**Modelling pipeline.** SolidWorks → URDF (SW2URDF exporter, with mass, inertia
+and STL meshes) → MJCF. MuJoCo ignores `<transmission>`, so actuators must be
+added manually in MJCF. Rotate `<body>` rather than `<geom>` so children follow.
 
-### 3) Synchronized torque controller
-
-```python
-class SynchronizedTorqueController:
-    def __init__(self, real, model, data, enable_real=True, enable_sim=True):
-        self.real, self.model, self.data = real, model, data
-        self.enable_real, self.enable_sim = enable_real, enable_sim
-
-    def send_torque(self, tau):
-        if self.enable_sim:
-            self.data.ctrl[:len(tau)] = tau
-        if self.enable_real:
-            self.real.send_torque(list(tau))
-```
+**Debug checklist.** For jitter, keep `mass` ≥ 0.02 kg and `diaginertia` ≥ 1e-5,
+add `damping` (0.05–0.2) and some `frictionloss`, and check `data.cfrc_ext` for
+contact spikes. For orientation mismatches, combine quaternions by
+multiplication. For the sim–real gap, run a periodic reverse-torque experiment
+and compare `qpos` curves.
 
 ---
 
-## 3D Modeling & Coordinates
+## Reproducibility Practices
 
-* **SolidWorks → URDF**: with SW2URDF exporter (includes mass, inertia, STL meshes)
-* **URDF → MJCF**: load URDF in MuJoCo Viewer, save as MJCF, then add actuators
-* **Mesh orientation**: rotate `<body>` (with `quat=`) — not just `<geom>` — so children follow
-* **Gravity/integrator**:
+Adopted after failures that silently corrupted earlier results:
 
-```xml
-<option gravity="0 0 -9.81" timestep="0.001" integrator="RK4"/>
-```
-
----
-
-## Tuning & Debug Checklist
-
-* **Jitter / instability**
-
-  * Ensure `mass` ≥ 0.02 kg, `diaginertia` ≥ 1e-5
-  * Add `damping` (0.05–0.2) and some `frictionloss`
-  * Check for collision issues or `data.cfrc_ext` spikes
-  * Zero out `data.ctrl[:]` if actuators retain old commands
-* **Orientation mismatch**
-
-  * Combine quaternions by multiplication, not addition
-* **No actuator control from URDF**
-
-  * MuJoCo ignores `<transmission>` for actuators; add `<actuator>` in MJCF
-* **Sim–real gap**
-
-  * Run a periodic reverse-torque experiment and compare qpos curves; adjust `damping`, `frictionloss`, mass, or torque mapping
+- **Validate the harness before the policy.** Any changed evaluation path is
+  first driven with *expert* actions (`replay_*.py`, `comp_setcheck.py`); if the
+  expert cannot complete the task through it, policy numbers from it are
+  meaningless.
+- **Pin sampling noise** for any comparison, or the measurement is sampling
+  variance.
+- **Offline metrics do not arbitrate design questions.** The arm ablation posted
+  the best-looking validation curve and the worst closed-loop behaviour.
+- **Additive, default-off flags with provenance hashes**, so the frozen harness
+  stays frozen.
+- **One log file per job**, never reused — a reused log makes a gate read a
+  previous run's result.
+- **Never delete checkpoints with a globbed `rm -rf dir/*/`** — it follows
+  baseline symlinks and destroys their targets. Enumerate with
+  `find -maxdepth 1 -type d` instead, and push every selected checkpoint to the
+  hub at selection time.
 
 ---
 
-## Optional PyTorch Integration
+## Documentation
 
-* Write your policy (MPPI/MPC/NN) in Torch, read sim state via `data.qpos/qvel`, output `tau` to `SynchronizedTorqueController`
-* Keep policy logic separate from sim/env code
-
----
-
-## Run Examples
-
-* **MuJoCo demo**:
-
-```bash
-python Mujoco/test1.py
-```
-
-* **Sim–real consistency test**:
-
-  * Apply fixed torque, flip sign every N frames
-  * Plot difference between sim and real joint positions
-
----
-
-## AirVLA: language-conditioned aerial manipulation (v2 campaign)
-
-This repository contains the MSc-dissertation experiments that adapt a
-pretrained **π₀ vision-language-action policy** to the SkyGrip drone +
-2-DoF arm + parallel gripper, evaluated in MuJoCo. The policy receives
-three camera images and a written instruction and outputs drone motion
-and gripper commands; the arm follows deterministic task-phase logic.
-
-Everything below is sufficient to reproduce the campaign end to end.
-Per-experiment pre-registrations, amendments, results and provenance
-are tracked in **[`Reports/finaldroneresults.md`](Reports/finaldroneresults.md)**,
-which is the authoritative record — this README is the operational
-guide.
-
-**Headline result.** The pure VLA reliably selects and approaches the
-commanded object but rarely grasps (1/60). Adding a specialised
-terminal controller for the last 0.15 m raises this to **36/60 grasps
-(60%) and 27/60 complete pick-and-place (45%)**.
-
----
-
-### 1. Environment
-
-The simulator version is **load-bearing**: training data and every
-frozen evaluation were produced under **MuJoCo 3.3.4**. A different
-MuJoCo changes contact behaviour enough to invalidate comparisons with
-the banked results (an earlier v1 run had a hidden 3.11-data /
-3.3.4-eval mismatch — see the ledger).
-
-```bash
-conda create -n airvla python=3.10 -y && conda activate airvla
-pip install mujoco==3.3.4 numpy scipy torch imageio imageio-ffmpeg
-pip install lerobot                 # π₀, ACT and Diffusion Policy implementations
-pip install huggingface_hub
-export MUJOCO_GL=egl                # headless rendering on cluster nodes
-```
-
-On UCL Myriad the campaign used a pinned interpreter at
-`~/Scratch/env-pin/bin/python`; that pin was never modified mid-campaign
-by design.
-
-Working directory for all commands below: `Sim'n'Real/Mujoco/`.
-The scene is `SkyGrip_airvla.xml`.
-
----
-
-### 2. Where the data, weights and videos live
-
-#### 2.1 Datasets (Hugging Face, LeRobot format)
-
-| Repo | Contents | Episodes / frames | Visibility |
-|---|---|---|---|
-| `hanapasta/airvla_v2` | **v2 baseline**: 360 pick + 240 nav demos | 600 / 239,520 | private |
-| `hanapasta/airvla_v21` | **v2 + F1** (terminal-corrective) — trains FT-C | 910 / 391,750 | public |
-| `hanapasta/airvla_v22` | **v2 + F1 + F2** (paired-command scaling) — trains FT-D / FT-D-KI | 1358 / 622,801 | public |
-| `hanapasta/airvla_v24` | **v21 + on-policy DAgger** — trains FT-DAG | 1110 / 512,577 | public |
-| `hanapasta/airvla_v3` | v2 relabelled with arm-joint deltas — trains the arm ablation | 600 / 239,520 | private |
-| `hanapasta/airvla_dag1` … `airvla_dag4` | raw DAgger collection shards (merged into v24) | — | public |
-| `hanapasta/airvla_v2_d2` … `_d4` | Plan-D collection shards (merged into v22) | — | public |
-| `hanapasta/airvla_v2_e3` | F1 corrective collection shard | — | public |
-
-Download a dataset:
-
-```bash
-huggingface-cli download hanapasta/airvla_v21 --repo-type dataset \
-  --local-dir ~/hf_cache/lerobot/hanapasta/airvla_v21
-# If training offline, delete the legacy download marker or LeRobot
-# forces a hub re-sync and fails under HF_HUB_OFFLINE=1:
-rm -rf ~/hf_cache/lerobot/hanapasta/airvla_v21/.cache
-```
-
-#### 2.2 Trained weights
-
-Each π₀ checkpoint is ~8.3 GB (7 files: `model.safetensors`, the
-pre/post-processor normalizer tensors, and their JSON configs).
-
-| Configuration | Hugging Face | Cluster path (Myriad) |
-|---|---|---|
-| **Base** (π₀, step 47500) | `hanapasta/airvla_v2_pi0_047500` — *private* | `~/Scratch/airvla/pi0_v2_out/checkpoints/047500/pretrained_model` |
-| **FT-C** (step 15000) | **`hanapasta/airvla_ftc_15000`** — public | `~/Scratch/airvla/pi0_e3c_r_out/checkpoints/015000/pretrained_model` |
-| **FT-D** (step 15000) | **`hanapasta/airvla_ftd_15000`** — public | `~/Scratch/airvla/pi0_d_out/checkpoints/015000/pretrained_model` |
-| **FT-D-KI** (step 5000) | **`hanapasta/airvla_ftdki_5000`** — public | `~/Scratch/airvla/pi0_dki_out/checkpoints/005000/pretrained_model` |
-| **FT-DAG** (step 17500) | **`hanapasta/airvla_ftdag_17500`** — public | `~/Scratch/airvla/pi0_dag_out/checkpoints/017500/pretrained_model` |
-| **V3-arm** (step 25000) | **`hanapasta/airvla_v3arm_25000`** — public | `~/Scratch/airvla/pi0_v3_out/checkpoints/025000/pretrained_model` |
-| **Learned terminal servo** | `hanapasta/airvla_e5_actor` — *private*; actor + `rl_env.py` + `rl_nets.py` | `~/Scratch/airvla/e5_out/e5_actor_final.pt` |
-| **ACT baseline** | `hanapasta/act_v21` — *private* | `~/Scratch/airvla/act_ckpt/pretrained_model` |
-| **Diffusion Policy baseline** | `hanapasta/dp_v21` — *private* | `~/Scratch/airvla/dp_ckpt` |
-
-Fetch a checkpoint and evaluate it:
-
-```bash
-huggingface-cli download hanapasta/airvla_ftc_15000 --local-dir ./ftc_15000
-python eval_v2.py ./ftc_15000 60 20 --torchseed 1000 --tag ftc --video
-```
-
-Each public repo carries a model card recording its training data,
-initialisation, step count, checkpoint-selection rule and
-frozen-protocol result.
-
-> **Provenance note on FT-C.** The published FT-C checkpoint is
-> `pi0_e3c_r_out`, a deterministic **retrain** of the original C-15000,
-> which was destroyed by a cleanup script that followed a baseline
-> symlink. It was accepted only after equivalence gates: pinned-noise
-> validation MSE 7.7×10⁻⁵ against the original's 7.679×10⁻⁵ (0.3%),
-> plus a matching closed-loop evaluation. Every result in the ledger
-> attributed to FT-C was produced by the original checkpoint under
-> recorded provenance hashes; runs made after the loss are marked as
-> using the retrain. The incident and recovery are documented in full.
->
-> **Repos still private.** The Base policy, the E5 actor and the two
-> from-scratch baselines remain private, as do the `airvla_v2` and
-> `airvla_v3` datasets — a third party following this guide can
-> reproduce the FT-C/FT-D/FT-DAG line but not the Base policy or a
-> collection-from-scratch run until those are published.
->
-> **Disregard `hanapasta/airvla_d_15000`** — an earlier private FT-D
-> backup whose push never completed; it holds only `.gitattributes`.
-> It is superseded by the public `airvla_ftd_15000` above.
-
-#### 2.3 Evaluation videos and logs
-
-| Artefact | Location | Notes |
-|---|---|---|
-| Rendered evaluation episodes | `Reports/v2_eval_videos/` | 206 MP4s, ~4.6 GB — **git-ignored**, local only |
-| Contact sheets / figures | `Reports/*.png` | tracked in git |
-| Per-episode eval records | `~/Scratch/airvla/logs/*.log` (cluster) | one `EVAL {json}` line per episode |
-| Trajectory dumps | `~/Scratch/airvla/sim/eval_v2_traj.jsonl` (cluster) | drone + jaw pose every 3 ticks |
-| Collection manifests | `v2_manifest_<seed>.jsonl`, `dag_manifest_<seed>.jsonl` | one line per attempt, accepted or rejected |
-
-Video sub-directories map to experiments: `full47k5` (Base full run, 80
-clips), `h1mini`/`h1cmini`/`h1cfull` (scripted hybrid), `e5cfull`
-(learned hybrid), `e1mini47k5`/`e2mini47k5`/`e2full47k5` (execution
-horizon and RTC), `ooddfull` (novel-distractor OOD), `grasps` (isolated
-successful grasps), plus 42 loose clips at the top level.
-
-Videos are produced by passing `--video` to `eval_v2.py`, which writes
-`v2vid_<tag>_pick<NN>.mp4` / `_nav<NN>.mp4` into the working directory.
-
----
-
-### 3. Reproducing the campaign
-
-#### Step 1 — Collect demonstrations
-
-A scripted expert flies the platform and banks only episodes passing
-every acceptance gate (genuine seated grasp, object retained through
-transport, placement inside the box, zero table/gate/non-grasp contacts).
-
-```bash
-python collect_v2.py <seed> <n_units>        # v2 baseline + F1/F2 extensions
-```
-
-| File | Role |
+| Document | Contents |
 |---|---|
-| `collect_v2.py` | Main collector: seeded scene randomisation, expert pipeline (`nav_v2` → `pick_v2` → `place_v2`), acceptance gates, per-attempt manifest |
-| `collect_airvla.py` | Shared prompts and expert primitives |
-| `collect_dagger.py` | On-policy DAgger collector (Step 5b) |
-| `relabel_v3.py` | Rewrites action dims 3–4 with arm-joint deltas (arm ablation) |
-
-Collection seed family is **71000**, disjoint from every evaluation seed
-family. Episodes upload to Hugging Face as they are banked; note that a
-wall-clock kill loses the whole dataset (LeRobot writes its footer at
-close), so size collection jobs under the wall.
-
-#### Step 2 — Fine-tune π₀
-
-Each configuration pins its episode list, seed and hyper-parameters in a
-wrapper. All use π₀ base, batch 4, seed 1000, full fine-tune unless
-stated.
-
-| Configuration | Dataset | Init from | Steps |
-|---|---|---|---|
-| Base | `airvla_v2` (480-episode train split) | π₀ base | 47,500 |
-| FT-C | `airvla_v21`, F1 episodes up-weighted via the episode list | π₀ base | 15,000 |
-| FT-D | `airvla_v22` | FT-C | 15,000 |
-| FT-D-KI | `airvla_v22`, VLM backbone frozen | FT-C | 5,000 |
-| FT-DAG | `airvla_v24` (FT-C list + 160 DAgger episodes) | FT-C | 20,000, lr 5e-6→5e-7 |
-| V3-arm | `airvla_v3` | π₀ base | 25,000 |
-| ACT / DP | `airvla_v21` | from scratch | see wrappers |
-
-Wrappers: `d_train_wrapper.py`, `dki_train_wrapper.py`,
-`act_train_wrapper.py`, `dp_train_wrapper.py` (in this directory);
-`e3ctrain_wrapper.py`, `dag_train_wrapper.py`, `e3cr_train_wrapper.py`
-(cluster-side, `~/Scratch/airvla/`). Always run a 200-step smoke job
-before committing to a full train.
-
-#### Step 3 — Select a checkpoint
-
-Checkpoints are selected by **lowest pinned-noise validation MSE** over
-the saved ladder, computed by `valcurve_v2.py` — never by inspecting
-closed-loop results. Pinning the noise matters: π₀ draws fresh flow
-noise per call, so an unpinned comparison measures sampling variance
-rather than the intervention.
-
-#### Step 4 — Evaluate (frozen protocol)
-
-`eval_v2.py` is the frozen harness. Every experimental condition is an
-**additive, default-off flag**; with no flags the code path is
-byte-identical to the frozen version, and each run records a `PROV`
-line with script and dependency hashes.
-
-```bash
-# Pure policy, full frozen protocol: 60 pick + 20 nav scenes
-python eval_v2.py <ckpt>/pretrained_model 60 20 --torchseed 1000 --tag base --video
-
-# Scripted terminal servo (H1)
-python eval_v2.py <ckpt>/pretrained_model 60 20 --torchseed 1000 --tag h1c --assist 0.15
-
-# Learned terminal servo (E5) — the best system
-python eval_v2.py <ckpt>/pretrained_model 60 20 --torchseed 1000 --tag e5c \
-  --assist 0.15 --learned-servo e5_actor/e5_actor_final.pt
-```
-
-Protocol constants: scene seed family **97000** (paired across all
-configurations), 1200 ticks per pick, 500 per nav, action horizon 50 /
-execute 50, torch seed 1000. Because scenes are paired, configurations
-are compared with exact McNemar tests on discordant scenes.
-
-Experimental flags:
-
-| Flag | Experiment |
-|---|---|
-| `--assist 0.15` | scripted terminal servo |
-| `--learned-servo <actor.pt>` | learned terminal servo |
-| `--exec 10` / `--rtc` | shortened execution horizon / real-time chunking |
-| `--paraphrase` / `--synonyms` | OOD: unseen instruction wordings / unseen object nouns |
-| `--oodpos --sceneseed 96000` | OOD: target outside the trained ±0.35 m band |
-| `--novel-distractor` | OOD: unseen mustard bottle added as clutter |
-| `--novel-target` | open-vocabulary probe: the bottle commanded as target |
-| `--comp --sceneseed 95000` | held-out composite instruction (gate → pick → place) |
-| `--solo --sceneseed 99000` | single-object competence probe |
-| `--policy-arm` | arm ablation: policy commands the arm joints |
-| `--pag` | payload-mass compensation ablation |
-
-Run a 10+4 episode mini first — it gates the full run for harness
-validity, never for conclusions (minis are too small to judge results).
-
-#### Step 5 — Terminal controllers
-
-**5a. Scripted servo.** Implemented in `platform_v2.py`, enabled by
-`--assist 0.15`: when the jaws enter a 0.15 m capture radius of the
-**instruction-named** object, control transfers to a deterministic
-descend–align–close sequence. Because the trigger keys on the commanded
-object, it cannot rescue a wrong-target approach — the hybrid never
-conceals a grounding failure. Validate with
-`replay_h1_validation.py`.
-
-**5b. Learned servo (the best system).** A 2×128 tanh MLP mapping an
-18-D body-frame observation to 4 actions:
-
-| File | Stage |
-|---|---|
-| `rl_env.py` | Terminal-phase environment contract — imported, never copied, by every consumer |
-| `rl_nets.py` | Actor-critic architecture |
-| `rl_bc.py` | Stage 0: DAgger-clone the scripted servo (this is where success-rate learning happens: 0 → 6 → 59 welds per 60 episodes over three rounds) |
-| `rl_train.py` | Stage 1: PPO refinement (71 iterations, 3,373 episodes, holding 89–100% weld rate) |
-| `replay_e5_validation.py` | Contract-parity validation before results count |
-
-Training progression is plotted in
-[`Reports/e5_training_progression.png`](Reports/e5_training_progression.png).
+| [`Reports/finaldroneresults.md`](Reports/finaldroneresults.md) | Experimental ledger: pre-registrations, results, statistics, incidents |
+| [`Sim'n'Real/Mujoco/PROVENANCE.md`](Sim'n'Real/Mujoco/PROVENANCE.md) | File provenance and hashes |
+| [`Sim'n'Real/Mujoco/INTERPRETABILITY_README.md`](Sim'n'Real/Mujoco/INTERPRETABILITY_README.md) | Interpretability probes |
+| [`Sim'n'Real/Mujoco/SAGEMAKER_TRAINING.md`](Sim'n'Real/Mujoco/SAGEMAKER_TRAINING.md) | Alternative training path |
 
 ---
 
-### 4. Reproducibility practices used throughout
+## Research Boundary
 
-These were adopted after failures that silently corrupted earlier
-results; they are worth keeping:
+These results establish behaviour **in simulation only**, under the frozen
+protocol described above. Three constraints bound every claim:
 
-- **Validate the harness before the policy.** Any changed evaluation
-  path is first driven with *expert* actions (`replay_*.py`,
-  `comp_setcheck.py`); if the expert cannot complete the task through
-  the new path, policy numbers from it are meaningless.
-- **Pin sampling noise** for any comparison, or the measurement is
-  sampling variance.
-- **Offline metrics do not arbitrate design questions.** The arm
-  ablation posted the campaign's best-looking validation curve and its
-  worst closed-loop behaviour; only closed-loop evaluation decides.
-- **Additive, default-off flags with provenance hashes**, so the frozen
-  harness stays frozen.
-- **One log file per job**, never reused — a reused log makes a gate
-  read a previous run's result.
-- **Gate merges on clean exit**, and never delete checkpoints with a
-  globbed `rm -rf dir/*/` (it follows baseline symlinks and destroys
-  their targets — this is how C-15000 was lost).
+- **No physical deployment.** The hardware exists and was brought up, but the
+  learned system has never flown. Sim-to-real performance is unknown.
+- **Privileged terminal-controller inputs.** Both terminal controllers read
+  simulator state rather than onboard sensing — the scripted controller uses the
+  target position, the learned controller an aim-to-jaw vector derived from
+  ground truth. Their gains do not demonstrate a perception-driven system.
+- **Simplified grasp retention.** A weld constraint holds the object after a
+  validated grasp, simplifying contact and slip behaviour and potentially
+  overestimating post-grasp reliability.
+
+Each configuration was trained once, so differences between configurations
+cannot be attributed to the intervention alone; the analysis is restricted to
+effects large enough to be robust to that, and comparisons within seed-variance
+range are reported as non-significant.
 
 ---
 
-## Contributing & Roadmap
+## Licence Status
 
-* ✅ Implemented: URDF/MJCF, real–sim sync, PWM/position modes, torque approx.
-* 🛠 Planned: MPPI interface, torque–PWM calibration, sim–real residual compensation (Torch)
-
-PRs and issues welcome.
+MIT, unless otherwise specified in individual files. The `π₀` checkpoint,
+LeRobot and MuJoCo carry their own licences.
 
 ---
 
-## Authors and Contact
+## Authors and Acknowledgements
 
-Zhuohang Wu @
-zhuohang2024@163.com
+AirVLA experiments, simulation environment, collectors, training and evaluation
+pipeline, terminal controllers and platform modifications: **Hana Emma Hadidi**
+(MSc Artificial Intelligence for Sustainable Development, UCL), supervised by
+**Dr Valerio Modugno**.
 
-## License
+The underlying SkyGrip whole-body control framework and the Dynamixel real–sim
+synchronisation code are by **Zhuohang Wu** (zhuohang2024@163.com). The drone
+and arm were inherited from a previous student project and extended here with a
+replacement gripper, a custom gripper-to-arm adapter and shortened landing legs.
 
-MIT (unless otherwise specified in individual files)
-
----
-
-## Acknowledgements
-
-* MuJoCo team & community
-* Dynamixel SDK
-* SolidWorks URDF Exporter
-
-
+With thanks to the Department of Computer Science at UCL East and Holistic AI
+for facilities and computational resources, and to the MuJoCo, LeRobot and
+Dynamixel SDK communities.
