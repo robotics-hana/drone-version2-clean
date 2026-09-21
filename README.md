@@ -22,7 +22,7 @@ pick-and-place (45%)**.
 ## Evidence Structure
 
 | Evidence | Location |
-|---|---|
+|---|---| 
 | Experimental ledger: pre-registrations, amendments, every result with job IDs and provenance | [`Reports/finaldroneresults.md`](Reports/finaldroneresults.md) |
 | Figures used in the dissertation | [`Reports/`](Reports/) (`*.png`) |
 | Learned-servo training progression | [`Reports/e5_training_progression.png`](Reports/e5_training_progression.png) |
